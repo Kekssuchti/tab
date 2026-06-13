@@ -1,0 +1,37 @@
+[project]
+name = "tab"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = "== 3.12.13"
+dependencies = [
+    "numpy>=2.4.6",
+    "pandas>=3.0.3",
+    "torch>=2.5.1; sys_platform == 'linux'",
+    "torchvision>=0.20.1; sys_platform == 'linux'",
+    "pytorch-triton-rocm>=3.1.0; sys_platform == 'linux'",
+    "triton-rocm>=3.6.0; sys_platform == 'linux'",
+    "marimo>=0.23.9",
+    "tabpfn>=8.0.6",
+    "optuna>=4.9.0",
+    "pydantic>=2.13.4",
+    "python-json-logger>=4.1.0",
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-rocm" },
+]
+torchvision = [
+    { index = "pytorch-rocm" },
+]
+pytorch-triton-rocm = [
+    { index = "pytorch-rocm" },
+]
+triton-rocm = [
+    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm7.2"
+explicit = true
