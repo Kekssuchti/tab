@@ -1,0 +1,3 @@
+[submodule "external/limix"]
+	path = external/limix
+	url = https://github.com/limix-ldm-ai/LimiX.git

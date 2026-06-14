@@ -1,12 +1,12 @@
 from timeit import default_timer as timer
 
-from tabpfn import TabPFNClassifier, TabPFNRegressor
+from tabicl import TabICLClassifier, TabICLRegressor
 
 from src.interfaces.model_interface import TFModelInterface
 from src.utils.logger import logger
 
 
-class TabPFNAdapter(TFModelInterface):
+class TabICLAdapter(TFModelInterface):
     def __init__(self, task_type="classification", **kwargs) -> None:
         super().__init__()
         self.task_type = task_type
@@ -15,9 +15,9 @@ class TabPFNAdapter(TFModelInterface):
 
     def _load_model(self):
         if self.task_type == "classification":
-            model = TabPFNClassifier(**self.kwargs)
+            model = TabICLClassifier(**self.kwargs)
         else:
-            model = TabPFNRegressor(**self.kwargs)
+            model = TabICLRegressor(**self.kwargs)
         return model
 
     def fit(self, X_train, y_train):
@@ -26,12 +26,13 @@ class TabPFNAdapter(TFModelInterface):
         return timer() - start_time
 
     def predict(self, X_test):
-        logger.info(f"Predicting with: {self.model.configs_}")
+        logger.info(f"Predicting with: {self.model.model_config_}")
         start_time = timer()
-        if isinstance(self.model, TabPFNClassifier):
+        if isinstance(self.model, TabICLClassifier):
             result = self.model.predict_proba(X_test)
         else:
-            result = self.model.predict(X_test, output_type="mean", quantiles=None)
+            result = self.model.predict(X_test, output_type="mean", alphas=None)
+            # alphas == quantiles
 
-        logger.info("TabPFN Prediction done")
+        logger.info("TabICL Prediction done")
         return result, timer() - start_time

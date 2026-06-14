@@ -4,20 +4,9 @@ from numpy import ndarray
 
 
 class TFModelInterface(ABC):
-    """
-    Interface to unify usage of all tabular foundation models.
-
-    Basic functions needed:
-        fit(X_train, y_train)
-        predict(X_test)
-    """
-
-    def __init__(self) -> None:
-        self.model = None
-
-    @abstractmethod
-    def load_model(self, task_type="classifier", **kwargs):
-        pass
+    name: str
+    task_type: str
+    kwargs: dict
 
     @abstractmethod
     def fit(self, X_train, y_train) -> float:

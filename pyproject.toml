@@ -15,6 +15,9 @@ dependencies = [
     "optuna>=4.9.0",
     "pydantic>=2.13.4",
     "python-json-logger>=4.1.0",
+    "tabicl>=2.1.1",
+    "orion-bix",
+    "orion-msp",
 ]
 
 [tool.uv.sources]
@@ -30,6 +33,8 @@ pytorch-triton-rocm = [
 triton-rocm = [
     { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
 ]
+orion-bix = { git = "https://github.com/Lexsi-Labs/Orion-BiX.git", rev = "060d34606f56c591c47e0b6cbe971e5f5035f33e" }
+orion-msp = { git = "https://github.com/Lexsi-Labs/Orion-MSP.git", rev = "c89aea6dc425bc701a9557fdd53e3dc3d766f983" }
 
 [[tool.uv.index]]
 name = "pytorch-rocm"

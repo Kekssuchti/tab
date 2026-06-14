@@ -25,13 +25,11 @@ class Config(BaseSettings):
         "tabpfn-3",
         "tabicl-2",
         "limix-2m",
+        "limix-16m",
+        "mitra",
         "orion-bix",
+        "orion-msp",
     )
-
-
-#        "mitra",
-#        "orion-msp",
-#       "limix-16m",
 
 
 @lru_cache
