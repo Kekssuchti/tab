@@ -19,7 +19,10 @@ from src.utils.logger import logger
 
 class LimixAdapter(TFModelInterface):
     def __init__(
-        self, task_type="classification", size: Literal["2M", "16M"] = "2M", **kwargs
+        self,
+        task_type: Literal["classification", "regression"] = "classification",
+        size: Literal["2M", "16M"] = "2M",
+        **kwargs,
     ) -> None:
         super().__init__()
         self.task_type = task_type

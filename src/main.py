@@ -1,6 +1,7 @@
 from sklearn.model_selection import train_test_split
 
 from src.adapter.limix_adapter import LimixAdapter
+from src.adapter.mitra_adapter import MitraAdapter
 from src.adapter.tabicl_adapter import TabICLAdapter
 from src.adapter.tabpfn_adapter import TabPFNAdapter
 from src.config import config
@@ -30,8 +31,9 @@ def main():
     model_tabpfn = TabPFNAdapter()
     model_icl = TabICLAdapter()
     model_limix_2m = LimixAdapter(size="16M")
+    model_mitra = MitraAdapter()
 
-    predictions, time_total = train_model(model_limix_2m, X_train, X_test, y_train)
+    predictions, time_total = train_model(model_mitra, X_train, X_test, y_train)
 
     metrics = evaluate_predictions(predictions, y_test)
     logger.info(f"Metrics: {metrics}")

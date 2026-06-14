@@ -1,4 +1,5 @@
 from timeit import default_timer as timer
+from typing import Literal
 
 from tabicl import TabICLClassifier, TabICLRegressor
 
@@ -7,7 +8,11 @@ from src.utils.logger import logger
 
 
 class TabICLAdapter(TFModelInterface):
-    def __init__(self, task_type="classification", **kwargs) -> None:
+    def __init__(
+        self,
+        task_type: Literal["classification", "regression"] = "classification",
+        **kwargs,
+    ) -> None:
         super().__init__()
         self.task_type = task_type
         self.kwargs = kwargs
