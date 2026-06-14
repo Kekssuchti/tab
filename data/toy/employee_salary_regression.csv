@@ -1,0 +1,1001 @@
+employee_id,age,years_experience,education_level,job_role,city_tier,performance_score,num_skills,remote_work,annual_salary_usd
+EMP0001,29,9,Master,Software Engineer,1,2.4,3,0,106343.31
+EMP0002,27,6,Bachelor,ML Engineer,3,2.1,5,1,82852.6
+EMP0003,36,13,Master,Data Analyst,1,4.1,7,1,142019.59
+EMP0004,43,23,High School,DevOps,1,3.1,7,1,159972.8
+EMP0005,24,1,High School,DevOps,1,3.7,12,1,94126.86
+EMP0006,24,3,Master,Data Analyst,1,4.6,8,1,109682.21
+EMP0007,51,29,Bachelor,Product Manager,2,2.6,6,0,155103.12
+EMP0008,37,16,PhD,DevOps,2,5.0,12,0,146648.13
+EMP0009,42,22,Bachelor,Data Analyst,2,3.2,3,0,141824.61
+EMP0010,42,21,PhD,DevOps,3,3.4,6,0,134712.86
+EMP0011,37,13,Master,QA Engineer,3,3.3,11,1,111491.26
+EMP0012,30,6,PhD,Data Analyst,1,4.6,4,0,126697.88
+EMP0013,49,25,High School,DevOps,2,3.8,9,1,163662.4
+EMP0014,22,2,Master,QA Engineer,2,2.3,8,0,83564.49
+EMP0015,51,31,Master,ML Engineer,1,3.5,3,1,180993.54
+EMP0016,34,13,Master,Software Engineer,3,4.9,10,0,121806.45
+EMP0017,60,38,PhD,Data Analyst,1,4.8,6,0,217067.54
+EMP0018,27,7,PhD,Data Analyst,3,4.3,4,1,107120.75
+EMP0019,57,36,Master,ML Engineer,3,3.3,5,0,173668.79
+EMP0020,45,22,PhD,Data Analyst,1,2.7,7,0,149272.46
+EMP0021,59,35,Bachelor,ML Engineer,1,2.0,12,0,186546.06
+EMP0022,43,23,Bachelor,Product Manager,3,3.5,10,0,151011.18
+EMP0023,58,34,PhD,Software Engineer,2,4.4,5,0,190084.35
+EMP0024,49,26,PhD,QA Engineer,1,4.0,12,0,180630.27
+EMP0025,25,2,Master,Data Analyst,1,2.6,10,1,101821.22
+EMP0026,51,30,High School,DevOps,3,2.3,12,0,155414.3
+EMP0027,27,6,Bachelor,DevOps,2,3.4,8,0,99934.27
+EMP0028,46,24,PhD,Product Manager,2,4.1,10,1,166025.87
+EMP0029,31,10,Master,Software Engineer,1,3.7,10,0,126182.54
+EMP0030,59,36,Bachelor,Data Analyst,3,2.2,4,0,162427.65
+EMP0031,60,40,Bachelor,DevOps,1,4.8,11,0,213998.04
+EMP0032,27,4,Master,Product Manager,1,4.0,7,0,107058.0
+EMP0033,38,15,Bachelor,QA Engineer,3,2.9,7,0,118363.65
+EMP0034,58,38,High School,ML Engineer,1,3.5,4,1,192776.02
+EMP0035,26,5,Master,Product Manager,1,3.3,10,1,103777.75
+EMP0036,55,35,Master,QA Engineer,1,4.8,4,1,190974.53
+EMP0037,29,9,Bachelor,Product Manager,2,3.8,7,0,106402.81
+EMP0038,54,31,Master,Data Analyst,1,3.9,6,0,174164.52
+EMP0039,22,0,Bachelor,QA Engineer,2,2.5,9,1,79992.48
+EMP0040,31,7,High School,Product Manager,3,3.7,8,0,91922.41
+EMP0041,24,2,Master,Data Analyst,2,2.6,5,0,80092.74
+EMP0042,48,24,Bachelor,Software Engineer,1,4.9,4,1,169475.27
+EMP0043,23,2,Master,DevOps,3,4.6,5,1,93558.2
+EMP0044,46,26,PhD,Software Engineer,1,4.4,9,1,185233.19
+EMP0045,41,20,Bachelor,Data Analyst,3,2.6,7,1,134874.06
+EMP0046,39,17,PhD,QA Engineer,3,3.0,2,0,111138.71
+EMP0047,38,17,Master,Data Analyst,1,3.8,7,1,135184.2
+EMP0048,29,6,Bachelor,Product Manager,1,4.1,2,0,109283.9
+EMP0049,45,22,High School,QA Engineer,2,3.9,12,0,148011.42
+EMP0050,41,18,Master,DevOps,3,2.9,4,0,117280.28
+EMP0051,48,25,Bachelor,ML Engineer,3,2.9,10,0,143487.51
+EMP0052,59,35,Master,DevOps,2,3.3,5,1,185391.89
+EMP0053,32,12,Master,ML Engineer,3,3.9,7,0,116180.61
+EMP0054,41,20,Bachelor,Software Engineer,1,2.1,9,0,134335.71
+EMP0055,51,28,Bachelor,QA Engineer,3,3.2,8,0,155861.53
+EMP0056,28,5,Bachelor,Software Engineer,3,3.6,2,0,87881.25
+EMP0057,29,6,Bachelor,DevOps,3,3.6,10,1,106417.23
+EMP0058,54,31,PhD,Software Engineer,3,4.6,9,1,176597.25
+EMP0059,37,15,PhD,QA Engineer,1,2.8,3,1,132752.02
+EMP0060,56,36,Bachelor,Software Engineer,1,3.1,4,0,188801.65
+EMP0061,26,3,PhD,Product Manager,3,3.4,2,0,84177.27
+EMP0062,59,39,PhD,DevOps,1,4.8,6,1,211753.19
+EMP0063,48,24,Bachelor,DevOps,1,2.8,9,0,151245.01
+EMP0064,47,26,PhD,Software Engineer,3,3.6,8,0,158823.64
+EMP0065,27,4,Bachelor,DevOps,1,2.2,8,1,98849.03
+EMP0066,46,24,PhD,Product Manager,1,3.4,10,0,170056.03
+EMP0067,44,23,High School,QA Engineer,1,4.3,5,0,156414.14
+EMP0068,37,16,PhD,QA Engineer,1,3.7,5,1,138278.85
+EMP0069,38,16,Bachelor,ML Engineer,3,4.9,3,0,124666.51
+EMP0070,23,1,PhD,DevOps,3,2.6,11,0,82179.35
+EMP0071,28,6,High School,ML Engineer,1,3.0,8,1,109892.94
+EMP0072,22,0,PhD,Data Analyst,2,4.9,12,1,108225.29
+EMP0073,31,8,Bachelor,QA Engineer,3,4.9,6,1,99704.1
+EMP0074,59,37,Master,Software Engineer,1,2.8,9,0,196836.9
+EMP0075,51,27,PhD,Product Manager,1,3.5,7,0,168266.66
+EMP0076,38,16,Master,ML Engineer,3,4.6,10,0,132692.64
+EMP0077,55,34,High School,Software Engineer,3,3.2,10,0,165548.72
+EMP0078,53,30,High School,Data Analyst,2,2.7,5,1,153082.83
+EMP0079,59,37,PhD,ML Engineer,3,3.0,10,1,184974.14
+EMP0080,41,19,Bachelor,Data Analyst,3,2.6,3,0,120929.06
+EMP0081,34,13,PhD,Product Manager,3,3.8,10,1,132706.51
+EMP0082,40,19,Master,Software Engineer,2,2.0,10,0,132276.16
+EMP0083,39,19,High School,ML Engineer,2,4.1,4,1,135352.34
+EMP0084,40,17,PhD,DevOps,2,2.6,2,1,127977.6
+EMP0085,52,32,High School,DevOps,2,2.2,12,0,170678.33
+EMP0086,41,21,Bachelor,Data Analyst,3,4.3,11,0,148754.62
+EMP0087,55,32,PhD,DevOps,2,4.6,8,1,187519.15
+EMP0088,28,7,Bachelor,Product Manager,3,2.2,5,0,83210.7
+EMP0089,57,37,Bachelor,Data Analyst,2,3.4,11,1,192455.93
+EMP0090,40,17,High School,QA Engineer,1,4.8,12,0,150855.61
+EMP0091,49,29,Bachelor,QA Engineer,1,4.7,4,0,181803.0
+EMP0092,60,36,Master,DevOps,1,3.4,6,1,197996.96
+EMP0093,39,15,PhD,DevOps,1,3.8,8,1,143671.92
+EMP0094,36,12,High School,QA Engineer,2,3.7,4,1,112294.61
+EMP0095,55,32,Master,Software Engineer,3,3.3,9,0,164174.4
+EMP0096,42,22,Bachelor,Product Manager,2,4.1,6,1,150167.65
+EMP0097,57,37,PhD,Data Analyst,2,2.8,3,1,190935.12
+EMP0098,22,0,PhD,DevOps,1,2.6,7,1,88395.86
+EMP0099,50,30,Bachelor,Product Manager,3,2.4,6,1,156974.49
+EMP0100,23,0,Bachelor,QA Engineer,1,2.9,2,1,80664.76
+EMP0101,27,6,High School,DevOps,1,3.9,4,1,108280.1
+EMP0102,39,16,PhD,DevOps,1,3.4,4,1,138635.37
+EMP0103,34,10,Bachelor,Data Analyst,2,4.3,8,1,123761.67
+EMP0104,22,0,Master,ML Engineer,3,5.0,9,0,86888.03
+EMP0105,50,26,PhD,Product Manager,2,3.7,10,1,165612.94
+EMP0106,34,13,PhD,Software Engineer,2,2.1,9,1,122776.09
+EMP0107,46,25,PhD,Data Analyst,1,3.5,11,1,179764.22
+EMP0108,50,30,PhD,Data Analyst,3,2.4,12,0,157852.31
+EMP0109,26,3,Master,Product Manager,3,4.1,12,0,100068.61
+EMP0110,56,33,Master,QA Engineer,3,4.7,9,0,173121.84
+EMP0111,26,5,Master,Software Engineer,3,2.3,3,0,73625.66
+EMP0112,23,3,Master,Data Analyst,2,3.1,8,0,94733.21
+EMP0113,37,13,PhD,ML Engineer,3,4.4,4,0,125716.95
+EMP0114,37,14,Bachelor,Software Engineer,2,3.9,9,1,133252.71
+EMP0115,22,0,Master,QA Engineer,3,2.5,9,1,80162.53
+EMP0116,49,27,PhD,Product Manager,1,5.0,9,0,183138.59
+EMP0117,37,14,Master,ML Engineer,2,5.0,6,0,138205.19
+EMP0118,39,19,High School,ML Engineer,3,3.5,6,0,121840.33
+EMP0119,60,38,Bachelor,QA Engineer,1,3.9,12,0,199210.89
+EMP0120,24,2,PhD,Data Analyst,3,3.1,4,0,73761.3
+EMP0121,40,18,PhD,Software Engineer,1,2.4,10,1,138115.97
+EMP0122,32,10,PhD,Product Manager,3,4.6,3,1,111495.18
+EMP0123,26,5,Bachelor,QA Engineer,3,4.0,8,1,98979.37
+EMP0124,38,14,High School,DevOps,2,4.0,12,1,132003.65
+EMP0125,59,36,Master,Data Analyst,3,2.7,2,1,172837.91
+EMP0126,26,3,Master,QA Engineer,2,2.4,2,0,79763.51
+EMP0127,41,18,High School,Data Analyst,1,4.7,4,1,137940.8
+EMP0128,56,33,Bachelor,DevOps,3,2.3,9,1,166711.56
+EMP0129,39,19,Master,Software Engineer,2,3.3,5,1,142937.85
+EMP0130,56,34,High School,DevOps,2,2.6,3,1,170207.06
+EMP0131,27,6,High School,Data Analyst,2,2.7,4,0,93236.08
+EMP0132,35,11,Bachelor,Software Engineer,2,4.3,11,0,125645.23
+EMP0133,39,18,Bachelor,ML Engineer,2,4.4,3,0,135947.69
+EMP0134,37,13,Master,Data Analyst,1,2.8,4,1,127775.37
+EMP0135,55,35,High School,DevOps,2,4.3,10,0,182346.78
+EMP0136,24,0,Master,DevOps,3,4.9,2,1,83640.82
+EMP0137,47,24,High School,DevOps,3,4.7,3,0,139257.76
+EMP0138,30,8,Master,DevOps,3,3.6,9,1,107837.99
+EMP0139,28,8,Bachelor,DevOps,2,4.7,8,1,118086.14
+EMP0140,28,6,PhD,Product Manager,3,2.8,4,1,88833.32
+EMP0141,26,6,High School,Data Analyst,2,2.3,7,0,83264.27
+EMP0142,57,33,Master,QA Engineer,1,3.2,12,1,191156.37
+EMP0143,25,3,Master,Product Manager,1,3.7,5,0,99023.59
+EMP0144,28,6,Master,Data Analyst,2,3.7,8,0,102225.06
+EMP0145,60,38,High School,Software Engineer,2,4.1,6,1,188949.25
+EMP0146,31,7,PhD,Data Analyst,1,4.2,2,0,116237.91
+EMP0147,55,34,PhD,DevOps,2,3.0,7,1,182370.15
+EMP0148,58,34,High School,Data Analyst,1,2.5,11,0,173832.19
+EMP0149,27,5,PhD,QA Engineer,2,3.5,9,1,106826.98
+EMP0150,29,7,PhD,Data Analyst,2,4.0,11,1,125437.3
+EMP0151,55,33,High School,Software Engineer,2,5.0,2,0,176774.08
+EMP0152,30,8,Master,Product Manager,1,2.0,8,0,117251.05
+EMP0153,30,7,Bachelor,ML Engineer,3,4.5,7,0,94744.97
+EMP0154,49,29,PhD,Data Analyst,2,3.7,11,1,182567.77
+EMP0155,48,26,High School,DevOps,1,4.9,4,1,171678.46
+EMP0156,27,4,High School,Software Engineer,2,3.8,10,0,87432.07
+EMP0157,47,25,Master,Software Engineer,2,4.3,3,0,152822.07
+EMP0158,44,22,Bachelor,Software Engineer,1,2.4,5,0,142498.07
+EMP0159,60,39,High School,Software Engineer,3,3.5,11,1,184182.02
+EMP0160,42,20,Bachelor,DevOps,1,3.4,12,1,147291.84
+EMP0161,39,15,High School,Product Manager,3,2.2,9,1,113980.19
+EMP0162,40,20,High School,ML Engineer,3,3.5,9,0,129948.2
+EMP0163,50,26,Bachelor,Product Manager,3,3.4,4,0,136048.83
+EMP0164,43,23,Bachelor,Data Analyst,1,4.1,9,0,163033.34
+EMP0165,45,23,Master,DevOps,2,4.3,12,0,162008.96
+EMP0166,26,4,High School,ML Engineer,3,3.2,6,0,73249.67
+EMP0167,43,23,Bachelor,Product Manager,2,4.9,12,1,168531.5
+EMP0168,27,5,PhD,QA Engineer,2,4.4,12,0,118352.11
+EMP0169,49,25,Master,Data Analyst,2,2.9,5,1,156769.37
+EMP0170,36,15,Bachelor,Data Analyst,2,4.5,3,0,124109.19
+EMP0171,43,19,Bachelor,ML Engineer,2,2.5,4,0,125784.69
+EMP0172,45,24,PhD,ML Engineer,2,4.3,9,0,161623.88
+EMP0173,56,35,Master,DevOps,1,3.1,11,1,193639.5
+EMP0174,46,22,PhD,Software Engineer,1,4.4,4,1,163576.01
+EMP0175,25,2,Master,ML Engineer,1,4.1,10,0,104716.47
+EMP0176,39,16,Bachelor,DevOps,1,4.8,5,1,150224.59
+EMP0177,44,24,PhD,Data Analyst,2,3.5,5,1,160075.29
+EMP0178,23,1,High School,QA Engineer,3,3.0,4,0,66716.64
+EMP0179,24,2,PhD,QA Engineer,1,4.3,9,1,105689.9
+EMP0180,23,1,Bachelor,Software Engineer,3,4.8,11,1,87035.21
+EMP0181,29,7,Bachelor,Product Manager,1,2.1,8,1,112829.63
+EMP0182,53,29,High School,QA Engineer,3,3.7,4,1,155377.67
+EMP0183,49,29,Master,Software Engineer,3,3.2,12,0,159058.07
+EMP0184,55,31,High School,DevOps,2,2.1,8,1,160693.81
+EMP0185,38,18,Master,Data Analyst,2,2.7,12,0,137878.25
+EMP0186,43,22,High School,Product Manager,3,3.0,12,0,128788.72
+EMP0187,51,28,Bachelor,Software Engineer,1,4.1,9,0,174477.24
+EMP0188,34,14,Master,Product Manager,3,3.2,10,1,122552.93
+EMP0189,38,18,Bachelor,Product Manager,2,4.6,2,1,135357.91
+EMP0190,49,26,PhD,DevOps,2,4.9,9,1,182093.03
+EMP0191,45,21,Master,Data Analyst,3,3.3,8,0,132821.64
+EMP0192,27,5,Master,Product Manager,2,3.8,8,0,101407.57
+EMP0193,50,28,PhD,Data Analyst,3,4.6,7,1,166680.3
+EMP0194,25,5,PhD,Product Manager,3,4.4,12,0,116857.62
+EMP0195,23,2,PhD,Data Analyst,1,2.2,12,1,96868.86
+EMP0196,24,0,Bachelor,QA Engineer,2,4.8,7,1,100645.86
+EMP0197,26,2,Bachelor,ML Engineer,2,3.2,12,1,95204.79
+EMP0198,33,10,PhD,ML Engineer,1,2.8,6,1,123962.98
+EMP0199,35,11,Master,QA Engineer,2,2.6,4,0,99026.28
+EMP0200,50,30,Master,QA Engineer,2,4.1,10,1,182140.3
+EMP0201,41,20,Bachelor,Product Manager,3,2.7,5,0,123588.67
+EMP0202,45,21,Master,DevOps,3,2.4,3,0,129452.88
+EMP0203,41,18,PhD,ML Engineer,2,4.3,11,0,150864.91
+EMP0204,26,3,PhD,QA Engineer,3,3.0,10,0,91875.05
+EMP0205,30,7,High School,Data Analyst,3,2.5,4,0,77877.98
+EMP0206,44,20,Master,Data Analyst,2,2.6,10,1,148243.96
+EMP0207,30,8,High School,ML Engineer,3,2.5,11,0,94509.97
+EMP0208,60,38,High School,Data Analyst,1,2.1,12,1,198576.12
+EMP0209,35,11,PhD,ML Engineer,3,2.1,12,1,109668.98
+EMP0210,37,14,Master,DevOps,1,4.1,4,1,132960.26
+EMP0211,48,25,PhD,Software Engineer,2,3.8,7,1,162412.73
+EMP0212,47,26,Master,ML Engineer,3,2.3,5,1,135695.95
+EMP0213,29,7,PhD,Software Engineer,1,2.3,6,1,113336.44
+EMP0214,32,10,Master,Software Engineer,1,3.5,10,1,124863.05
+EMP0215,53,31,PhD,Data Analyst,1,4.8,10,1,200323.5
+EMP0216,44,24,High School,Product Manager,2,3.8,12,1,156071.46
+EMP0217,40,16,High School,Data Analyst,2,2.4,6,1,118982.02
+EMP0218,47,27,Bachelor,Product Manager,3,2.9,8,1,146796.16
+EMP0219,57,35,High School,Software Engineer,1,3.2,7,1,185933.13
+EMP0220,54,31,High School,Data Analyst,1,2.4,7,1,167186.16
+EMP0221,55,32,Bachelor,ML Engineer,3,2.4,11,1,171586.31
+EMP0222,41,17,Master,ML Engineer,3,3.6,11,1,143821.81
+EMP0223,52,32,Master,Product Manager,3,2.3,8,1,165861.98
+EMP0224,23,0,PhD,Product Manager,3,4.3,11,0,83845.14
+EMP0225,25,1,PhD,Software Engineer,3,3.9,11,1,97020.8
+EMP0226,24,0,High School,Software Engineer,1,3.3,8,0,91489.89
+EMP0227,48,27,PhD,ML Engineer,3,4.8,2,0,152703.46
+EMP0228,52,28,PhD,Product Manager,1,3.4,10,1,180198.95
+EMP0229,56,34,Master,ML Engineer,2,2.6,5,1,173133.04
+EMP0230,41,19,Bachelor,QA Engineer,3,3.5,9,1,131980.99
+EMP0231,57,35,Master,Data Analyst,3,4.0,8,1,186743.57
+EMP0232,31,9,High School,Product Manager,3,2.2,9,1,84406.28
+EMP0233,52,31,Bachelor,ML Engineer,2,4.8,6,0,180885.58
+EMP0234,37,16,High School,QA Engineer,3,2.7,5,0,112415.7
+EMP0235,28,5,Master,QA Engineer,2,2.3,4,0,99372.25
+EMP0236,32,9,PhD,DevOps,3,2.6,6,1,99557.89
+EMP0237,40,20,High School,QA Engineer,3,2.7,2,0,109216.05
+EMP0238,24,1,PhD,Software Engineer,3,4.9,6,0,94162.7
+EMP0239,22,0,High School,Product Manager,2,3.4,12,1,88698.2
+EMP0240,54,31,Master,Software Engineer,1,3.0,9,1,181223.53
+EMP0241,33,13,Master,Product Manager,3,4.0,5,0,110023.91
+EMP0242,47,24,Master,Data Analyst,2,4.0,4,0,148335.36
+EMP0243,52,30,Bachelor,Data Analyst,2,3.2,9,1,173251.09
+EMP0244,58,38,Master,QA Engineer,2,4.1,2,0,188434.05
+EMP0245,51,29,Bachelor,DevOps,3,3.5,6,0,148281.34
+EMP0246,45,21,Bachelor,Software Engineer,1,3.4,9,1,146724.57
+EMP0247,48,24,PhD,ML Engineer,3,4.5,5,0,146360.12
+EMP0248,45,25,High School,Data Analyst,3,4.7,5,0,144667.64
+EMP0249,32,10,PhD,Data Analyst,3,2.6,11,1,114820.96
+EMP0250,25,2,Bachelor,ML Engineer,2,3.4,2,1,86985.27
+EMP0251,41,21,PhD,Product Manager,1,4.2,11,0,167728.67
+EMP0252,26,2,High School,Data Analyst,2,2.1,8,0,78082.14
+EMP0253,30,7,Master,DevOps,2,4.6,8,1,124835.74
+EMP0254,56,35,Master,Data Analyst,1,5.0,8,0,206585.94
+EMP0255,36,16,High School,Product Manager,2,4.0,10,1,125751.16
+EMP0256,37,14,Master,Software Engineer,2,2.6,3,0,112915.55
+EMP0257,48,24,High School,Software Engineer,1,2.2,11,0,145212.24
+EMP0258,25,4,High School,DevOps,2,2.7,5,0,84622.24
+EMP0259,30,6,Master,Software Engineer,3,3.7,11,1,103872.09
+EMP0260,55,34,PhD,Product Manager,2,2.2,11,0,188749.49
+EMP0261,49,25,PhD,Data Analyst,2,4.8,12,1,175981.77
+EMP0262,48,25,Bachelor,Product Manager,2,2.6,10,1,150183.78
+EMP0263,37,16,Master,QA Engineer,1,4.4,2,1,145602.09
+EMP0264,30,7,Bachelor,Product Manager,1,3.0,3,1,104173.49
+EMP0265,45,25,Bachelor,Data Analyst,2,3.1,11,0,156610.38
+EMP0266,59,35,Bachelor,DevOps,1,4.6,7,1,196157.96
+EMP0267,22,1,Bachelor,QA Engineer,1,4.2,9,0,97709.55
+EMP0268,47,26,Master,Product Manager,2,3.4,12,1,160721.08
+EMP0269,41,19,Master,ML Engineer,2,3.4,9,1,146705.41
+EMP0270,48,28,Bachelor,QA Engineer,1,2.0,10,1,164426.37
+EMP0271,40,19,Bachelor,Product Manager,1,3.1,5,1,132693.17
+EMP0272,43,21,PhD,QA Engineer,3,4.2,9,0,142800.31
+EMP0273,44,23,Bachelor,QA Engineer,3,3.5,10,0,134840.66
+EMP0274,26,6,High School,DevOps,1,4.5,5,0,105904.06
+EMP0275,31,11,Bachelor,ML Engineer,2,3.1,11,1,118215.61
+EMP0276,56,32,PhD,Data Analyst,1,3.6,6,1,187800.28
+EMP0277,23,0,PhD,Software Engineer,1,4.8,10,0,108115.49
+EMP0278,38,16,Master,DevOps,1,3.1,8,1,145553.8
+EMP0279,58,37,Bachelor,Product Manager,3,4.5,3,0,182451.37
+EMP0280,57,34,High School,QA Engineer,1,4.1,3,1,185815.13
+EMP0281,49,27,High School,ML Engineer,1,2.7,11,1,164049.4
+EMP0282,39,15,High School,Software Engineer,2,2.0,5,0,118255.02
+EMP0283,47,27,Master,Software Engineer,3,2.7,8,1,147508.5
+EMP0284,27,3,Master,Data Analyst,1,3.3,3,1,103175.87
+EMP0285,60,36,PhD,Product Manager,1,3.9,9,1,205695.1
+EMP0286,46,23,Bachelor,QA Engineer,3,4.0,3,1,145028.5
+EMP0287,37,17,High School,Product Manager,1,3.1,12,0,137623.27
+EMP0288,28,8,High School,Product Manager,2,3.1,6,0,93966.63
+EMP0289,30,10,Bachelor,DevOps,2,3.7,10,1,119580.94
+EMP0290,57,37,Master,DevOps,1,2.9,8,0,195647.64
+EMP0291,57,36,Bachelor,QA Engineer,2,2.5,6,1,178740.73
+EMP0292,32,9,Master,DevOps,2,3.5,3,1,111031.75
+EMP0293,38,17,PhD,ML Engineer,3,2.6,3,0,114516.05
+EMP0294,43,19,PhD,Product Manager,2,3.0,12,0,153783.4
+EMP0295,41,19,Bachelor,DevOps,2,2.5,8,1,132212.84
+EMP0296,53,29,Bachelor,Product Manager,2,2.8,8,1,169556.06
+EMP0297,29,5,Bachelor,ML Engineer,3,2.5,10,0,90258.67
+EMP0298,35,12,Master,QA Engineer,1,4.5,8,1,135904.63
+EMP0299,30,8,Bachelor,Product Manager,3,2.5,8,1,105937.15
+EMP0300,52,28,PhD,ML Engineer,3,4.8,8,0,173283.47
+EMP0301,45,21,High School,Data Analyst,1,4.0,7,0,147724.01
+EMP0302,47,25,PhD,Data Analyst,1,2.3,5,0,155839.38
+EMP0303,50,28,PhD,DevOps,3,3.8,10,0,163698.72
+EMP0304,28,6,PhD,Data Analyst,1,4.5,4,1,119337.93
+EMP0305,41,19,PhD,Software Engineer,3,3.4,9,0,129681.23
+EMP0306,42,22,Master,Data Analyst,3,2.3,7,0,134140.81
+EMP0307,32,11,Bachelor,ML Engineer,1,3.0,8,1,122863.72
+EMP0308,33,12,PhD,DevOps,1,4.2,5,1,138849.9
+EMP0309,59,36,PhD,Data Analyst,3,2.6,6,0,168259.36
+EMP0310,56,35,Master,Product Manager,1,3.4,6,1,189250.56
+EMP0311,55,33,PhD,ML Engineer,2,3.8,7,1,188731.37
+EMP0312,41,17,High School,QA Engineer,1,2.9,5,1,126674.42
+EMP0313,29,8,Master,QA Engineer,1,3.5,8,0,113259.77
+EMP0314,53,29,Bachelor,ML Engineer,1,3.5,4,0,166099.99
+EMP0315,42,19,High School,Product Manager,1,3.5,5,1,145074.59
+EMP0316,53,30,PhD,DevOps,3,4.5,9,0,171730.5
+EMP0317,27,3,High School,Software Engineer,2,2.1,5,1,81424.09
+EMP0318,53,29,High School,ML Engineer,1,2.8,10,1,174101.35
+EMP0319,56,36,PhD,ML Engineer,1,5.0,3,0,196892.07
+EMP0320,50,28,Master,Data Analyst,2,4.6,3,0,180185.09
+EMP0321,35,11,Master,QA Engineer,3,3.9,4,0,108592.43
+EMP0322,25,1,Master,ML Engineer,2,3.8,4,1,82244.05
+EMP0323,40,18,Master,ML Engineer,3,4.4,4,1,143516.08
+EMP0324,30,9,Bachelor,Software Engineer,3,3.0,5,1,91088.39
+EMP0325,53,32,Master,QA Engineer,2,3.1,3,0,162343.89
+EMP0326,45,22,PhD,Product Manager,3,2.0,3,1,135016.68
+EMP0327,44,24,PhD,Software Engineer,2,4.5,9,1,165556.06
+EMP0328,57,33,Bachelor,ML Engineer,2,4.4,12,0,189130.4
+EMP0329,24,4,PhD,Data Analyst,1,4.8,4,1,102855.81
+EMP0330,49,28,Bachelor,QA Engineer,2,2.5,6,0,156946.9
+EMP0331,45,23,High School,Product Manager,3,4.7,4,0,135933.58
+EMP0332,36,13,High School,QA Engineer,1,2.0,9,0,118520.63
+EMP0333,30,6,Bachelor,ML Engineer,3,3.3,2,1,91876.15
+EMP0334,49,28,PhD,Data Analyst,1,3.1,3,0,156729.39
+EMP0335,42,20,Master,Software Engineer,2,4.3,4,0,147280.55
+EMP0336,32,9,Master,QA Engineer,1,3.9,4,1,122545.71
+EMP0337,50,29,High School,Data Analyst,1,4.3,11,1,177926.5
+EMP0338,30,9,Master,QA Engineer,1,2.7,11,1,125003.74
+EMP0339,23,1,Bachelor,ML Engineer,3,3.5,8,1,77149.99
+EMP0340,37,14,PhD,Data Analyst,1,3.5,11,0,134836.97
+EMP0341,55,35,Master,Product Manager,1,3.2,11,1,193378.83
+EMP0342,52,32,High School,ML Engineer,1,2.0,5,0,169387.36
+EMP0343,25,2,Master,QA Engineer,3,3.5,8,1,86705.28
+EMP0344,56,32,Bachelor,Product Manager,1,2.9,10,0,178416.33
+EMP0345,31,7,Master,DevOps,3,3.9,12,0,103816.21
+EMP0346,37,17,Bachelor,Data Analyst,2,2.3,11,0,131587.79
+EMP0347,41,20,High School,Data Analyst,3,2.4,2,0,110359.97
+EMP0348,55,33,Bachelor,Product Manager,1,4.2,6,0,185883.18
+EMP0349,23,1,PhD,Product Manager,3,2.2,11,0,75418.27
+EMP0350,25,2,Bachelor,Product Manager,1,2.8,3,0,87115.77
+EMP0351,36,12,High School,Data Analyst,1,2.7,9,1,119158.15
+EMP0352,24,0,PhD,Software Engineer,2,2.7,7,1,88130.17
+EMP0353,26,2,Master,Data Analyst,3,4.0,2,0,80807.8
+EMP0354,24,1,High School,DevOps,2,4.3,6,1,92799.1
+EMP0355,27,3,PhD,Data Analyst,2,2.6,11,1,99004.85
+EMP0356,45,21,PhD,Software Engineer,3,4.7,5,0,141024.62
+EMP0357,22,0,High School,Software Engineer,3,3.0,2,1,70503.74
+EMP0358,41,21,Bachelor,ML Engineer,1,3.3,2,0,142053.78
+EMP0359,39,19,High School,Software Engineer,3,3.2,7,1,126713.5
+EMP0360,28,4,Bachelor,QA Engineer,2,2.2,11,0,90331.76
+EMP0361,49,28,Bachelor,Product Manager,2,4.6,8,1,170278.36
+EMP0362,26,5,Bachelor,ML Engineer,1,2.5,4,1,100699.98
+EMP0363,51,29,PhD,Data Analyst,3,3.1,5,1,158675.59
+EMP0364,29,9,Bachelor,QA Engineer,2,4.5,11,0,121330.59
+EMP0365,35,13,Bachelor,Data Analyst,3,2.7,7,1,103006.39
+EMP0366,38,17,High School,DevOps,2,3.7,10,0,130541.91
+EMP0367,28,5,High School,Software Engineer,1,2.0,5,0,90545.63
+EMP0368,27,3,Master,Data Analyst,1,5.0,5,1,115233.9
+EMP0369,30,10,Master,Data Analyst,1,4.8,2,0,126986.95
+EMP0370,47,24,High School,DevOps,3,3.3,7,0,134694.36
+EMP0371,33,11,Master,DevOps,1,2.1,11,0,117771.52
+EMP0372,57,34,High School,Data Analyst,2,3.1,8,0,168893.73
+EMP0373,55,34,High School,DevOps,3,3.1,10,1,167172.4
+EMP0374,42,19,Master,Software Engineer,1,3.0,5,0,145490.04
+EMP0375,39,19,PhD,ML Engineer,2,4.3,5,0,148730.24
+EMP0376,39,15,High School,Software Engineer,3,4.5,8,1,126292.82
+EMP0377,33,12,Bachelor,ML Engineer,2,4.4,7,0,120326.33
+EMP0378,58,34,Bachelor,ML Engineer,1,4.5,9,1,193434.16
+EMP0379,33,10,High School,Data Analyst,1,2.7,5,0,107304.12
+EMP0380,34,13,Master,QA Engineer,1,4.8,7,0,137575.53
+EMP0381,23,2,Bachelor,Data Analyst,3,4.6,3,1,83139.57
+EMP0382,59,39,Master,Product Manager,2,2.4,4,1,181746.07
+EMP0383,53,31,Bachelor,QA Engineer,3,4.1,11,1,173492.69
+EMP0384,33,10,Master,QA Engineer,3,2.9,4,0,103458.56
+EMP0385,58,35,High School,Software Engineer,3,3.0,11,0,169251.22
+EMP0386,53,32,Master,QA Engineer,1,2.7,7,0,176757.45
+EMP0387,27,5,PhD,Data Analyst,2,2.6,3,1,95120.01
+EMP0388,22,2,PhD,DevOps,3,3.3,4,1,86111.05
+EMP0389,53,30,Master,ML Engineer,2,2.3,9,0,165416.55
+EMP0390,24,2,High School,Product Manager,2,4.9,3,1,92185.44
+EMP0391,32,9,Bachelor,QA Engineer,1,3.6,3,1,109818.6
+EMP0392,52,32,PhD,QA Engineer,1,3.8,8,0,185927.11
+EMP0393,25,5,Master,Software Engineer,1,3.2,10,1,110409.86
+EMP0394,28,8,PhD,ML Engineer,3,4.5,4,0,102355.64
+EMP0395,45,25,PhD,Data Analyst,2,4.5,12,1,173684.03
+EMP0396,32,10,High School,DevOps,1,2.9,8,1,116118.13
+EMP0397,53,31,High School,QA Engineer,3,3.2,7,1,155687.03
+EMP0398,38,15,PhD,Product Manager,1,4.5,11,0,152379.11
+EMP0399,31,11,High School,QA Engineer,2,4.4,8,0,108812.53
+EMP0400,55,32,PhD,ML Engineer,1,3.4,3,1,181065.94
+EMP0401,24,0,Bachelor,Data Analyst,2,2.5,4,0,73546.1
+EMP0402,49,29,PhD,Software Engineer,3,2.4,11,1,160860.99
+EMP0403,42,22,High School,DevOps,3,3.2,7,1,124590.3
+EMP0404,22,0,PhD,Data Analyst,2,2.4,11,0,85498.39
+EMP0405,28,4,High School,Product Manager,3,4.6,8,1,89228.19
+EMP0406,60,37,High School,Software Engineer,2,3.2,11,1,191342.31
+EMP0407,24,1,Master,QA Engineer,1,2.1,9,1,93845.32
+EMP0408,41,19,Master,DevOps,3,4.1,5,0,131312.5
+EMP0409,41,18,Master,Product Manager,3,3.3,12,0,133647.97
+EMP0410,48,25,Master,Data Analyst,3,4.4,3,1,153549.75
+EMP0411,54,31,Bachelor,ML Engineer,3,2.1,5,0,151974.94
+EMP0412,51,31,Master,QA Engineer,1,2.8,9,1,178810.86
+EMP0413,29,9,Bachelor,Product Manager,2,3.8,4,1,105628.13
+EMP0414,32,10,High School,Product Manager,1,3.2,4,0,107323.22
+EMP0415,36,15,Bachelor,Product Manager,3,3.2,2,0,106497.06
+EMP0416,33,9,High School,Software Engineer,2,3.8,6,1,107795.31
+EMP0417,49,26,Master,DevOps,2,2.7,6,1,154781.07
+EMP0418,45,21,Master,Product Manager,3,2.3,3,1,126954.06
+EMP0419,39,17,Master,Product Manager,3,4.1,12,1,139423.37
+EMP0420,37,17,PhD,QA Engineer,2,4.0,2,1,140470.17
+EMP0421,40,18,PhD,DevOps,2,4.2,11,0,144306.16
+EMP0422,56,33,Master,ML Engineer,2,4.5,12,0,195070.58
+EMP0423,40,20,PhD,Software Engineer,3,2.8,10,0,143903.75
+EMP0424,27,6,Master,Software Engineer,3,4.6,8,1,102192.62
+EMP0425,45,23,Master,DevOps,1,3.4,12,0,160608.8
+EMP0426,29,6,Master,DevOps,1,4.6,4,0,113656.94
+EMP0427,34,12,PhD,ML Engineer,2,2.4,4,0,106168.69
+EMP0428,33,11,High School,Data Analyst,2,2.8,4,0,102090.32
+EMP0429,53,33,Bachelor,ML Engineer,2,3.9,8,1,185240.08
+EMP0430,24,0,Bachelor,QA Engineer,2,4.9,7,0,89949.94
+EMP0431,23,3,Bachelor,Software Engineer,3,4.6,6,0,91980.65
+EMP0432,41,20,High School,Data Analyst,2,4.8,9,1,150696.34
+EMP0433,49,28,Master,DevOps,2,4.3,4,1,170830.5
+EMP0434,30,9,High School,ML Engineer,3,2.5,7,0,90191.77
+EMP0435,46,24,High School,ML Engineer,1,4.0,12,0,164743.98
+EMP0436,50,27,High School,ML Engineer,2,3.4,4,0,150642.25
+EMP0437,22,0,PhD,QA Engineer,1,4.0,6,0,90730.92
+EMP0438,54,30,High School,Product Manager,1,4.4,9,0,182628.22
+EMP0439,60,39,Master,ML Engineer,1,3.1,8,1,207091.55
+EMP0440,35,12,Master,Software Engineer,1,2.0,3,0,117463.3
+EMP0441,58,35,Bachelor,Data Analyst,3,2.2,3,1,160077.15
+EMP0442,40,18,PhD,Data Analyst,1,4.4,2,1,145719.76
+EMP0443,45,23,PhD,QA Engineer,1,2.3,2,0,151129.08
+EMP0444,32,10,Master,DevOps,3,2.8,3,1,94668.74
+EMP0445,43,22,High School,DevOps,2,4.9,6,1,148767.77
+EMP0446,48,27,High School,Software Engineer,3,4.2,4,0,142608.78
+EMP0447,48,24,PhD,ML Engineer,3,3.3,11,1,155202.1
+EMP0448,30,7,PhD,Data Analyst,2,3.3,3,1,99592.7
+EMP0449,42,22,Bachelor,QA Engineer,2,3.6,11,0,143522.61
+EMP0450,52,30,PhD,Software Engineer,3,4.7,11,0,179038.29
+EMP0451,22,1,PhD,DevOps,1,2.2,9,1,97406.3
+EMP0452,25,1,Bachelor,ML Engineer,3,3.1,5,0,82982.88
+EMP0453,51,28,PhD,Data Analyst,2,3.3,3,1,163777.34
+EMP0454,47,24,High School,ML Engineer,3,2.0,3,1,126292.89
+EMP0455,54,30,Bachelor,QA Engineer,3,3.4,7,1,164157.37
+EMP0456,51,29,PhD,QA Engineer,3,3.1,9,0,155042.5
+EMP0457,28,7,High School,Product Manager,2,4.5,6,1,105686.97
+EMP0458,32,9,Bachelor,QA Engineer,3,4.2,3,1,100830.51
+EMP0459,34,13,High School,DevOps,1,3.4,5,1,126275.53
+EMP0460,59,39,PhD,DevOps,3,3.8,10,0,197592.99
+EMP0461,53,33,High School,ML Engineer,2,4.5,9,0,178566.83
+EMP0462,30,10,PhD,QA Engineer,3,3.8,7,1,110892.71
+EMP0463,48,24,Bachelor,Product Manager,2,4.9,6,1,160536.32
+EMP0464,60,36,Master,QA Engineer,3,4.6,10,0,186346.58
+EMP0465,34,13,Master,QA Engineer,2,4.8,4,0,119843.43
+EMP0466,42,22,Master,ML Engineer,2,3.7,12,1,157049.36
+EMP0467,56,34,PhD,Data Analyst,3,2.3,8,0,170890.32
+EMP0468,39,18,Master,QA Engineer,2,2.4,2,1,126646.9
+EMP0469,35,11,High School,Product Manager,2,2.3,12,0,108005.32
+EMP0470,37,13,Master,QA Engineer,3,2.1,8,1,104471.25
+EMP0471,48,26,High School,Data Analyst,3,2.8,11,1,151292.66
+EMP0472,45,21,Bachelor,QA Engineer,1,2.9,4,0,134280.74
+EMP0473,33,12,High School,DevOps,1,3.3,10,1,129274.88
+EMP0474,38,18,Master,DevOps,3,4.8,2,0,133463.34
+EMP0475,42,18,High School,QA Engineer,3,4.5,6,1,130104.56
+EMP0476,26,4,Bachelor,Software Engineer,3,2.2,10,0,76502.07
+EMP0477,48,24,PhD,Data Analyst,2,2.7,5,1,149773.88
+EMP0478,55,32,High School,Data Analyst,3,3.0,5,0,157761.52
+EMP0479,24,2,PhD,Data Analyst,2,2.8,6,0,94909.17
+EMP0480,45,21,PhD,DevOps,1,2.9,12,0,153669.97
+EMP0481,42,18,High School,Data Analyst,1,4.9,10,0,147127.66
+EMP0482,35,12,High School,Software Engineer,3,4.5,8,0,109480.38
+EMP0483,31,11,PhD,QA Engineer,2,2.1,3,0,107332.25
+EMP0484,26,2,Bachelor,Product Manager,2,3.2,12,1,97940.88
+EMP0485,49,27,High School,DevOps,3,2.4,2,0,133848.8
+EMP0486,26,4,High School,Product Manager,3,2.9,3,1,71144.28
+EMP0487,50,27,PhD,QA Engineer,1,3.4,10,0,177608.41
+EMP0488,56,34,Bachelor,Product Manager,3,4.7,12,1,188810.95
+EMP0489,22,0,Bachelor,Data Analyst,1,2.0,11,1,79768.28
+EMP0490,41,20,Master,Software Engineer,2,4.7,10,0,149957.44
+EMP0491,32,11,Bachelor,ML Engineer,2,2.6,4,0,109722.47
+EMP0492,57,34,High School,Product Manager,3,2.2,3,0,145786.7
+EMP0493,59,36,Master,Product Manager,1,4.0,5,0,194466.76
+EMP0494,34,12,PhD,DevOps,2,3.8,6,0,124084.8
+EMP0495,58,34,Master,Product Manager,2,2.5,7,0,176002.71
+EMP0496,49,27,Master,Software Engineer,3,4.2,9,1,156444.68
+EMP0497,50,28,Master,DevOps,3,2.3,12,0,158915.25
+EMP0498,30,6,Bachelor,Product Manager,3,4.7,3,0,86966.63
+EMP0499,23,0,High School,ML Engineer,3,3.2,11,0,77863.29
+EMP0500,56,32,PhD,QA Engineer,1,3.1,5,1,181386.82
+EMP0501,30,7,High School,DevOps,2,3.5,12,0,108436.86
+EMP0502,32,8,Bachelor,DevOps,1,2.5,11,0,105680.87
+EMP0503,52,30,High School,Software Engineer,2,2.7,6,1,160245.93
+EMP0504,55,33,PhD,DevOps,2,4.6,2,1,190314.83
+EMP0505,28,4,Master,QA Engineer,2,3.7,11,0,99812.69
+EMP0506,59,39,Master,DevOps,1,3.5,7,1,208329.78
+EMP0507,53,30,High School,ML Engineer,1,3.3,5,0,163815.76
+EMP0508,31,10,Bachelor,Product Manager,3,4.2,3,0,101503.68
+EMP0509,48,26,High School,DevOps,3,3.4,5,0,137974.31
+EMP0510,37,17,Bachelor,ML Engineer,3,2.5,12,0,118713.06
+EMP0511,58,37,High School,Software Engineer,2,4.8,10,1,192470.42
+EMP0512,23,1,High School,Software Engineer,2,3.8,9,1,85639.06
+EMP0513,32,11,PhD,ML Engineer,1,4.4,4,1,135007.45
+EMP0514,51,27,High School,Software Engineer,2,3.2,3,0,152939.73
+EMP0515,34,10,PhD,Software Engineer,3,2.3,9,0,107142.4
+EMP0516,29,9,PhD,QA Engineer,1,4.7,10,0,128978.06
+EMP0517,49,25,PhD,Product Manager,1,4.1,8,0,175449.55
+EMP0518,46,24,High School,DevOps,1,2.8,5,0,145518.54
+EMP0519,40,16,PhD,Product Manager,1,2.0,2,0,122351.5
+EMP0520,35,13,PhD,Product Manager,1,2.5,12,1,135319.67
+EMP0521,38,14,PhD,ML Engineer,2,3.8,12,1,138529.01
+EMP0522,57,34,Bachelor,Product Manager,3,3.7,6,1,168471.66
+EMP0523,58,36,PhD,QA Engineer,1,4.6,12,0,209740.24
+EMP0524,32,12,Bachelor,ML Engineer,2,4.4,10,0,120649.17
+EMP0525,32,9,High School,Data Analyst,1,3.4,11,1,121708.41
+EMP0526,45,25,High School,QA Engineer,2,4.8,8,1,162293.83
+EMP0527,60,40,Bachelor,QA Engineer,2,3.3,5,1,196182.46
+EMP0528,54,30,Bachelor,ML Engineer,1,4.0,7,0,183984.61
+EMP0529,22,1,High School,Product Manager,2,3.1,8,1,79108.69
+EMP0530,26,6,Master,QA Engineer,3,4.7,7,1,101912.75
+EMP0531,39,18,Bachelor,DevOps,2,3.7,6,0,131216.07
+EMP0532,26,2,Master,Product Manager,1,4.4,6,1,107245.66
+EMP0533,50,27,PhD,Software Engineer,2,4.9,9,1,184137.05
+EMP0534,52,32,Master,Data Analyst,2,3.9,5,0,170180.95
+EMP0535,42,19,Master,ML Engineer,3,2.0,6,0,119463.0
+EMP0536,43,23,Bachelor,DevOps,2,3.1,11,1,156125.74
+EMP0537,33,12,PhD,QA Engineer,1,2.7,5,1,126522.34
+EMP0538,37,13,Master,Software Engineer,1,2.4,3,1,123994.16
+EMP0539,22,0,High School,DevOps,2,3.9,9,1,74931.29
+EMP0540,54,32,PhD,Software Engineer,3,2.4,10,1,170666.2
+EMP0541,52,28,High School,ML Engineer,2,3.2,12,0,159296.98
+EMP0542,55,32,Master,QA Engineer,1,2.0,5,1,175138.3
+EMP0543,59,39,Master,Product Manager,3,4.6,4,1,192964.56
+EMP0544,43,21,Bachelor,DevOps,2,2.6,7,1,143301.61
+EMP0545,47,25,PhD,Software Engineer,3,2.4,11,0,151107.8
+EMP0546,37,13,PhD,DevOps,1,2.4,4,1,119723.0
+EMP0547,22,1,PhD,DevOps,1,5.0,12,1,117943.92
+EMP0548,57,33,High School,DevOps,1,4.1,2,0,173354.28
+EMP0549,38,15,High School,DevOps,3,3.0,7,1,104037.6
+EMP0550,38,16,High School,DevOps,1,3.1,12,0,131618.18
+EMP0551,58,34,Bachelor,Product Manager,2,3.0,10,1,181874.12
+EMP0552,27,4,Master,DevOps,3,4.9,4,1,92099.04
+EMP0553,48,24,PhD,Data Analyst,1,2.5,5,1,156845.7
+EMP0554,39,15,PhD,Product Manager,2,4.3,7,1,141230.96
+EMP0555,48,27,Bachelor,Data Analyst,1,4.2,12,1,184982.98
+EMP0556,27,6,Bachelor,DevOps,1,2.3,9,0,100128.72
+EMP0557,23,0,High School,Data Analyst,2,3.9,3,1,78150.91
+EMP0558,40,17,Bachelor,Software Engineer,3,4.5,2,0,124808.37
+EMP0559,44,22,PhD,DevOps,3,4.8,10,1,162837.3
+EMP0560,56,35,PhD,QA Engineer,3,3.9,11,1,195912.32
+EMP0561,55,31,Master,Product Manager,2,3.6,3,1,169533.49
+EMP0562,31,9,High School,Data Analyst,3,4.4,4,1,104504.01
+EMP0563,40,17,High School,QA Engineer,2,4.8,9,1,143687.1
+EMP0564,40,16,Bachelor,Data Analyst,3,3.1,8,1,121243.4
+EMP0565,47,26,Bachelor,QA Engineer,3,3.9,8,0,150458.66
+EMP0566,37,13,Master,Product Manager,3,4.2,6,1,123975.95
+EMP0567,34,14,Bachelor,Software Engineer,2,2.3,9,1,119025.74
+EMP0568,34,12,High School,Software Engineer,1,4.9,2,0,128181.36
+EMP0569,28,6,Master,Software Engineer,3,3.3,2,0,87581.27
+EMP0570,35,13,PhD,Product Manager,2,5.0,9,0,136569.9
+EMP0571,43,23,Bachelor,Data Analyst,2,4.3,3,1,153343.53
+EMP0572,38,15,High School,Data Analyst,3,2.7,9,0,117981.66
+EMP0573,24,3,PhD,QA Engineer,1,3.6,5,1,98178.59
+EMP0574,42,21,High School,QA Engineer,3,3.6,6,1,138393.37
+EMP0575,41,20,Master,Data Analyst,3,2.7,3,0,121422.12
+EMP0576,32,10,High School,DevOps,1,2.0,2,1,100023.22
+EMP0577,60,39,Master,Data Analyst,1,2.5,3,1,207157.91
+EMP0578,25,5,Master,QA Engineer,1,4.1,3,0,100465.11
+EMP0579,53,32,Master,ML Engineer,3,4.3,9,0,178061.42
+EMP0580,30,8,High School,DevOps,3,3.3,6,1,94171.19
+EMP0581,34,10,Bachelor,ML Engineer,2,3.0,9,1,116441.81
+EMP0582,57,36,High School,ML Engineer,1,3.3,6,1,184055.87
+EMP0583,51,31,PhD,QA Engineer,1,4.6,11,1,198080.87
+EMP0584,26,2,PhD,Software Engineer,3,4.0,10,0,89684.58
+EMP0585,40,18,PhD,QA Engineer,2,2.3,10,0,144273.05
+EMP0586,33,13,Bachelor,Data Analyst,2,2.6,2,1,112960.54
+EMP0587,53,29,Master,Data Analyst,2,2.7,3,0,159478.2
+EMP0588,53,33,PhD,QA Engineer,1,3.1,8,1,189437.86
+EMP0589,25,1,Master,ML Engineer,1,4.2,6,0,108762.36
+EMP0590,28,8,Bachelor,ML Engineer,2,2.6,10,0,99530.4
+EMP0591,58,37,PhD,QA Engineer,1,4.3,11,1,209754.42
+EMP0592,49,29,Bachelor,Software Engineer,3,3.2,7,0,148258.97
+EMP0593,56,32,PhD,Product Manager,2,3.7,7,1,177372.31
+EMP0594,42,18,Bachelor,ML Engineer,3,2.6,10,1,128964.96
+EMP0595,45,22,PhD,DevOps,1,4.2,6,0,148399.97
+EMP0596,41,21,Master,Software Engineer,1,4.6,2,1,154400.18
+EMP0597,57,33,Bachelor,Data Analyst,1,3.4,4,0,177810.31
+EMP0598,37,16,Master,Product Manager,1,3.7,11,0,152560.65
+EMP0599,26,4,PhD,Software Engineer,2,4.5,11,0,107606.35
+EMP0600,58,35,High School,Data Analyst,2,3.0,8,1,175945.5
+EMP0601,29,8,High School,QA Engineer,3,3.1,6,0,87272.84
+EMP0602,42,18,Bachelor,Software Engineer,1,4.0,8,1,152678.75
+EMP0603,60,36,High School,Software Engineer,2,2.9,8,0,178169.85
+EMP0604,58,38,PhD,Product Manager,1,3.2,8,0,203425.88
+EMP0605,30,7,Bachelor,DevOps,2,4.0,5,0,102751.92
+EMP0606,49,27,High School,Data Analyst,3,3.2,7,1,150593.88
+EMP0607,34,12,Master,ML Engineer,3,2.1,6,0,106919.23
+EMP0608,50,26,Bachelor,DevOps,1,4.8,5,0,168170.93
+EMP0609,45,24,High School,Data Analyst,3,2.2,11,0,139879.5
+EMP0610,22,0,High School,Product Manager,2,3.4,7,0,72609.28
+EMP0611,56,35,Bachelor,ML Engineer,3,4.3,10,1,174867.77
+EMP0612,23,0,High School,Product Manager,1,2.2,5,1,70734.89
+EMP0613,25,2,High School,Data Analyst,2,4.0,12,1,96766.54
+EMP0614,46,25,PhD,ML Engineer,3,2.3,7,1,145608.74
+EMP0615,60,36,High School,Software Engineer,1,3.5,9,0,198610.71
+EMP0616,41,19,PhD,DevOps,3,2.5,7,1,132834.85
+EMP0617,44,22,Bachelor,ML Engineer,2,4.4,12,1,164483.51
+EMP0618,23,0,Master,Software Engineer,1,3.0,8,0,85791.31
+EMP0619,27,4,Bachelor,DevOps,1,3.7,8,1,110015.34
+EMP0620,56,35,Bachelor,QA Engineer,1,3.7,12,0,193679.36
+EMP0621,30,8,Bachelor,DevOps,1,4.0,11,0,118498.62
+EMP0622,29,8,Master,Software Engineer,3,2.1,7,1,99054.33
+EMP0623,48,26,PhD,QA Engineer,3,4.8,6,0,160145.71
+EMP0624,33,13,Master,ML Engineer,3,3.8,11,0,118530.86
+EMP0625,36,16,Master,Data Analyst,3,4.3,4,1,125484.9
+EMP0626,46,23,PhD,Software Engineer,1,2.6,2,1,148638.42
+EMP0627,22,0,PhD,Software Engineer,3,4.0,5,0,89375.11
+EMP0628,50,26,PhD,QA Engineer,2,4.6,5,1,172095.45
+EMP0629,47,27,PhD,QA Engineer,2,3.2,11,0,162652.27
+EMP0630,24,3,PhD,QA Engineer,1,3.7,10,0,109032.73
+EMP0631,34,12,PhD,DevOps,2,4.3,6,1,130273.56
+EMP0632,25,1,Bachelor,DevOps,3,3.4,10,0,83091.14
+EMP0633,33,9,Bachelor,DevOps,2,3.0,2,0,90436.72
+EMP0634,34,11,High School,Product Manager,2,4.1,4,0,111895.21
+EMP0635,27,7,PhD,QA Engineer,2,2.3,8,0,99168.32
+EMP0636,32,10,Bachelor,Software Engineer,1,2.5,2,1,112103.72
+EMP0637,41,19,PhD,Product Manager,3,2.5,4,0,130809.74
+EMP0638,22,0,PhD,DevOps,3,4.4,11,1,93751.19
+EMP0639,37,16,PhD,DevOps,2,3.3,11,0,136967.26
+EMP0640,57,36,High School,Software Engineer,1,2.2,7,0,184683.47
+EMP0641,31,11,Master,Product Manager,1,2.1,8,0,118730.1
+EMP0642,60,36,Bachelor,DevOps,3,3.7,2,0,173177.44
+EMP0643,41,19,Master,DevOps,1,4.3,10,0,154428.24
+EMP0644,39,17,PhD,ML Engineer,1,4.1,11,0,154472.95
+EMP0645,28,4,High School,DevOps,3,4.1,6,1,84545.24
+EMP0646,55,31,Master,Software Engineer,3,3.7,10,1,169795.31
+EMP0647,53,32,Bachelor,QA Engineer,2,4.9,2,0,179942.33
+EMP0648,29,8,PhD,DevOps,1,3.0,10,0,120241.69
+EMP0649,22,1,Master,Product Manager,1,2.9,10,1,99410.06
+EMP0650,43,21,PhD,QA Engineer,3,3.8,2,0,133044.7
+EMP0651,34,12,Master,QA Engineer,2,4.7,2,0,114618.79
+EMP0652,56,34,PhD,DevOps,3,2.2,10,1,175051.85
+EMP0653,58,36,High School,Software Engineer,3,4.1,7,0,178236.42
+EMP0654,23,1,PhD,QA Engineer,3,4.5,11,1,96384.13
+EMP0655,33,9,High School,Product Manager,3,4.6,2,1,95430.49
+EMP0656,37,15,PhD,Product Manager,1,3.6,4,0,137815.83
+EMP0657,45,25,Bachelor,Data Analyst,2,3.5,9,0,158128.63
+EMP0658,55,33,Master,Software Engineer,1,4.5,10,0,203839.93
+EMP0659,35,15,PhD,DevOps,3,4.6,3,0,123751.24
+EMP0660,60,40,Master,DevOps,1,2.3,12,1,208313.34
+EMP0661,23,0,Master,QA Engineer,1,3.0,5,1,90415.46
+EMP0662,50,30,Master,Software Engineer,1,2.8,2,0,170658.26
+EMP0663,35,11,Master,ML Engineer,2,2.8,6,0,112440.22
+EMP0664,43,19,PhD,Data Analyst,1,2.1,12,0,150241.0
+EMP0665,28,5,High School,Data Analyst,2,3.2,11,1,96071.91
+EMP0666,34,10,High School,DevOps,3,2.4,9,0,92138.96
+EMP0667,51,29,PhD,DevOps,1,4.8,4,1,188207.46
+EMP0668,43,21,PhD,DevOps,1,2.2,3,1,143522.54
+EMP0669,52,29,Bachelor,Product Manager,2,3.8,4,0,156548.11
+EMP0670,28,6,High School,Product Manager,3,3.4,11,1,98186.19
+EMP0671,37,13,Bachelor,ML Engineer,1,4.9,8,0,132441.68
+EMP0672,59,36,PhD,ML Engineer,2,3.6,5,0,193575.88
+EMP0673,26,2,PhD,Data Analyst,3,3.8,7,0,88888.86
+EMP0674,47,27,High School,QA Engineer,3,4.3,8,1,153010.39
+EMP0675,53,33,High School,Software Engineer,1,4.7,12,0,192511.52
+EMP0676,50,26,Master,DevOps,3,3.7,5,0,143123.22
+EMP0677,42,20,Master,DevOps,3,4.9,7,0,137026.1
+EMP0678,54,31,Bachelor,Product Manager,1,3.1,10,0,175667.98
+EMP0679,22,0,Master,Data Analyst,2,4.6,5,1,91415.6
+EMP0680,42,19,PhD,DevOps,2,3.6,12,0,144373.86
+EMP0681,52,31,Bachelor,ML Engineer,2,4.5,7,1,186024.15
+EMP0682,30,9,High School,Data Analyst,3,2.0,9,1,103649.64
+EMP0683,30,10,Bachelor,QA Engineer,2,4.6,11,1,121652.45
+EMP0684,49,25,PhD,DevOps,2,2.7,8,0,151720.97
+EMP0685,58,35,Bachelor,QA Engineer,3,2.8,10,1,175886.93
+EMP0686,52,30,High School,ML Engineer,2,4.9,3,0,166481.95
+EMP0687,55,33,PhD,ML Engineer,1,3.6,11,0,194369.13
+EMP0688,26,2,Master,ML Engineer,1,4.7,10,0,115443.12
+EMP0689,52,29,PhD,ML Engineer,3,3.0,7,1,161338.38
+EMP0690,60,38,Master,Data Analyst,3,3.4,4,0,180640.41
+EMP0691,40,16,High School,Product Manager,2,2.2,10,0,121170.7
+EMP0692,30,6,Master,Product Manager,2,2.0,3,0,85806.24
+EMP0693,59,38,PhD,Product Manager,1,2.8,5,1,201262.61
+EMP0694,24,2,High School,Software Engineer,3,4.8,4,1,87891.74
+EMP0695,48,25,Bachelor,QA Engineer,2,4.2,4,0,146216.84
+EMP0696,25,3,High School,Data Analyst,1,3.4,9,1,96244.44
+EMP0697,52,28,Bachelor,DevOps,3,4.1,9,1,166748.89
+EMP0698,22,0,PhD,DevOps,3,2.9,10,0,86792.49
+EMP0699,28,4,Master,DevOps,3,4.8,6,1,97282.66
+EMP0700,38,14,PhD,DevOps,3,4.2,12,0,136943.76
+EMP0701,55,33,Bachelor,Product Manager,3,2.0,2,0,153608.67
+EMP0702,28,5,Master,Software Engineer,3,2.8,5,0,84936.19
+EMP0703,23,0,High School,Data Analyst,3,4.0,5,0,70723.41
+EMP0704,60,39,PhD,QA Engineer,3,3.7,4,0,185247.43
+EMP0705,33,11,Master,DevOps,3,4.8,12,1,127845.29
+EMP0706,49,27,Master,Software Engineer,1,2.8,2,1,160297.96
+EMP0707,46,24,High School,Product Manager,2,2.5,3,1,140704.85
+EMP0708,47,26,PhD,Data Analyst,1,3.6,8,0,170654.81
+EMP0709,28,5,Master,Data Analyst,1,2.2,11,1,107532.59
+EMP0710,53,32,High School,Data Analyst,3,3.2,4,1,157082.8
+EMP0711,47,23,High School,ML Engineer,3,4.8,9,1,141152.8
+EMP0712,26,2,Bachelor,Data Analyst,2,4.9,9,0,101815.4
+EMP0713,58,34,Master,Product Manager,3,2.9,2,0,157803.75
+EMP0714,43,23,PhD,Product Manager,3,2.6,10,0,148867.53
+EMP0715,46,25,Master,QA Engineer,2,4.7,12,1,163307.05
+EMP0716,50,29,Bachelor,Data Analyst,1,2.1,11,0,168704.94
+EMP0717,53,30,High School,ML Engineer,3,2.9,10,1,158361.84
+EMP0718,43,23,Master,QA Engineer,1,3.2,5,1,156448.26
+EMP0719,56,35,Bachelor,Data Analyst,1,4.2,9,0,186199.34
+EMP0720,24,3,Bachelor,Data Analyst,1,3.9,6,0,101609.02
+EMP0721,51,27,Bachelor,ML Engineer,1,4.5,3,0,160033.85
+EMP0722,36,16,Bachelor,DevOps,2,4.4,12,1,141728.63
+EMP0723,42,22,Bachelor,Product Manager,1,4.3,11,0,160561.51
+EMP0724,31,8,Bachelor,QA Engineer,2,3.7,9,0,110143.37
+EMP0725,59,39,Bachelor,Data Analyst,3,3.8,4,0,182993.71
+EMP0726,22,1,High School,QA Engineer,3,3.8,6,1,75923.76
+EMP0727,52,31,Bachelor,Software Engineer,3,2.8,9,1,162567.16
+EMP0728,24,0,Bachelor,QA Engineer,2,3.8,3,1,84871.94
+EMP0729,44,21,High School,ML Engineer,1,2.6,10,0,137802.11
+EMP0730,56,32,Bachelor,DevOps,3,4.0,6,0,160382.6
+EMP0731,34,14,Bachelor,QA Engineer,2,3.5,4,0,121589.53
+EMP0732,35,12,Master,Product Manager,3,4.4,9,0,120067.59
+EMP0733,28,8,Bachelor,Software Engineer,1,3.5,3,0,113054.97
+EMP0734,59,35,Master,DevOps,1,4.2,7,0,191682.99
+EMP0735,29,7,Bachelor,Data Analyst,1,4.2,5,1,116013.06
+EMP0736,59,36,High School,DevOps,1,2.6,11,1,188863.88
+EMP0737,33,10,Master,Software Engineer,2,4.2,12,1,129257.06
+EMP0738,30,10,High School,Product Manager,1,2.3,9,1,112438.67
+EMP0739,48,27,Master,Software Engineer,2,3.8,12,0,164324.79
+EMP0740,36,16,PhD,ML Engineer,2,4.6,5,1,138008.08
+EMP0741,51,29,High School,QA Engineer,2,4.2,5,0,159192.35
+EMP0742,59,38,High School,DevOps,1,2.1,9,0,191706.11
+EMP0743,49,25,PhD,DevOps,3,4.5,9,1,162104.76
+EMP0744,22,0,Bachelor,Software Engineer,2,2.9,12,0,89905.75
+EMP0745,23,0,Master,Software Engineer,3,3.4,11,0,86016.68
+EMP0746,30,7,Bachelor,Product Manager,3,3.4,12,0,98740.83
+EMP0747,26,3,Master,ML Engineer,1,2.9,6,0,97385.63
+EMP0748,43,23,Master,Data Analyst,1,3.1,9,0,156202.23
+EMP0749,45,23,Bachelor,QA Engineer,3,4.1,10,0,148330.59
+EMP0750,56,36,PhD,QA Engineer,3,4.6,5,0,188160.43
+EMP0751,42,20,Master,ML Engineer,3,3.3,2,0,123138.79
+EMP0752,54,30,High School,DevOps,3,3.6,10,1,164996.48
+EMP0753,50,26,Master,QA Engineer,3,4.4,3,0,154244.03
+EMP0754,27,4,Bachelor,Product Manager,1,2.3,6,0,90419.55
+EMP0755,31,8,Bachelor,Software Engineer,3,4.9,2,1,96955.82
+EMP0756,30,7,Master,DevOps,2,4.2,2,1,109233.44
+EMP0757,34,14,High School,Software Engineer,3,3.9,8,1,112524.81
+EMP0758,53,29,PhD,DevOps,2,3.7,6,0,163764.48
+EMP0759,38,17,PhD,Product Manager,2,4.3,2,0,132136.4
+EMP0760,32,8,Bachelor,QA Engineer,3,2.9,4,0,93118.91
+EMP0761,32,11,High School,Data Analyst,2,3.7,9,1,114198.53
+EMP0762,24,2,Master,Software Engineer,2,3.3,4,1,91179.78
+EMP0763,29,9,PhD,DevOps,1,4.8,7,0,135949.08
+EMP0764,54,32,Master,DevOps,2,4.9,11,0,188376.75
+EMP0765,58,35,Master,QA Engineer,1,4.2,2,0,188728.35
+EMP0766,23,0,Bachelor,DevOps,2,2.3,2,0,67406.26
+EMP0767,59,35,Bachelor,Product Manager,1,2.1,10,1,182150.46
+EMP0768,54,31,Bachelor,DevOps,2,3.8,10,0,165580.08
+EMP0769,45,22,Bachelor,QA Engineer,2,3.1,7,0,140796.09
+EMP0770,50,26,High School,Software Engineer,3,4.7,8,1,158483.95
+EMP0771,40,19,PhD,QA Engineer,2,2.4,11,0,141906.93
+EMP0772,55,33,High School,ML Engineer,2,2.3,8,1,170718.8
+EMP0773,48,27,PhD,QA Engineer,3,4.3,4,0,158735.15
+EMP0774,57,34,High School,Product Manager,3,2.9,10,1,172459.98
+EMP0775,36,16,High School,Software Engineer,2,2.9,12,1,133059.88
+EMP0776,40,17,Bachelor,DevOps,3,3.9,2,0,122566.56
+EMP0777,39,16,High School,ML Engineer,3,3.1,9,1,122257.91
+EMP0778,52,32,Master,ML Engineer,3,3.7,6,0,162859.58
+EMP0779,59,39,Bachelor,Product Manager,2,4.6,4,1,199253.89
+EMP0780,48,26,High School,Product Manager,2,3.6,3,0,149979.95
+EMP0781,33,13,Bachelor,ML Engineer,2,4.6,12,1,133567.98
+EMP0782,45,25,Master,Software Engineer,1,2.4,6,1,164733.42
+EMP0783,53,30,Master,Software Engineer,1,2.7,10,0,179692.78
+EMP0784,57,33,High School,DevOps,2,4.7,3,0,167242.83
+EMP0785,23,0,Master,Product Manager,3,3.1,9,1,82001.21
+EMP0786,29,8,Bachelor,QA Engineer,1,4.1,6,0,118210.75
+EMP0787,35,14,High School,DevOps,3,4.3,3,0,114421.01
+EMP0788,49,29,Bachelor,Data Analyst,1,4.4,10,0,181142.66
+EMP0789,52,32,Master,Data Analyst,1,2.9,2,0,175216.39
+EMP0790,35,11,Bachelor,Software Engineer,3,3.1,3,0,89193.0
+EMP0791,39,15,Master,Product Manager,1,4.6,11,0,145295.69
+EMP0792,59,39,Bachelor,QA Engineer,1,4.9,4,0,204353.58
+EMP0793,28,7,PhD,Product Manager,3,3.8,9,0,105776.36
+EMP0794,46,23,Bachelor,ML Engineer,1,3.2,7,0,156396.83
+EMP0795,51,31,Bachelor,DevOps,2,4.1,10,0,180457.56
+EMP0796,46,24,PhD,ML Engineer,3,2.9,9,0,148705.88
+EMP0797,57,34,Master,DevOps,1,4.6,9,1,206875.7
+EMP0798,53,33,PhD,DevOps,3,4.0,3,0,184185.12
+EMP0799,31,8,PhD,QA Engineer,3,4.9,4,0,105853.64
+EMP0800,34,10,PhD,Data Analyst,1,4.5,9,1,137813.53
+EMP0801,59,35,Master,QA Engineer,2,3.1,12,1,194772.75
+EMP0802,31,8,High School,Data Analyst,2,3.5,5,0,98275.08
+EMP0803,23,3,High School,Data Analyst,2,4.0,4,1,86631.73
+EMP0804,41,17,High School,Data Analyst,3,4.3,9,1,126275.7
+EMP0805,34,12,PhD,DevOps,3,2.8,7,0,110768.98
+EMP0806,49,29,PhD,DevOps,2,4.6,9,1,181302.44
+EMP0807,24,4,Bachelor,ML Engineer,3,4.6,6,0,88853.22
+EMP0808,46,23,High School,ML Engineer,3,3.5,10,1,141765.04
+EMP0809,52,28,Bachelor,ML Engineer,1,3.2,9,1,169631.51
+EMP0810,40,18,High School,Data Analyst,3,2.1,7,1,113148.63
+EMP0811,59,39,Master,DevOps,1,3.3,7,1,200902.74
+EMP0812,37,16,Master,ML Engineer,1,4.7,3,1,148333.71
+EMP0813,29,7,Bachelor,Data Analyst,3,3.0,9,1,88564.83
+EMP0814,39,19,PhD,ML Engineer,1,5.0,8,1,159229.67
+EMP0815,42,18,High School,DevOps,1,4.1,5,1,133944.71
+EMP0816,43,22,Master,Product Manager,2,2.6,12,0,147750.05
+EMP0817,56,35,Master,Product Manager,1,2.9,11,1,197483.49
+EMP0818,27,3,High School,ML Engineer,2,2.8,11,1,85377.19
+EMP0819,49,28,Master,Data Analyst,3,4.5,10,1,163851.83
+EMP0820,34,11,PhD,Product Manager,3,3.5,12,0,119239.47
+EMP0821,23,0,Bachelor,ML Engineer,2,2.6,9,1,86954.6
+EMP0822,49,25,High School,ML Engineer,1,3.1,4,0,148752.11
+EMP0823,31,9,PhD,DevOps,2,4.6,3,0,117187.63
+EMP0824,40,19,Master,QA Engineer,3,2.7,5,0,120803.65
+EMP0825,31,10,High School,Software Engineer,2,3.4,10,1,104980.89
+EMP0826,34,13,Master,Software Engineer,1,2.8,6,0,128490.3
+EMP0827,24,1,High School,Data Analyst,1,2.9,6,0,87966.97
+EMP0828,45,25,PhD,QA Engineer,1,2.7,11,0,164008.34
+EMP0829,55,31,Master,DevOps,1,2.7,3,1,171067.51
+EMP0830,46,25,PhD,Software Engineer,1,2.3,5,1,164455.95
+EMP0831,50,27,Master,ML Engineer,1,3.5,7,0,167295.94
+EMP0832,37,15,Bachelor,Product Manager,2,4.1,6,0,130638.85
+EMP0833,60,40,High School,QA Engineer,3,2.7,10,1,180778.69
+EMP0834,45,25,Bachelor,DevOps,2,2.0,8,1,156998.66
+EMP0835,41,21,Bachelor,Product Manager,1,4.6,4,1,149618.45
+EMP0836,48,28,Master,Data Analyst,2,3.4,8,1,161354.09
+EMP0837,49,29,Bachelor,QA Engineer,2,3.5,7,1,160727.87
+EMP0838,42,19,High School,Data Analyst,3,3.9,12,1,130863.19
+EMP0839,30,10,PhD,Software Engineer,3,2.9,11,0,111925.59
+EMP0840,30,6,PhD,Product Manager,2,3.4,4,1,105944.37
+EMP0841,33,9,Master,Product Manager,1,2.3,7,0,108346.27
+EMP0842,58,37,High School,Data Analyst,3,3.9,12,0,185065.34
+EMP0843,27,4,Bachelor,Product Manager,3,4.6,2,1,85204.38
+EMP0844,31,11,Master,Software Engineer,3,2.4,10,1,104541.07
+EMP0845,51,28,High School,Software Engineer,3,2.6,6,1,145362.29
+EMP0846,49,28,Bachelor,Product Manager,3,4.0,8,0,153076.14
+EMP0847,48,27,High School,Product Manager,2,2.7,9,0,147702.26
+EMP0848,51,31,High School,DevOps,1,4.6,8,0,185687.09
+EMP0849,46,23,Master,Data Analyst,1,3.7,2,1,160096.78
+EMP0850,44,20,High School,Data Analyst,2,3.5,8,1,136955.57
+EMP0851,47,25,Bachelor,ML Engineer,1,3.7,6,0,151169.68
+EMP0852,51,30,High School,Product Manager,3,3.6,4,1,154432.67
+EMP0853,29,7,High School,Software Engineer,2,4.6,6,1,109568.13
+EMP0854,38,14,Master,ML Engineer,2,3.3,4,1,121341.6
+EMP0855,53,32,PhD,Data Analyst,1,2.4,5,0,180027.14
+EMP0856,51,28,High School,DevOps,1,3.3,10,1,171143.89
+EMP0857,51,28,High School,QA Engineer,1,2.4,3,0,155357.29
+EMP0858,32,8,Master,ML Engineer,3,3.8,11,0,104539.58
+EMP0859,55,31,Bachelor,DevOps,1,2.7,9,0,175497.16
+EMP0860,29,6,Master,ML Engineer,1,4.5,4,0,112003.57
+EMP0861,27,4,PhD,DevOps,3,4.9,11,0,104226.72
+EMP0862,50,28,Bachelor,Software Engineer,1,4.4,6,1,177051.74
+EMP0863,25,5,PhD,Data Analyst,2,2.8,5,1,105427.17
+EMP0864,32,9,PhD,Product Manager,3,4.3,12,0,120558.47
+EMP0865,29,7,PhD,DevOps,3,4.4,6,0,103062.12
+EMP0866,45,21,Bachelor,DevOps,2,4.7,9,1,155192.41
+EMP0867,58,34,PhD,Data Analyst,2,4.4,11,0,189941.26
+EMP0868,24,0,Master,DevOps,3,2.7,12,0,80295.62
+EMP0869,53,29,High School,Product Manager,2,3.3,9,1,165294.24
+EMP0870,41,20,PhD,Product Manager,3,2.1,3,0,124881.39
+EMP0871,54,34,PhD,DevOps,1,3.4,11,1,195533.94
+EMP0872,54,34,High School,QA Engineer,3,3.4,4,1,168835.68
+EMP0873,24,4,PhD,QA Engineer,2,2.9,9,1,99163.61
+EMP0874,33,12,Bachelor,Data Analyst,3,4.9,6,0,112996.79
+EMP0875,49,25,High School,Data Analyst,2,2.4,4,1,137500.38
+EMP0876,60,37,Master,ML Engineer,3,3.1,12,1,188609.78
+EMP0877,41,21,Bachelor,Software Engineer,1,2.6,2,0,139533.9
+EMP0878,31,10,PhD,QA Engineer,3,2.6,6,1,102677.38
+EMP0879,31,8,PhD,Data Analyst,1,2.5,4,1,116601.4
+EMP0880,50,26,Bachelor,Software Engineer,2,3.7,8,0,156583.22
+EMP0881,43,23,High School,QA Engineer,3,3.3,8,1,137613.34
+EMP0882,57,35,High School,DevOps,2,3.5,11,1,179083.48
+EMP0883,36,16,High School,DevOps,3,2.9,3,1,113299.75
+EMP0884,52,32,PhD,ML Engineer,3,3.0,8,0,165609.08
+EMP0885,32,10,Bachelor,DevOps,2,3.3,10,0,107619.34
+EMP0886,60,37,Bachelor,Product Manager,3,4.1,8,1,182618.18
+EMP0887,52,31,Bachelor,Product Manager,3,4.2,12,1,176237.61
+EMP0888,60,37,High School,DevOps,2,2.9,5,0,178184.73
+EMP0889,23,1,Master,Product Manager,3,2.5,10,0,79068.98
+EMP0890,29,5,Bachelor,Data Analyst,3,2.7,6,1,81997.57
+EMP0891,44,24,Master,Software Engineer,3,4.6,11,0,153526.81
+EMP0892,50,27,High School,Data Analyst,3,3.8,3,0,134447.96
+EMP0893,54,34,Bachelor,QA Engineer,1,4.6,7,0,191348.64
+EMP0894,54,31,High School,Software Engineer,3,3.1,4,0,145230.26
+EMP0895,34,11,PhD,Data Analyst,1,4.5,9,1,138038.76
+EMP0896,39,17,PhD,Product Manager,3,4.0,4,1,132786.68
+EMP0897,36,15,PhD,DevOps,2,4.7,10,1,148257.18
+EMP0898,22,0,High School,Data Analyst,2,2.9,4,1,72952.94
+EMP0899,25,2,High School,QA Engineer,3,2.5,11,0,86132.61
+EMP0900,55,33,PhD,DevOps,3,4.1,6,1,176639.26
+EMP0901,44,24,Master,ML Engineer,3,4.8,8,1,151427.98
+EMP0902,50,28,PhD,Software Engineer,2,2.3,10,1,159628.35
+EMP0903,46,25,Master,Software Engineer,1,3.5,6,1,165304.55
+EMP0904,23,0,Master,Software Engineer,2,4.2,10,0,90840.04
+EMP0905,25,3,Master,QA Engineer,3,3.1,2,0,72453.86
+EMP0906,22,0,Master,Software Engineer,3,5.0,11,0,92850.61
+EMP0907,44,22,Master,QA Engineer,3,3.7,4,1,136605.56
+EMP0908,42,18,Bachelor,Product Manager,2,2.3,8,1,129428.08
+EMP0909,27,7,High School,DevOps,1,3.4,9,0,104718.77
+EMP0910,59,35,PhD,Product Manager,3,3.5,8,1,186179.07
+EMP0911,53,30,Bachelor,Software Engineer,3,2.4,9,0,158903.08
+EMP0912,55,35,Bachelor,DevOps,2,2.1,4,1,170442.42
+EMP0913,29,5,PhD,Data Analyst,1,3.1,6,0,104818.3
+EMP0914,41,19,Master,Product Manager,2,2.1,4,0,126314.44
+EMP0915,59,36,High School,Product Manager,2,2.6,9,0,179112.63
+EMP0916,24,1,PhD,ML Engineer,2,3.7,7,1,97974.69
+EMP0917,52,28,Bachelor,Software Engineer,3,3.9,9,1,164426.52
+EMP0918,27,3,PhD,DevOps,1,4.7,7,0,117196.56
+EMP0919,50,28,High School,Software Engineer,3,2.1,12,1,147743.08
+EMP0920,57,37,Bachelor,ML Engineer,3,3.7,2,0,172430.49
+EMP0921,52,28,High School,Data Analyst,3,4.8,4,0,152825.84
+EMP0922,59,36,High School,ML Engineer,3,3.0,11,0,175932.11
+EMP0923,53,33,Master,DevOps,1,3.2,10,1,189311.06
+EMP0924,28,4,Bachelor,Product Manager,1,2.5,3,0,91980.1
+EMP0925,41,18,Bachelor,Data Analyst,3,4.9,4,0,128830.92
+EMP0926,28,6,Bachelor,DevOps,2,2.8,3,0,86924.04
+EMP0927,34,13,Bachelor,DevOps,3,4.3,8,0,116376.66
+EMP0928,57,34,High School,DevOps,1,3.2,5,0,181126.17
+EMP0929,39,15,High School,Software Engineer,3,4.0,4,1,111096.4
+EMP0930,54,33,Bachelor,Product Manager,3,5.0,5,1,174592.54
+EMP0931,57,34,High School,Data Analyst,2,4.9,11,1,188664.81
+EMP0932,25,2,Master,ML Engineer,2,4.5,8,1,99214.3
+EMP0933,35,11,Master,Data Analyst,1,4.2,11,0,131944.9
+EMP0934,29,8,Master,DevOps,1,3.8,7,1,124410.74
+EMP0935,38,15,Master,Software Engineer,3,4.9,7,0,122560.38
+EMP0936,23,2,High School,ML Engineer,2,2.0,2,0,70602.35
+EMP0937,48,24,PhD,DevOps,3,2.2,12,0,137598.65
+EMP0938,50,30,Master,DevOps,3,3.1,4,0,153368.28
+EMP0939,29,6,Master,Software Engineer,2,2.0,2,1,87543.05
+EMP0940,34,14,Master,QA Engineer,1,2.7,9,1,127502.26
+EMP0941,24,2,PhD,QA Engineer,3,3.8,2,0,87477.76
+EMP0942,29,7,PhD,Software Engineer,3,2.6,11,0,98836.77
+EMP0943,26,2,Bachelor,QA Engineer,1,2.4,11,0,98939.0
+EMP0944,39,18,High School,QA Engineer,3,3.6,6,1,119055.66
+EMP0945,22,0,High School,Product Manager,2,4.5,8,1,92338.36
+EMP0946,53,31,High School,QA Engineer,1,2.1,8,1,172597.37
+EMP0947,42,22,PhD,Software Engineer,2,2.2,11,0,149855.16
+EMP0948,49,29,Bachelor,Software Engineer,1,3.0,3,0,163625.13
+EMP0949,23,0,PhD,Data Analyst,3,4.4,7,1,88881.04
+EMP0950,43,23,Master,ML Engineer,1,4.8,11,1,177930.59
+EMP0951,28,5,High School,Data Analyst,1,4.8,8,1,117391.0
+EMP0952,30,10,PhD,Data Analyst,2,3.8,8,0,115482.1
+EMP0953,28,8,High School,Product Manager,2,3.2,11,1,107623.17
+EMP0954,22,0,PhD,DevOps,2,4.6,11,0,105181.34
+EMP0955,43,23,PhD,ML Engineer,2,3.8,3,0,156103.99
+EMP0956,59,38,Bachelor,QA Engineer,3,2.8,8,1,181287.71
+EMP0957,50,29,Bachelor,Software Engineer,1,2.2,6,1,159810.22
+EMP0958,44,22,Bachelor,Software Engineer,2,2.9,7,1,142921.42
+EMP0959,45,25,Bachelor,Data Analyst,1,3.5,10,0,161672.31
+EMP0960,34,13,High School,Product Manager,1,4.0,9,1,132690.68
+EMP0961,59,35,Master,ML Engineer,2,3.3,4,0,171830.79
+EMP0962,24,1,Bachelor,Data Analyst,3,2.7,5,1,74998.87
+EMP0963,35,14,PhD,QA Engineer,2,4.4,8,0,128138.66
+EMP0964,22,0,High School,Data Analyst,2,2.1,3,0,69835.66
+EMP0965,40,17,Bachelor,QA Engineer,3,4.7,7,0,131833.61
+EMP0966,40,19,Bachelor,Product Manager,3,2.5,10,0,124788.12
+EMP0967,33,12,High School,Software Engineer,2,4.7,2,0,108351.44
+EMP0968,29,7,Bachelor,Product Manager,2,2.7,7,0,102053.22
+EMP0969,55,31,PhD,QA Engineer,1,2.4,4,0,174397.03
+EMP0970,45,23,PhD,QA Engineer,1,4.8,11,0,177040.39
+EMP0971,56,34,Bachelor,Product Manager,1,2.2,6,0,182859.64
+EMP0972,53,32,High School,DevOps,3,3.8,4,1,153003.22
+EMP0973,54,32,PhD,ML Engineer,2,2.5,7,1,173998.97
+EMP0974,39,15,PhD,QA Engineer,3,3.9,5,0,117834.14
+EMP0975,34,11,Bachelor,DevOps,1,2.9,8,0,122358.59
+EMP0976,57,37,Bachelor,Data Analyst,2,3.3,7,0,183273.29
+EMP0977,59,39,PhD,ML Engineer,3,3.0,9,1,188510.45
+EMP0978,53,31,Master,DevOps,1,2.5,5,1,176375.44
+EMP0979,26,4,High School,Product Manager,3,3.5,12,0,89893.25
+EMP0980,28,8,High School,Product Manager,1,3.6,7,0,100738.98
+EMP0981,43,21,Master,QA Engineer,3,4.5,5,0,146483.07
+EMP0982,56,34,High School,Product Manager,2,4.5,8,1,183983.03
+EMP0983,59,39,PhD,QA Engineer,3,5.0,4,1,198900.38
+EMP0984,35,12,Bachelor,ML Engineer,3,4.4,9,1,125148.84
+EMP0985,43,23,Master,Software Engineer,2,4.3,8,0,148542.02
+EMP0986,23,1,Bachelor,ML Engineer,1,2.9,2,1,89543.46
+EMP0987,44,22,Bachelor,DevOps,2,4.1,8,1,151400.96
+EMP0988,24,3,Bachelor,Product Manager,3,3.9,11,1,93770.21
+EMP0989,46,25,PhD,Data Analyst,3,3.2,9,0,146138.44
+EMP0990,41,21,Bachelor,Data Analyst,3,3.7,2,1,140397.7
+EMP0991,23,2,Bachelor,Data Analyst,2,2.9,5,1,84180.11
+EMP0992,25,3,High School,Software Engineer,2,4.6,8,1,96565.74
+EMP0993,32,12,Bachelor,ML Engineer,2,3.4,3,1,121298.43
+EMP0994,30,9,Master,DevOps,3,4.0,4,1,102768.47
+EMP0995,59,38,PhD,Product Manager,1,2.0,4,1,196916.23
+EMP0996,37,13,Master,ML Engineer,2,3.4,11,0,127579.68
+EMP0997,27,5,PhD,Product Manager,3,4.5,6,1,96672.53
+EMP0998,33,10,Bachelor,Software Engineer,3,4.2,9,1,107247.32
+EMP0999,33,9,High School,DevOps,3,4.8,5,0,100412.67
+EMP1000,40,20,Bachelor,DevOps,2,5.0,10,0,156563.24

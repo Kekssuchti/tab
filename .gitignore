@@ -11,6 +11,7 @@ wheels/
 .env
 
 logs/
-data/
+data/mimic/
+data/erope/
 models/
 cache/
