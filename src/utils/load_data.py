@@ -5,7 +5,7 @@ from src.config import config
 
 
 def load_toy_data_student():
-    df = pd.read_csv(config.data_dir / "ai_student_impact_dataset.csv")
+    df = pd.read_csv(config.dir_data_toy / "ai_student_impact_dataset.csv")
     df.describe()
 
     X_cols = [
@@ -31,13 +31,29 @@ def load_toy_data_student():
     return X, y
 
 
-def load_toy_data_dna():
-    df = pd.read_csv(config.data_dir / "dna_methylation.csv")
+def load_toy_data_cls():
+    df = pd.read_csv(config.dir_data_toy / "dna_methylation.csv")
     df.describe()
 
     y_col = ["methylation_status"]
 
     X = df.drop(y_col, axis=1)
+    y = np.array(df[y_col]).ravel()
+
+    return X, y
+
+
+def load_toy_data_reg():
+    df = pd.read_csv(config.dir_data_toy / "employee_salary_regression.csv")
+    df.describe()
+
+    y_col = ["annual_salary_usd"]
+
+    X = df.drop(y_col + ["employee_id"], axis=1)
+
+    X = pd.get_dummies(X, columns=["education_level", "job_role"])
+    X = X.astype(np.float32)
+
     y = np.array(df[y_col]).ravel()
 
     return X, y

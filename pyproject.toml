@@ -19,6 +19,14 @@ dependencies = [
     "orion-bix",
     "orion-msp",
     "autogluon-tabular[mitra]==1.5.0",
+    "scipy",
+    "scikit-learn",
+    "einops",
+    "huggingface-hub",
+    "tqdm",
+    "typing-extensions",
+    "kditransform",
+    "pytest>=8.4.0",
 ]
 
 [tool.uv.sources]
@@ -42,13 +50,15 @@ name = "pytorch-rocm"
 url = "https://download.pytorch.org/whl/rocm6.4"
 explicit = true
 
-[dependency-groups]
-limix = [
-    "scipy",
-    "scikit-learn",
-    "einops",
-    "huggingface-hub",
-    "tqdm",
-    "typing-extensions",
-    "kditransform",
+[tool.pytest.ini_options]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore:Flash Efficient attention on Current AMD GPU is still experimental:UserWarning",
+    "ignore:Mem Efficient attention on Current AMD GPU is still experimental:UserWarning",
+    "ignore:The argument 'device' of Tensor\\.pin_memory\\(\\) is deprecated:DeprecationWarning",
+    "ignore:The argument 'device' of Tensor\\.is_pinned\\(\\) is deprecated:DeprecationWarning",
+    "ignore:einx\\.rearrange is deprecated:DeprecationWarning",
+    "ignore:The 'keepdims' argument in einx reduction operations is deprecated:DeprecationWarning",
+    "ignore:`BaseEstimator\\._validate_data` is deprecated:FutureWarning",
+    "ignore:'force_all_finite' was renamed to 'ensure_all_finite':FutureWarning",
 ]

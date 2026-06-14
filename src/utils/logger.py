@@ -17,19 +17,19 @@ def configure_logger():
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
-    config.log_dir.mkdir(parents=True, exist_ok=True)
+    config.dir_log.mkdir(parents=True, exist_ok=True)
 
     formatter = JsonFormatter(["asctime", "levelname", "filename", "lineno", "message"])
 
     active_handler = logging.FileHandler(
-        config.log_dir / ACTIVE_LOG_FILE,
+        config.dir_log / ACTIVE_LOG_FILE,
         mode="w",
     )
     active_handler.setFormatter(formatter)
     logger.addHandler(active_handler)
 
     append_handler = RotatingFileHandler(
-        config.log_dir / APPEND_LOG_FILE,
+        config.dir_log / APPEND_LOG_FILE,
         mode="a",
         maxBytes=MAX_APPEND_LOG_BYTES,
         backupCount=APPEND_LOG_BACKUP_COUNT,

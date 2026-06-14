@@ -1,6 +1,7 @@
 from timeit import default_timer as timer
 from typing import Literal
 
+import numpy as np
 from tabicl import TabICLClassifier, TabICLRegressor
 
 from src.interfaces.model_interface import TFModelInterface
@@ -31,12 +32,14 @@ class TabICLAdapter(TFModelInterface):
         return timer() - start_time
 
     def predict(self, X_test):
-        logger.info(f"Predicting with: {self.model.model_config_}")
+        logger.info(f"Predicting with: {self.model.get_params()}")
         start_time = timer()
         if isinstance(self.model, TabICLClassifier):
-            result = self.model.predict_proba(X_test)
+            result = np.asarray(self.model.predict_proba(X_test))
         else:
-            result = self.model.predict(X_test, output_type="mean", alphas=None)
+            result = np.asarray(
+                self.model.predict(X_test, output_type="mean", alphas=None)
+            )
             # alphas == quantiles
 
         logger.info("TabICL Prediction done")

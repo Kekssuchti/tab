@@ -2,7 +2,7 @@ import sys
 
 from src.config import config
 
-sys.path.insert(0, str(config.external_limix_dir))
+sys.path.insert(0, str(config.dir_external_limix))
 
 
 import os
@@ -30,7 +30,7 @@ class LimixAdapter(TFModelInterface):
             raise ValueError(f"size must be '2M' or '16M', got '{size}'")
         self.size = size  # only "2M" and "16M" are valid
         self.kwargs = kwargs
-        self.model_path = str(config.cache_dir / f"LimiX-{self.size}.ckpt")
+        self.model_path = str(config.dir_cache / f"LimiX-{self.size}.ckpt")
         self.model = self._load_model()
 
     def _load_model(self):
@@ -50,7 +50,7 @@ class LimixAdapter(TFModelInterface):
             "regression": f"reg_default_{self.size}_retrieval.json",
         }[self.task_type.lower()]
 
-        config_path = str(config.external_limix_dir / "config" / config_name)
+        config_path = str(config.dir_external_limix / "config" / config_name)
 
         model = LimiXPredictor(
             device=device,

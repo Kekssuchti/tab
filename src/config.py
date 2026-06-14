@@ -10,17 +10,21 @@ class Config(BaseSettings):
     seed: int = Field(default=1337, alias="SEED")
 
     # paths
-    root_dir: Path = Path(__file__).parents[1]
-    data_dir: Path = root_dir / "data"
-    cache_dir: Path = root_dir / "cache"
+    dir_root: Path = Path(__file__).parents[1]
+    dir_cache: Path = dir_root / "cache"
 
-    src_dir: Path = root_dir / "src"
-    mlflow_dir: Path = src_dir / "mlflow"
-    log_dir: Path = src_dir / "logs"
-    evaluation_dir: Path = src_dir / "evaluation"
+    dir_data: Path = dir_root / "data"
+    dir_data_toy: Path = dir_data / "toy"
+    dir_mimic: Path = dir_data / "mimic"
+    dir_europe: Path = dir_data / "europe"
 
-    external_dep_dir: Path = root_dir / "external"
-    external_limix_dir: Path = external_dep_dir / "limix"
+    dir_src: Path = dir_root / "src"
+    dir_mlflow: Path = dir_src / "mlflow"
+    dir_log: Path = dir_src / "logs"
+    dir_evaluation: Path = dir_src / "evaluation"
+
+    dir_external_dep: Path = dir_root / "external"
+    dir_external_limix: Path = dir_external_dep / "limix"
 
     tabpfn_token: str = Field(default="", alias="TABPFN_TOKEN")
 

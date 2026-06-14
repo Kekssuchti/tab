@@ -21,7 +21,7 @@ def train_model(model: TFModelInterface, X_train, X_test, y_train):
 
 
 def main():
-    X, y = load_data.load_toy_data_dna()
+    X, y = load_data.load_toy_data_cls()
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, train_size=config.train_size
