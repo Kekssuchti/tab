@@ -1,5 +1,6 @@
 from sklearn.model_selection import train_test_split
 
+from src.adapter.limix_adapter import LimixAdapter
 from src.adapter.tabicl_adapter import TabICLAdapter
 from src.adapter.tabpfn_adapter import TabPFNAdapter
 from src.config import config
@@ -11,8 +12,6 @@ from src.utils.model_registry import MODEL_REGISTRY
 
 
 def train_model(model: TFModelInterface, X_train, X_test, y_train):
-    model.load_model()
-
     time_train = model.fit(X_train=X_train, y_train=y_train)
 
     predictions, time_pred = model.predict(X_test=X_test)
@@ -21,7 +20,7 @@ def train_model(model: TFModelInterface, X_train, X_test, y_train):
 
 
 def main():
-    X, y = load_data.load_toy_data()
+    X, y = load_data.load_toy_data_dna()
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, train_size=config.train_size
@@ -30,8 +29,9 @@ def main():
 
     model_tabpfn = TabPFNAdapter()
     model_icl = TabICLAdapter()
+    model_limix_2m = LimixAdapter(size="16M")
 
-    predictions, time_total = train_model(model_icl, X_train, X_test, y_train)
+    predictions, time_total = train_model(model_limix_2m, X_train, X_test, y_train)
 
     metrics = evaluate_predictions(predictions, y_test)
     logger.info(f"Metrics: {metrics}")

@@ -1,9 +1,10 @@
+import numpy as np
 import pandas as pd
 
 from src.config import config
 
 
-def load_toy_data():
+def load_toy_data_student():
     df = pd.read_csv(config.data_dir / "ai_student_impact_dataset.csv")
     df.describe()
 
@@ -26,5 +27,17 @@ def load_toy_data():
 
     X = df[X_cols]
     y = df[y_cols[0]]  # Series → 1D, not a DataFrame column-vector
+
+    return X, y
+
+
+def load_toy_data_dna():
+    df = pd.read_csv(config.data_dir / "dna_methylation.csv")
+    df.describe()
+
+    y_col = ["methylation_status"]
+
+    X = df.drop(y_col, axis=1)
+    y = np.array(df[y_col]).ravel()
 
     return X, y

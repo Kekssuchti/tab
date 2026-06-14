@@ -40,3 +40,14 @@ orion-msp = { git = "https://github.com/Lexsi-Labs/Orion-MSP.git", rev = "c89aea
 name = "pytorch-rocm"
 url = "https://download.pytorch.org/whl/rocm7.2"
 explicit = true
+
+[dependency-groups]
+limix = [
+    "scipy",
+    "scikit-learn",
+    "einops",
+    "huggingface-hub",
+    "tqdm",
+    "typing-extensions",
+    "kditransform",
+]

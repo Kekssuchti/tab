@@ -1,3 +1,4 @@
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -11,10 +12,15 @@ class Config(BaseSettings):
     # paths
     root_dir: Path = Path(__file__).parents[1]
     data_dir: Path = root_dir / "data"
+    cache_dir: Path = root_dir / "cache"
+
     src_dir: Path = root_dir / "src"
     mlflow_dir: Path = src_dir / "mlflow"
     log_dir: Path = src_dir / "logs"
     evaluation_dir: Path = src_dir / "evaluation"
+
+    external_dep_dir: Path = root_dir / "external"
+    external_limix_dir: Path = external_dep_dir / "limix"
 
     tabpfn_token: str = Field(default="", alias="TABPFN_TOKEN")
 
