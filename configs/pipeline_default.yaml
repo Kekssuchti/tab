@@ -1,0 +1,46 @@
+run_number: 1
+run_date: 2026-06-17
+
+dataset:
+  random_state: 1337
+  train_size: 0.8
+  train_on:
+    - dataset: mimic
+      fraction: 1.0
+  classification: true
+  preprocessor:
+    steps:
+      - remove_minors
+      - adapt_max_age
+      - outlier_removal
+    bmi_limit: 100
+    min_age: 18
+    max_age: 90
+    outlier_limits: new_extended_limits.json
+    missing_rate: 0.5
+  scaler_encoder: {}
+  imputer:
+    imputation_method: knn
+    flag_missing: false
+
+training:
+  models:
+    - name: tabpfn-3
+      task_type: classification
+      params: {}
+      optimize_hyperparameters: false
+      hyperparameter_optimization_params: null
+    - name: tabicl-2
+      task_type: classification
+      params: {}
+      optimize_hyperparameters: false
+      hyperparameter_optimization_params: null
+
+evaluation:
+  metrics:
+    - all
+
+plotting:
+  enabled: true
+  formats:
+    - png

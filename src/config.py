@@ -12,6 +12,7 @@ class Config(BaseSettings):
     # paths
     dir_root: Path = Path(__file__).parents[1]
     dir_cache: Path = dir_root / "cache"
+    dir_run_results: Path = dir_root / "run_results"
 
     dir_data: Path = dir_root / "data"
     dir_data_toy: Path = dir_data / "toy"
@@ -22,7 +23,6 @@ class Config(BaseSettings):
     dir_mlflow: Path = dir_src / "mlflow"
     dir_log: Path = dir_src / "logs"
     dir_evaluation: Path = dir_src / "evaluation"
-
     dir_external_dep: Path = dir_root / "external"
     dir_external_limix: Path = dir_external_dep / "limix"
 

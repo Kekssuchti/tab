@@ -27,6 +27,7 @@ dependencies = [
     "typing-extensions",
     "kditransform",
     "pytest>=8.4.0",
+    "pyyaml>=6.0.3",
 ]
 
 [tool.uv.sources]
