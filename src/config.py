@@ -13,6 +13,8 @@ class Config(BaseSettings):
     dir_root: Path = Path(__file__).parents[1]
     dir_cache: Path = dir_root / "cache"
     dir_run_results: Path = dir_root / "run_results"
+    dir_configs: Path = dir_root / "configs"
+    dir_plots: Path = dir_root / "plots"
 
     dir_data: Path = dir_root / "data"
     dir_data_toy: Path = dir_data / "toy"

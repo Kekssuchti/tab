@@ -16,3 +16,6 @@ data/erope/
 models/
 cache/
 run_results/
+data/raw
+data/filtered
+data/extracted

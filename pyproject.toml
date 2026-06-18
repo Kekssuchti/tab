@@ -28,6 +28,8 @@ dependencies = [
     "kditransform",
     "pytest>=8.4.0",
     "pyyaml>=6.0.3",
+    "seaborn>=0.13.2",
+    "ipykernel>=7.3.0",
 ]
 
 [tool.uv.sources]

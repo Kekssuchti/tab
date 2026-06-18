@@ -39,6 +39,8 @@ class Dataset:
         # preprocess data
         # combine data given params
         # save to self.data: PreparedDataset
+        df_mimic, df_tudd = self._load_data()
+
         test_sets = {
             "mimic": PreparedTestSet(pd.DataFrame([1, 3, 2]), pd.Series([1, 6, 1]))
         }
@@ -50,3 +52,9 @@ class Dataset:
         if not self.data:
             self.create_dataset()
         return self.data
+
+    def _load_data(self):
+        """load and return both extracted dataframes"""
+        # we skip the raw data step since I dont have access yet
+
+        pass
