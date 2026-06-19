@@ -15,7 +15,7 @@ APPEND_LOG_BACKUP_COUNT = 10
 @lru_cache
 def configure_logger():
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     config.dir_log.mkdir(parents=True, exist_ok=True)
 

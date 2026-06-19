@@ -43,7 +43,8 @@ class Pipeline:
         self.plotter = Plotter(params.plotting)
 
     def run(self) -> PipelineResult:
-        dataset = self._create_dataset()
+        dataset = self.dataset.get_dataset()
+
         model_results = []
 
         for model_params in self.params.training.models:
@@ -53,24 +54,6 @@ class Pipeline:
             run_id=self.params.run_id,
             model_results=tuple(model_results),
         )
-
-    def _create_dataset(self) -> dict[str, Any]:
-        params = self.params.dataset
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            train_size=params.train_size,
-            random_state=params.random_state,
-            stratify=y if self._can_stratify(y) else None,
-        )
-
-        return {
-            "X_train": X_train,
-            "X_test": X_test,
-            "y_train": y_train,
-            "y_test": y_test,
-        }
 
     def _run_model(
         self,

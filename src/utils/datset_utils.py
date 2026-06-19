@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -42,25 +43,90 @@ def _remove_impossible_values(df, json_file_path):
     return df, removed_counts
 
 
-def _filter_many_missing(df, threshold_row=0.5, threshold_col=0.5):
-    logger.info("shape before missing filter", df.shape)
+def _filter_many_missing(
+    df: pd.DataFrame, readmission: bool, threshold_row=0.5, threshold_col=0.5
+):
+    logger.debug(f"shape before missing filter {df.shape}")
+    row_null: pd.Series = df.isnull().sum(axis=1)
+    # -3 is offset for cols we dont use
+    if readmission:
+        # mortality, LOS, Bmi+100%mean, hours_to_readmit
+        feature_offset = 4
 
-    df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+        # subject_id, hadm_id, stay_id dropped
+        df = df.drop(["subject_id", "hadm_id", "stay_id"])
 
-    row_null = df.isnull().sum(axis=1)
-    df = df[row_null < (threshold_row * len(df.columns))]
+        # drop dead patients -> cannot readmit
+        df = df.loc[df["mortality"] != 1]
+    else:
+        # mortality, LOS, Bmi+100%mean
+        feature_offset = 3
 
-    df = df.loc[:, df.isnull().mean() < 0.5]
+    df = df.loc[row_null < int(threshold_row * (len(df.columns) - feature_offset))]
 
-    logger.info("shape after missing filter", df.shape)
+    # REMOVED FOR NOW:
+    # Problem is that both datasets have different cols where they miss a lot of values
+
+    # drop all cols with too many missing but keep readmission for obvious reasons
+    # df = df.loc[:, (df.isnull().mean() < 0.5) | df.columns.isin(["hours_to_readmit"])]
+
+    logger.debug(f"shape after missing filter {df.shape}")
     return df
 
 
-def standart_preprocessing(df, threshold_row=0.5, threshold_col=0.5):
+def _filter_reasonable_los(df, min_h, max_h):
+    logger.debug(f"shape before LOS filter {df.shape}")
+    df = df[df["LOS"] > min_h]
+    df = df[df["LOS"] < max_h]
+    logger.debug(f"shape before LOS filter {df.shape}")
+    return df
+
+
+def _filter_childs(df, min_age):
+    logger.debug(f"shape before min age filter {df.shape}")
+    df = df[df["Age"] > min_age]
+    logger.debug(f"shape before min age filter {df.shape}")
+    return df
+
+
+def _clean_dtypes(df):
+    df["Sex"] = (df["Sex"] == "F").astype(int)
+    return df
+
+
+def standard_preprocessing(
+    df,
+    readmission: bool,
+    threshold_row: float = 0.5,
+    threshold_col: float = 0.5,
+    data_limit_config_path: Path = config.dir_configs / "data_limits.json",
+    min_los_filter=24,
+    max_los_filter=24 * 14000,
+    min_age_filter=18,
+):
+    """
+    Args:
+        df: data
+        readmission: bool if this is readmission dataset
+        threshold_row: float threshold when missing data removes the row (sample)
+        threshold_col: float threshold when missing data removes the col (feature)
+        data_limit_config_path: path for json limits enforced
+
+    This is task agnostic preprocessing from extracted to filtered datasets
+    It removes unrealistic values based on "data_limits.json" (by making them null)
+    It filters for minimum LOS 24h
+    It removes rows (samples) with more missing values than threshold_row (default 50%)
+    It removes cols (features) with more missing values than threshold_col (default 50%)
+    """
+
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-    _remove_impossible_values(df, config.dir_configs / "data_limits.json")
-    _filter_many_missing(df, threshold_row, threshold_col)
+    df, rm_count = _remove_impossible_values(df, data_limit_config_path)
+    logger.info(f"removed {rm_count} unreasonable values:")
+    df = _filter_reasonable_los(df, min_los_filter, max_los_filter)
+    df = _filter_childs(df, min_age=min_age_filter)
+    df = _filter_many_missing(df, readmission, threshold_row, threshold_col)
+    df = _clean_dtypes(df)
 
-    # still wip, we have way to many rows compared to expected extracted df
+    # still wip, we have minimally less rows than expected
     return df
