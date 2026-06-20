@@ -98,12 +98,19 @@ def _(df_tudd_filt, df_tudd_filter):
 def _(df_tudd_filt):
     df_tudd_filt["Sex"].unique()
     df_tudd_filt["Sex"] = (df_tudd_filt["Sex"] == "F").astype(int)
+
     return
 
 
 @app.cell
 def _(df_tudd_filt):
     df_tudd_filt.dtypes
+    return
+
+
+@app.cell
+def _(df_tudd_filter):
+    df_tudd_filter.isna()
     return
 
 

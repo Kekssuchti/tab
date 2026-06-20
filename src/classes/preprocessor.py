@@ -1,39 +1,79 @@
-from pathlib import Path
+from sklearn.impute import KNNImputer, SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
-import pandas as pd
-
-from src.config import config
-from src.schemas.preprocessing_schemas import PreprocessorParams
-from src.utils.datset_utils import standard_preprocessing
+from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
+from src.utils.logger import logger
 
 
 class Preprocessor:
-    def __init__(self, params: PreprocessorParams) -> None:
-        self.params = params
+    def __init__(
+        self,
+        params_imputer: ImputerParams,
+        params_scaler: ScalerEncoderParams,
+    ) -> None:
+        self.imputer = params_imputer
+        self.scaler = params_scaler
 
-    def preprocess_extracted_to_filtered(self):
-        """load and return both extracted dataframes"""
-        # we skip the raw data step since I dont have access yet
+    def build_pipeline(self) -> Pipeline:
+        return Pipeline(self._build_imputer().steps + self._build_scaler().steps)
 
-        extracted_path = Path(config.dir_data / "extracted")
-        filtered_path = Path(config.dir_data / "filtered")
+    def _build_imputer(self) -> Pipeline:
+        # since only sex is categorical and we do not have missing values there (we removed the ones missing)
+        # we only need imputation for numerical values
+        method = self.imputer.imputation_method
+        logger.info(f"missing data imputation via: {method}")
 
-        file_names = [
-            "mimic4_mean_100_full.csv",
-            "mimic4_readmission.csv",
-            "tudd_mean_100_full.csv",
-            "tudd_readmission.csv",
-        ]
-
-        for file_name in file_names:
-            df = pd.read_csv(Path(extracted_path / file_name))
-            readmission = True if "readmission" in file_name else False
-            df_filtered = standard_preprocessing(
-                df,
-                readmission,
-                self.params.missing_threshold_row,
-                self.params.missing_threshold_col,
-                self.params.outlier_limits_path,
+        if method == "mean":
+            return Pipeline(
+                [
+                    (
+                        "imputer",
+                        SimpleImputer(
+                            strategy="mean", add_indicator=self.imputer.flag_missing
+                        ),
+                    ),
+                ]
+            )
+        elif method == "median":
+            return Pipeline(
+                [
+                    (
+                        "imputer",
+                        SimpleImputer(
+                            strategy="median", add_indicator=self.imputer.flag_missing
+                        ),
+                    ),
+                ]
+            )
+        elif method == "knn":
+            return Pipeline(
+                [
+                    (
+                        "imputer",
+                        KNNImputer(
+                            n_neighbors=self.imputer.knn_neighbors,
+                            weights="distance",
+                            add_indicator=self.imputer.flag_missing,
+                        ),
+                    ),
+                ]
+            )
+        elif method == "none":
+            return Pipeline([("imputer", "passthrough")])
+        else:
+            raise ValueError(
+                f"Tried to use unknown / wrong imputation method: {method}"
             )
 
-            df_filtered.to_csv(Path(filtered_path / file_name))
+    def _build_scaler(self) -> Pipeline:
+        scaler_type = self.scaler.type
+        logger.info(f"scaling data using: {scaler_type}")
+        if scaler_type == "standardization":
+            return Pipeline([("scaler", StandardScaler())])
+        elif scaler_type == "none":
+            return Pipeline([("scaler", "passthrough")])
+        else:
+            raise ValueError(
+                f"Tried to use unknown / wrong scaling method: {scaler_type}"
+            )

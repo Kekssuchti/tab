@@ -1,17 +1,37 @@
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
+import pandas as pd
 from pydantic import Field, field_validator
 
 from src.config import config
 from src.schemas.base_schemas import StrictParams
 from src.schemas.preprocessing_schemas import (
     ImputerParams,
-    PreprocessorParams,
     ScalerEncoderParams,
 )
 
 DatasetName = Literal["mimic", "tudd", "mimic_readmission", "tudd_readmission"]
 Target = Literal["mortality", "LOS", "hours_to_readmit"]
+
+
+@dataclass
+class XYDataset:
+    X: pd.DataFrame
+    y: pd.Series
+
+
+@dataclass
+class DatasetBundle:
+    train_data: XYDataset
+    test_mimic: XYDataset
+    test_tudd: XYDataset
+
+
+class DataCleanerParams(StrictParams):
+    outlier_limits_path: Path = Path(config.dir_configs / "data_limits.json")
+    missing_threshold_row: float = Field(default=0.5, ge=0, le=1)
 
 
 class DataSplitParams(StrictParams):
@@ -32,7 +52,7 @@ class DatasetParams(StrictParams):
     train_size: float = Field(default=0.8, gt=0, lt=1)
     train_on: tuple[DataSplitParams, ...]
     classification: bool = Field(default=True)
-    preprocessor: PreprocessorParams = Field(default_factory=PreprocessorParams)
+    data_cleaner: DataCleanerParams = Field(default_factory=DataCleanerParams)
     force_repreprocess: bool = Field(
         default=False,
         description="Forces reprocessing from extracted to filtered if true",

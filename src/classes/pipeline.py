@@ -1,17 +1,15 @@
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
-from sklearn.model_selection import train_test_split
 
 from src.classes.dataset import Dataset
 from src.classes.evaluator import Evaluator
 from src.classes.plotter import Plotter
+from src.classes.preprocessor import Preprocessor
 from src.classes.trainer import Trainer
 from src.evaluation.evaluate import evaluate_predictions
 from src.schemas.pipeline_schemas import PipelineParams
-from src.schemas.training_schemas import ModelParams
-from src.utils.model_registry import MODEL_REGISTRY_CLS, MODEL_REGISTRY_REG
+from src.schemas.training_schemas import ModelTrainingResult
 
 
 @dataclass(frozen=True)
@@ -30,6 +28,7 @@ class ModelRunResult:
 class PipelineResult:
     run_id: str
     model_results: tuple[ModelRunResult, ...]
+    training_results: tuple[ModelTrainingResult, ...]
 
 
 class Pipeline:
@@ -38,74 +37,65 @@ class Pipeline:
         self.params.run_dir.mkdir(parents=True, exist_ok=True)
 
         self.dataset = Dataset(params.dataset)
-        self.trainer = Trainer(params.training)
         self.evaluator = Evaluator(params.evaluation)
         self.plotter = Plotter(params.plotting)
 
     def run(self) -> PipelineResult:
-        dataset = self.dataset.get_dataset()
+        data = self.dataset.get_dataset()
+
+        preprocessor = Preprocessor(
+            params_imputer=self.params.dataset.imputer,
+            params_scaler=self.params.dataset.scaler_encoder,
+        )
+        preprocess_pipeline = preprocessor.build_pipeline()
+
+        trainer = Trainer(
+            params=self.params.training,
+            preprocess_pipeline=preprocess_pipeline,
+        )
+
+        training_results = trainer.train_models(
+            X_train=data.train_data.X.to_numpy(),
+            y_train=data.train_data.y.to_numpy(),
+        )
 
         model_results = []
-
-        for model_params in self.params.training.models:
-            model_results.append(self._run_model(model_params, dataset))
+        for tr in training_results:
+            mr = self._evaluate_trained_model(tr, data)
+            model_results.append(mr)
 
         return PipelineResult(
             run_id=self.params.run_id,
             model_results=tuple(model_results),
+            training_results=tuple(training_results),
         )
 
-    def _run_model(
+    def _evaluate_trained_model(
         self,
-        model_params: ModelParams,
-        dataset: dict[str, Any],
+        training_result: ModelTrainingResult,
+        data,
     ) -> ModelRunResult:
-        model = self._create_model(model_params)
-        fit_time = model.fit(dataset["X_train"], dataset["y_train"])
-        predictions, predict_time = model.predict(dataset["X_test"])
-        metrics = self._evaluate(model_params, predictions, dataset["y_test"])
+        adapter = training_result.trained_model
+
+        predictions, predict_time = adapter.predict(data.test_mimic.X.to_numpy())
+        metrics = self._evaluate(
+            training_result.task_type, predictions, data.test_mimic.y.to_numpy()
+        )
 
         return ModelRunResult(
-            model_name=model_params.name,
+            model_name=training_result.model_name,
             metrics=metrics,
-            fit_time=fit_time,
+            fit_time=training_result.fit_time,
             predict_time=predict_time,
         )
 
-    def _create_model(self, model_params: ModelParams):
-        registry = (
-            MODEL_REGISTRY_CLS
-            if model_params.task_type == "classification"
-            else MODEL_REGISTRY_REG
-        )
-
-        try:
-            model_cls = registry[model_params.name]
-        except KeyError as exc:
-            available = ", ".join(sorted(registry))
-            raise ValueError(
-                f"Unknown {model_params.task_type} model '{model_params.name}'. "
-                f"Available models: {available}"
-            ) from exc
-
-        return model_cls(task_type=model_params.task_type, **model_params.params)
-
+    @staticmethod
     def _evaluate(
-        self,
-        model_params: ModelParams,
-        predictions: Any,
-        y_test: Any,
+        task_type: str,
+        predictions: np.ndarray,
+        y_test: np.ndarray,
     ) -> dict[str, float]:
-        if model_params.task_type != "classification":
+        if task_type != "classification":
             raise NotImplementedError("Regression evaluation is not implemented yet")
 
-        return evaluate_predictions(np.asarray(predictions), y_test)
-
-    @staticmethod
-    def _can_stratify(y: Any) -> bool:
-        y_array = np.asarray(y).ravel()
-        if y_array.size < 2:
-            return False
-
-        _, counts = np.unique(y_array, return_counts=True)
-        return bool(counts.size > 1 and counts.min() >= 2)
+        return evaluate_predictions(predictions, y_test)

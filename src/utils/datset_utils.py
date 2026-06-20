@@ -44,17 +44,18 @@ def _remove_impossible_values(df, json_file_path):
 
 
 def _filter_many_missing(
-    df: pd.DataFrame, readmission: bool, threshold_row=0.5, threshold_col=0.5
+    df: pd.DataFrame,
+    readmission: bool,
+    threshold_row=0.5,
 ):
     logger.debug(f"shape before missing filter {df.shape}")
-    row_null: pd.Series = df.isnull().sum(axis=1)
     # -3 is offset for cols we dont use
     if readmission:
         # mortality, LOS, Bmi+100%mean, hours_to_readmit
         feature_offset = 4
 
         # subject_id, hadm_id, stay_id dropped
-        df = df.drop(["subject_id", "hadm_id", "stay_id"])
+        df = df.drop(columns=["subject_id", "hadm_id", "stay_id"])
 
         # drop dead patients -> cannot readmit
         df = df.loc[df["mortality"] != 1]
@@ -62,6 +63,7 @@ def _filter_many_missing(
         # mortality, LOS, Bmi+100%mean
         feature_offset = 3
 
+    row_null: pd.Series = df.isnull().sum(axis=1)
     df = df.loc[row_null < int(threshold_row * (len(df.columns) - feature_offset))]
 
     # REMOVED FOR NOW:
@@ -89,7 +91,7 @@ def _filter_childs(df, min_age):
     return df
 
 
-def _clean_dtypes(df):
+def _clean_dtypes(df: pd.DataFrame):
     df["Sex"] = (df["Sex"] == "F").astype(int)
     return df
 
@@ -98,7 +100,6 @@ def standard_preprocessing(
     df,
     readmission: bool,
     threshold_row: float = 0.5,
-    threshold_col: float = 0.5,
     data_limit_config_path: Path = config.dir_configs / "data_limits.json",
     min_los_filter=24,
     max_los_filter=24 * 14000,
@@ -125,7 +126,7 @@ def standard_preprocessing(
     logger.info(f"removed {rm_count} unreasonable values:")
     df = _filter_reasonable_los(df, min_los_filter, max_los_filter)
     df = _filter_childs(df, min_age=min_age_filter)
-    df = _filter_many_missing(df, readmission, threshold_row, threshold_col)
+    df = _filter_many_missing(df, readmission, threshold_row)
     df = _clean_dtypes(df)
 
     # still wip, we have minimally less rows than expected
