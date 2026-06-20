@@ -21,6 +21,8 @@ dependencies = [
     "autogluon-tabular[mitra]==1.5.0",
     "scipy",
     "scikit-learn",
+    "xgboost",
+    "interpret",
     "einops",
     "huggingface-hub",
     "tqdm",

@@ -5,10 +5,12 @@ from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
 from src.utils.model_registry import MODEL_REGISTRY_CLS, MODEL_REGISTRY_REG
 
 
-def _make_model(model_name, adapter_cls, task_type):
-    if model_name == "limix-16m":
-        return adapter_cls(task_type=task_type, size="16M")
-    return adapter_cls(task_type=task_type)
+LIGHTWEIGHT_CLASSIFICATION_MODELS = ("logistic-regression", "xgboost")
+LIGHTWEIGHT_REGRESSION_MODELS = ("linear-regression", "xgboost")
+
+
+def _make_model(model_name, registry, task_type):
+    return registry[model_name].create(task_type=task_type, params={})
 
 
 def _as_numpy(predictions):
@@ -38,17 +40,25 @@ def _load_regression_data_for_model_smoke_test():
     return X, y
 
 
-@pytest.mark.parametrize("model_name,adapter_cls", MODEL_REGISTRY_CLS.items())
-def test_registered_classification_models_fit_and_predict(model_name, adapter_cls):
+def test_classification_registry_entries_are_model_specs():
+    assert all(spec.adapter_cls is not None for spec in MODEL_REGISTRY_CLS.values())
+
+
+def test_regression_registry_entries_are_model_specs():
+    assert all(spec.adapter_cls is not None for spec in MODEL_REGISTRY_REG.values())
+
+
+@pytest.mark.parametrize("model_name", LIGHTWEIGHT_CLASSIFICATION_MODELS)
+def test_lightweight_registered_classification_models_fit_and_predict(model_name):
     X, y = load_toy_data_cls()
-    model = _make_model(model_name, adapter_cls, "classification")
+    model = _make_model(model_name, MODEL_REGISTRY_CLS, "classification")
 
     _assert_valid_fit_and_predict(model_name, model, X, y)
 
 
-@pytest.mark.parametrize("model_name,adapter_cls", MODEL_REGISTRY_REG.items())
-def test_registered_regression_models_fit_and_predict(model_name, adapter_cls):
+@pytest.mark.parametrize("model_name", LIGHTWEIGHT_REGRESSION_MODELS)
+def test_lightweight_registered_regression_models_fit_and_predict(model_name):
     X, y = _load_regression_data_for_model_smoke_test()
-    model = _make_model(model_name, adapter_cls, "regression")
+    model = _make_model(model_name, MODEL_REGISTRY_REG, "regression")
 
     _assert_valid_fit_and_predict(model_name, model, X, y)

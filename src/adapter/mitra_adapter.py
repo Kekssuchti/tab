@@ -7,11 +7,11 @@ from autogluon.tabular.models.mitra.sklearn_interface import (
     MitraRegressor,
 )
 
-from src.interfaces.model_interface import TFModelInterface
+from src.interfaces.model_interface import ModelAdapter
 from src.utils.logger import logger
 
 
-class MitraAdapter(TFModelInterface):
+class MitraAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",
@@ -37,13 +37,9 @@ class MitraAdapter(TFModelInterface):
         return timer() - start_time
 
     def predict(self, X_test):
-        logger.info(f"Predicting with Mitra (n_estimators={self.model.n_estimators})")
+        logger.info("Predicting with Mitra")
         start_time = timer()
-
-        if isinstance(self.model, MitraClassifier):
-            result = np.asarray(self.model.predict_proba(X_test))
-        else:
-            result = np.asarray(self.model.predict(X_test))
+        result = self.predict_from_estimator(X_test)
 
         logger.info("Mitra Prediction done")
         return result, timer() - start_time

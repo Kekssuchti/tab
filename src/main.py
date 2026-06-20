@@ -6,13 +6,13 @@ from src.adapter.tabicl_adapter import TabICLAdapter
 from src.adapter.tabpfn_adapter import TabPFNAdapter
 from src.config import config
 from src.evaluation.evaluate import evaluate_predictions
-from src.interfaces.model_interface import TFModelInterface
+from src.interfaces.model_interface import ModelAdapter
 from src.utils import load_data
 from src.utils.logger import logger
 from src.utils.model_registry import MODEL_REGISTRY
 
 
-def train_model(model: TFModelInterface, X_train, X_test, y_train):
+def train_model(model: ModelAdapter, X_train, X_test, y_train):
     time_train = model.fit(X_train=X_train, y_train=y_train)
 
     predictions, time_pred = model.predict(X_test=X_test)

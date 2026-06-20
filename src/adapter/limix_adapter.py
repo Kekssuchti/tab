@@ -13,11 +13,11 @@ import torch
 from huggingface_hub import hf_hub_download
 
 from external.limix.inference.predictor import LimiXPredictor
-from src.interfaces.model_interface import TFModelInterface
+from src.interfaces.model_interface import ModelAdapter
 from src.utils.logger import logger
 
 
-class LimixAdapter(TFModelInterface):
+class LimixAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",

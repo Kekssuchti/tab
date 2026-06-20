@@ -1,9 +1,11 @@
 from timeit import default_timer as timer
 
 import numpy as np
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.base import clone
+from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold
 from sklearn.pipeline import Pipeline
 
+from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
 from src.schemas.training_schemas import (
     FoldResult,
     HPOParams,
@@ -13,7 +15,12 @@ from src.schemas.training_schemas import (
     TrainingParams,
 )
 from src.utils.logger import logger
-from src.utils.model_registry import MODEL_REGISTRY_CLS, MODEL_REGISTRY_REG
+from src.utils.model_registry import MODEL_REGISTRY_CLS, MODEL_REGISTRY_REG, ModelSpec
+
+SCORING_ALIASES = {
+    "prc_auc": "average_precision",
+    "sensitivity": "recall",
+}
 
 
 class Trainer:
@@ -46,20 +53,13 @@ class Trainer:
             else MODEL_REGISTRY_REG
         )
 
-        try:
-            model_cls = registry[model_params.name]
-        except KeyError as exc:
-            available = ", ".join(sorted(registry))
-            raise ValueError(
-                f"Unknown {model_params.task_type} model '{model_params.name}'. "
-                f"Available models: {available}"
-            ) from exc
+        spec = self._get_model_spec(model_params, registry)
+        adapter = spec.create(model_params.task_type, model_params.params)
 
-        adapter = model_cls(task_type=model_params.task_type, **model_params.params)
-
-        if model_params.optimize_hyperparameters:
+        if model_params.hpo is not None:
             return self._train_with_hpo(
                 model_params,
+                spec,
                 adapter,
                 X_train,
                 y_train,
@@ -67,25 +67,63 @@ class Trainer:
         else:
             return self._train_without_hpo(
                 model_params,
+                spec,
                 adapter,
                 X_train,
                 y_train,
             )
 
+    @staticmethod
+    def _get_model_spec(
+        model_params: ModelParams, registry: dict[str, ModelSpec]
+    ) -> ModelSpec:
+        try:
+            return registry[model_params.name]
+        except KeyError as exc:
+            available = ", ".join(sorted(registry))
+            raise ValueError(
+                f"Unknown {model_params.task_type} model '{model_params.name}'. "
+                f"Available models: {available}"
+            ) from exc
+
     def _train_without_hpo(
         self,
         model_params: ModelParams,
-        adapter,
+        spec: ModelSpec,
+        adapter: ModelAdapter,
         X_train: np.ndarray,
         y_train: np.ndarray,
     ) -> ModelTrainingResult:
-        pipeline = Pipeline([*self.preprocess_pipeline.steps, ("model", adapter.model)])
+        if not spec.supports_sklearn_pipeline:
+            wrapped_adapter = PreprocessedModelAdapter(
+                adapter, clone(self.preprocess_pipeline)
+            )
+            fit_time = wrapped_adapter.fit(X_train, y_train)
+
+            logger.info(
+                f"Model {model_params.name} trained without HPO in {fit_time:.3f}s"
+            )
+
+            return ModelTrainingResult(
+                model_name=model_params.name,
+                task_type=model_params.task_type,
+                trained_model=wrapped_adapter,
+                optimized_hyperparameters=False,
+                fit_time=fit_time,
+            )
+
+        pipeline = Pipeline(
+            [
+                *clone(self.preprocess_pipeline).steps,
+                ("model", adapter.estimator_for_training()),
+            ]
+        )
 
         start = timer()
         pipeline.fit(X_train, y_train)
         fit_time = timer() - start
 
-        adapter.model = pipeline.named_steps["model"]
+        adapter.set_trained_estimator(pipeline)
 
         logger.info(f"Model {model_params.name} trained without HPO in {fit_time:.3f}s")
 
@@ -100,29 +138,39 @@ class Trainer:
     def _train_with_hpo(
         self,
         model_params: ModelParams,
-        adapter,
+        spec: ModelSpec,
+        adapter: ModelAdapter,
         X_train: np.ndarray,
         y_train: np.ndarray,
     ) -> ModelTrainingResult:
-        hpo_params = model_params.hyperparameter_optimization_params
-        assert hpo_params is not None
+        hpo_params = model_params.hpo
+        if hpo_params is None:
+            raise ValueError("HPO requested without HPO parameters")
+        if not spec.supports_sklearn_pipeline:
+            raise ValueError(
+                f"Model '{model_params.name}' does not support sklearn HPO"
+            )
 
-        pipeline = Pipeline([*self.preprocess_pipeline.steps, ("model", adapter.model)])
+        pipeline = Pipeline(
+            [
+                *clone(self.preprocess_pipeline).steps,
+                ("model", adapter.estimator_for_training()),
+            ]
+        )
 
         param_grid = {
-            f"model__{key}": value for key, value in hpo_params.search_grid.items()
+            f"model__{key}": value
+            for key, value in spec.search_grid(
+                hpo_params.search_space, hpo_params.search_grid
+            ).items()
         }
 
-        cv = StratifiedKFold(
-            n_splits=hpo_params.cv.n_splits,
-            shuffle=hpo_params.cv.shuffle,
-            random_state=hpo_params.cv.random_state,
-        )
+        cv = self._build_cv(model_params, hpo_params)
 
         search = GridSearchCV(
             estimator=pipeline,
             param_grid=param_grid,
-            scoring=hpo_params.scoring,
+            scoring=SCORING_ALIASES.get(hpo_params.scoring, hpo_params.scoring),
             cv=cv,
             return_train_score=True,
             n_jobs=-1,
@@ -132,12 +180,12 @@ class Trainer:
         search.fit(X_train, y_train)
         fit_time = timer() - start
 
-        adapter.model = search.best_estimator_.named_steps["model"]
+        adapter.set_trained_estimator(search.best_estimator_)
 
         fold_results = self._extract_fold_results(search, hpo_params)
 
         hpo_result = HPOResult(
-            best_params=search.best_params_,
+            best_params=self._strip_model_prefix(search.best_params_),
             best_score=search.best_score_,
             scoring=hpo_params.scoring,
             cv_results=search.cv_results_,
@@ -157,6 +205,21 @@ class Trainer:
             fit_time=fit_time,
             hpo_result=hpo_result,
         )
+
+    @staticmethod
+    def _build_cv(model_params: ModelParams, hpo_params: HPOParams):
+        cv_cls = (
+            StratifiedKFold if model_params.task_type == "classification" else KFold
+        )
+        return cv_cls(
+            n_splits=hpo_params.cv.n_splits,
+            shuffle=hpo_params.cv.shuffle,
+            random_state=hpo_params.cv.random_state,
+        )
+
+    @staticmethod
+    def _strip_model_prefix(params: dict[str, object]) -> dict[str, object]:
+        return {key.removeprefix("model__"): value for key, value in params.items()}
 
     @staticmethod
     def _extract_fold_results(

@@ -7,7 +7,15 @@ from src.config import config
 from src.schemas.base_schemas import StrictParams
 
 ScoringMethod = Literal[
-    "roc_auc", "prc_auc", "f1", "accuracy", "sensitivity", "precision"
+    "roc_auc",
+    "prc_auc",
+    "f1",
+    "accuracy",
+    "sensitivity",
+    "precision",
+    "r2",
+    "neg_root_mean_squared_error",
+    "neg_mean_absolute_error",
 ]
 
 
@@ -18,8 +26,8 @@ class CVParams(StrictParams):
 
 
 class HPOParams(StrictParams):
-    search_grid: dict[str, Any]
-    # random or maybe even optuna / baysian style
+    search_space: str | None = "default"
+    search_grid: dict[str, Any] | None = None
     search_method: Literal["grid"] = "grid"
     scoring: ScoringMethod = "roc_auc"
     cv: CVParams = Field(default_factory=CVParams)
@@ -29,8 +37,7 @@ class ModelParams(StrictParams):
     name: str
     params: dict[str, Any] = Field(default_factory=dict)
     task_type: Literal["classification", "regression"] = "classification"
-    optimize_hyperparameters: bool = False
-    hyperparameter_optimization_params: HPOParams | None = None
+    hpo: HPOParams | None = None
 
 
 class TrainingParams(StrictParams):

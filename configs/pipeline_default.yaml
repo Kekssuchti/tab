@@ -2,22 +2,16 @@ run_number: 1
 run_date: 2026-06-17
 
 dataset:
+  target: mortality
   random_state: 1337
   train_size: 0.8
   train_on:
     - dataset: mimic
       fraction: 1.0
   classification: true
-  preprocessor:
-    steps:
-      - remove_minors
-      - adapt_max_age
-      - outlier_removal
-    bmi_limit: 100
-    min_age: 18
-    max_age: 90
-    outlier_limits: new_extended_limits.json
-    missing_rate: 0.5
+  data_cleaner:
+    outlier_limits_path: configs/data_limits.json
+    missing_threshold_row: 0.5
   scaler_encoder: {}
   imputer:
     imputation_method: knn
@@ -28,13 +22,11 @@ training:
     - name: tabpfn-3
       task_type: classification
       params: {}
-      optimize_hyperparameters: false
-      hyperparameter_optimization_params: null
+      hpo: null
     - name: tabicl-2
       task_type: classification
       params: {}
-      optimize_hyperparameters: false
-      hyperparameter_optimization_params: null
+      hpo: null
 
 evaluation:
   metrics:

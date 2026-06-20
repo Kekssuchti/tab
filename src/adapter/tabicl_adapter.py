@@ -4,11 +4,11 @@ from typing import Literal
 import numpy as np
 from tabicl import TabICLClassifier, TabICLRegressor
 
-from src.interfaces.model_interface import TFModelInterface
+from src.interfaces.model_interface import ModelAdapter
 from src.utils.logger import logger
 
 
-class TabICLAdapter(TFModelInterface):
+class TabICLAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",
@@ -32,15 +32,13 @@ class TabICLAdapter(TFModelInterface):
         return timer() - start_time
 
     def predict(self, X_test):
-        logger.info(f"Predicting with: {self.model.get_params()}")
+        logger.info("Predicting with TabICL")
         start_time = timer()
-        if isinstance(self.model, TabICLClassifier):
+        if self.task_type == "classification":
             result = np.asarray(self.model.predict_proba(X_test))
         else:
-            result = np.asarray(
-                self.model.predict(X_test, output_type="mean", alphas=None)
-            )
-            # alphas == quantiles
+            result = self.model.predict(X_test, output_type="mean", alphas=None)
+            result = np.asarray(result)
 
         logger.info("TabICL Prediction done")
         return result, timer() - start_time

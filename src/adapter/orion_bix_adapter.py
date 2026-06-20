@@ -3,11 +3,11 @@ from typing import Literal
 
 from orion_bix import OrionBixClassifier
 
-from src.interfaces.model_interface import TFModelInterface
+from src.interfaces.model_interface import ModelAdapter
 from src.utils.logger import logger
 
 
-class OrionBixAdapter(TFModelInterface):
+class OrionBixAdapter(ModelAdapter):
     def __init__(
         self, task_type: Literal["classification"] = "classification", **kwargs
     ) -> None:
@@ -29,7 +29,7 @@ class OrionBixAdapter(TFModelInterface):
         return timer() - start_time
 
     def predict(self, X_test):
-        logger.info(f"Predicting with: {self.model.get_params()}")
+        logger.info("Predicting with OrionBIX")
         start_time = timer()
         result = self.model.predict_proba(X_test)
 
