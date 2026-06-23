@@ -215,12 +215,17 @@ class Dataset:
 
         X = df.drop(columns=cols_to_drop, errors="ignore")
 
+        stratify = None
+        if self.params.classification and y.nunique() > 1 and y.value_counts().min() >= 2:
+            stratify = y
+
         X_train, X_test, y_train, y_test = train_test_split(
             X,
             y,
             test_size=(1 - self.params.train_size),
             random_state=self.seed,
             shuffle=True,
+            stratify=stratify,
         )
 
         X_train = pd.DataFrame(X_train)

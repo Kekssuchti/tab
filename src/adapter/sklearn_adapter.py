@@ -5,12 +5,13 @@ import numpy as np
 from sklearn.linear_model import LinearRegression, LogisticRegression
 
 from src.interfaces.model_interface import ModelAdapter
+from src.schemas.base_schemas import TaskType
 
 
 class LinearModelAdapter(ModelAdapter):
     def __init__(
         self,
-        task_type: Literal["classification", "regression"] = "regression",
+        task_type: TaskType = "regression",
         **kwargs,
     ) -> None:
         self.task_type = task_type

@@ -4,7 +4,6 @@ import pytest
 from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
 from src.utils.model_registry import MODEL_REGISTRY_CLS, MODEL_REGISTRY_REG
 
-
 LIGHTWEIGHT_CLASSIFICATION_MODELS = ("logistic-regression", "xgboost")
 LIGHTWEIGHT_REGRESSION_MODELS = ("linear-regression", "xgboost")
 
@@ -48,7 +47,7 @@ def test_regression_registry_entries_are_model_specs():
     assert all(spec.adapter_cls is not None for spec in MODEL_REGISTRY_REG.values())
 
 
-@pytest.mark.parametrize("model_name", LIGHTWEIGHT_CLASSIFICATION_MODELS)
+@pytest.mark.parametrize("model_name", MODEL_REGISTRY_CLS)
 def test_lightweight_registered_classification_models_fit_and_predict(model_name):
     X, y = load_toy_data_cls()
     model = _make_model(model_name, MODEL_REGISTRY_CLS, "classification")
@@ -56,7 +55,7 @@ def test_lightweight_registered_classification_models_fit_and_predict(model_name
     _assert_valid_fit_and_predict(model_name, model, X, y)
 
 
-@pytest.mark.parametrize("model_name", LIGHTWEIGHT_REGRESSION_MODELS)
+@pytest.mark.parametrize("model_name", MODEL_REGISTRY_REG)
 def test_lightweight_registered_regression_models_fit_and_predict(model_name):
     X, y = _load_regression_data_for_model_smoke_test()
     model = _make_model(model_name, MODEL_REGISTRY_REG, "regression")

@@ -22,15 +22,11 @@ training:
     - name: tabpfn-3
       task_type: classification
       params: {}
-      hpo: null
+      tuning: null
     - name: tabicl-2
       task_type: classification
       params: {}
-      hpo: null
-
-evaluation:
-  metrics:
-    - all
+      tuning: null
 
 plotting:
   enabled: true

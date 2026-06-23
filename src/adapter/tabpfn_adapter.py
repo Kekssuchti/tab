@@ -1,17 +1,17 @@
 from timeit import default_timer as timer
-from typing import Literal
 
 import numpy as np
 from tabpfn import TabPFNClassifier, TabPFNRegressor
 
 from src.interfaces.model_interface import ModelAdapter
+from src.schemas.base_schemas import TaskType
 from src.utils.logger import logger
 
 
 class TabPFNAdapter(ModelAdapter):
     def __init__(
         self,
-        task_type: Literal["classification", "regression"] = "classification",
+        task_type: TaskType = "classification",
         **kwargs,
     ) -> None:
         super().__init__()

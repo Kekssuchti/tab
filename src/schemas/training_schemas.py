@@ -1,22 +1,16 @@
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import Field
 
 from src.config import config
-from src.schemas.base_schemas import StrictParams
-
-ScoringMethod = Literal[
-    "roc_auc",
-    "prc_auc",
-    "f1",
-    "accuracy",
-    "sensitivity",
-    "precision",
-    "r2",
-    "neg_root_mean_squared_error",
-    "neg_mean_absolute_error",
-]
+from src.evaluation.evaluation_utils import (
+    ClassificationMetrics,
+    RegressionMetrics,
+    ScoringMethodCLS,
+    ScoringMethodREG,
+)
+from src.schemas.base_schemas import StrictParams, TaskType
 
 
 class CVParams(StrictParams):
@@ -25,19 +19,18 @@ class CVParams(StrictParams):
     random_state: int = Field(default_factory=lambda: config.seed)
 
 
-class HPOParams(StrictParams):
+class TuningParams(StrictParams):
     search_space: str | None = "default"
-    search_grid: dict[str, Any] | None = None
-    search_method: Literal["grid"] = "grid"
-    scoring: ScoringMethod = "roc_auc"
+    grid: dict[str, list[Any]] | None = None
+    scoring: ScoringMethodCLS = "roc_auc"
     cv: CVParams = Field(default_factory=CVParams)
 
 
 class ModelParams(StrictParams):
     name: str
     params: dict[str, Any] = Field(default_factory=dict)
-    task_type: Literal["classification", "regression"] = "classification"
-    hpo: HPOParams | None = None
+    task_type: TaskType = "classification"
+    tuning: TuningParams | None = None
 
 
 class TrainingParams(StrictParams):
@@ -46,29 +39,50 @@ class TrainingParams(StrictParams):
 
 @dataclass
 class FoldResult:
-    """Metrics for a single CV fold."""
+    """Validation metrics for one candidate on one CV fold."""
 
+    candidate_index: int
     fold_index: int
-    train_score: float
-    test_score: float
+    metrics: ClassificationMetrics | RegressionMetrics
+    time: float
+    params: dict[str, Any]
 
 
 @dataclass
-class HPOResult:
+class TuningCVResults:
+    params: list[dict[str, Any]]
+    mean_scores: list[float]
+    std_scores: list[float]
+    fold_scores: list[list[float]]
+    fold_times: list[list[float]]
+    mean_metrics: list[ClassificationMetrics] | list[RegressionMetrics]
+
+
+@dataclass
+class TuningResult:
     best_params: dict[str, Any]
-    best_score: float
-    scoring: ScoringMethod
-    cv_results: dict[str, Any]
+    scoring: ScoringMethodCLS
+    best_metrics: ClassificationMetrics | RegressionMetrics
+    cv_results: TuningCVResults
     fold_results: list[FoldResult] = field(default_factory=list)
+
+    @property
+    def best_score(self) -> float:
+        return self.best_metrics.primary_score
+
+    @property
+    def total_time(self) -> float:
+        return sum(fold.time for fold in self.fold_results)
 
 
 @dataclass
 class ModelTrainingResult:
-    """Result of training a single model (with or without HPO)."""
+    """Result of fitting a single model, optionally after tuning."""
 
     model_name: str
-    task_type: str
+    task_type: TaskType
     trained_model: Any
-    optimized_hyperparameters: bool
+    tuned: bool
     fit_time: float
-    hpo_result: HPOResult | None = None
+    training_metrics: ClassificationMetrics | RegressionMetrics | None = None
+    tuning_result: TuningResult | None = None

@@ -1,6 +1,7 @@
 import sys
 
 from src.config import config
+from src.schemas.base_schemas import TaskType
 
 sys.path.insert(0, str(config.dir_external_limix))
 
@@ -20,7 +21,7 @@ from src.utils.logger import logger
 class LimixAdapter(ModelAdapter):
     def __init__(
         self,
-        task_type: Literal["classification", "regression"] = "classification",
+        task_type: TaskType = "classification",
         size: Literal["2M", "16M"] = "2M",
         **kwargs,
     ) -> None:

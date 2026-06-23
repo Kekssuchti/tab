@@ -14,7 +14,6 @@ from src.interfaces.model_interface import ModelAdapter, TaskType
 @dataclass(frozen=True)
 class ModelSpec:
     adapter_cls: type[ModelAdapter]
-    supports_sklearn_pipeline: bool = True
     default_params: dict[str, Any] = field(default_factory=dict)
     search_spaces: dict[str, dict[str, list[Any]]] = field(default_factory=dict)
 
@@ -23,9 +22,16 @@ class ModelSpec:
             task_type=task_type, **{**self.default_params, **params}
         )
 
-    def search_grid(self, search_space: str | None, overrides: dict[str, Any] | None):
+    def tuning_grid(
+        self, search_space: str | None, overrides: dict[str, list[Any]] | None
+    ) -> dict[str, list[Any]]:
+        # if we get any search space override / new grid we use it
         if overrides:
             return overrides
+
+        # if we dont get override we use the provided search space.
+        # This will most likely be default.
+        # But can later also be specified with "best baseline" or whatever
         if search_space is None:
             search_space = "default"
         try:
@@ -33,10 +39,13 @@ class ModelSpec:
         except KeyError as exc:
             available = ", ".join(sorted(self.search_spaces)) or "none"
             raise ValueError(
-                f"Unknown HPO search space '{search_space}'. Available: {available}"
+                f"Unknown tuning search space '{search_space}'. Available: {available}"
             ) from exc
 
 
+# Note that search spaaces with parametes that have only 1 value are still worth it
+# since we use the 1 value as the "default" for the hyperparameter
+# While adjusting the other hyperparameters with multiple values
 MODEL_REGISTRY_CLS = {
     "logistic-regression": ModelSpec(
         LinearModelAdapter,
@@ -69,14 +78,29 @@ MODEL_REGISTRY_CLS = {
             }
         },
     ),
-    "tabpfn-3": ModelSpec(TabPFNAdapter),
-    "tabicl-2": ModelSpec(TabICLAdapter),
-    "limix-2m": ModelSpec(
-        LimixAdapter, supports_sklearn_pipeline=False, default_params={"size": "2M"}
+    "tabpfn-3": ModelSpec(
+        TabPFNAdapter,
+        search_spaces={
+            "default": {
+                "n_estimators": [4, 8, 16],
+                "average_before_softmax": [True, False],
+                "softmax_temperature": [0.75, 0.9, 1.0, 1.1],
+            }
+        },
     ),
-    "limix-16m": ModelSpec(
-        LimixAdapter, supports_sklearn_pipeline=False, default_params={"size": "16M"}
+    "tabicl-2": ModelSpec(
+        TabICLAdapter,
+        search_spaces={
+            "default": {
+                "n_estimators": [4, 8, 16],
+                "class_shuffle_method": ["shift"],
+                "softmax_temperature": [0.75, 0.9, 1.0, 1.1],
+                "average_logits": [True, False],
+            }
+        },
     ),
+    "limix-2m": ModelSpec(LimixAdapter, default_params={"size": "2M"}),
+    "limix-16m": ModelSpec(LimixAdapter, default_params={"size": "16M"}),
     "mitra": ModelSpec(MitraAdapter),
     "orion-msp": ModelSpec(OrionMSPAdapter),
     "orion-bix": ModelSpec(OrionBixAdapter),
@@ -108,11 +132,7 @@ MODEL_REGISTRY_REG = {
     ),
     "tabpfn-3": ModelSpec(TabPFNAdapter),
     "tabicl-2": ModelSpec(TabICLAdapter),
-    "limix-2m": ModelSpec(
-        LimixAdapter, supports_sklearn_pipeline=False, default_params={"size": "2M"}
-    ),
-    "limix-16m": ModelSpec(
-        LimixAdapter, supports_sklearn_pipeline=False, default_params={"size": "16M"}
-    ),
+    "limix-2m": ModelSpec(LimixAdapter, default_params={"size": "2M"}),
+    "limix-16m": ModelSpec(LimixAdapter, default_params={"size": "16M"}),
     "mitra": ModelSpec(MitraAdapter),
 }

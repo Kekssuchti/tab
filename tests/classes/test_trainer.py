@@ -4,7 +4,12 @@ import pandas as pd
 from src.classes.preprocessor import Preprocessor
 from src.classes.trainer import Trainer
 from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
-from src.schemas.training_schemas import CVParams, HPOParams, ModelParams, TrainingParams
+from src.schemas.training_schemas import (
+    CVParams,
+    ModelParams,
+    TrainingParams,
+    TuningParams,
+)
 
 
 def _classification_data():
@@ -55,14 +60,18 @@ def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
     predictions, predict_time = result.trained_model.predict(X)
 
     assert result.model_name == "logistic-regression"
-    assert not result.optimized_hyperparameters
+    assert not result.tuned
+    assert result.training_metrics is not None
+    assert result.training_metrics.primary_metric == "roc_auc"
+    assert result.training_metrics.primary_score == result.training_metrics.roc_auc
+    assert "accuracy" in result.training_metrics.side_scores
     assert result.fit_time >= 0
     assert predict_time >= 0
     assert predictions.shape == (len(X), 2)
     assert np.isfinite(predictions).all()
 
 
-def test_trainer_uses_model_specific_hpo_grid_and_returns_best_params():
+def test_trainer_uses_tuning_grid_and_returns_best_params():
     X, y = _classification_data()
     trainer = Trainer(
         params=TrainingParams(
@@ -71,8 +80,8 @@ def test_trainer_uses_model_specific_hpo_grid_and_returns_best_params():
                     name="logistic-regression",
                     task_type="classification",
                     params={"max_iter": 200},
-                    hpo=HPOParams(
-                        search_grid={"C": [0.1, 1.0]},
+                    tuning=TuningParams(
+                        grid={"C": [0.1, 1.0]},
                         scoring="accuracy",
                         cv=CVParams(n_splits=2, random_state=1),
                     ),
@@ -85,10 +94,23 @@ def test_trainer_uses_model_specific_hpo_grid_and_returns_best_params():
     result = trainer.train_models(X, y)[0]
     predictions, _ = result.trained_model.predict(X)
 
-    assert result.optimized_hyperparameters
-    assert result.hpo_result is not None
-    assert set(result.hpo_result.best_params) == {"C"}
-    assert result.hpo_result.best_score >= 0
+    assert result.tuned
+    assert result.tuning_result is not None
+    assert set(result.tuning_result.best_params) == {"C"}
+    assert result.tuning_result.best_score >= 0
+    assert result.tuning_result.best_metrics.primary_metric == "accuracy"
+    assert result.tuning_result.best_score == result.tuning_result.best_metrics.accuracy
+    assert len(result.tuning_result.cv_results.params) == 2
+    assert len(result.tuning_result.cv_results.mean_scores) == 2
+    assert len(result.tuning_result.cv_results.mean_metrics) == 2
+    assert len(result.tuning_result.fold_results) == 4
+    assert all(
+        fold.metrics.primary_metric == "accuracy"
+        for fold in result.tuning_result.fold_results
+    )
+    assert result.training_metrics is not None
+    assert result.training_metrics.primary_metric == "accuracy"
+    assert "roc_auc" in result.training_metrics.side_scores
     assert predictions.shape == (len(X), 2)
 
 
@@ -110,5 +132,6 @@ def test_trainer_can_fit_regression_adapter_behind_same_interface():
     predictions, _ = result.trained_model.predict(X)
 
     assert result.model_name == "linear-regression"
+    assert result.training_metrics is None
     assert predictions.shape == (len(X),)
     assert np.isfinite(predictions).all()

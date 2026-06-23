@@ -5,11 +5,10 @@ from src.adapter.mitra_adapter import MitraAdapter
 from src.adapter.tabicl_adapter import TabICLAdapter
 from src.adapter.tabpfn_adapter import TabPFNAdapter
 from src.config import config
-from src.evaluation.evaluate import evaluate_predictions
+from src.evaluation.evaluation_utils import evaluate_classification_predictions
 from src.interfaces.model_interface import ModelAdapter
 from src.utils import load_data
 from src.utils.logger import logger
-from src.utils.model_registry import MODEL_REGISTRY
 
 
 def train_model(model: ModelAdapter, X_train, X_test, y_train):
@@ -35,7 +34,7 @@ def main():
 
     predictions, time_total = train_model(model_mitra, X_train, X_test, y_train)
 
-    metrics = evaluate_predictions(predictions, y_test)
+    metrics = evaluate_classification_predictions("roc_auc", predictions, y_test)
     logger.info(f"Metrics: {metrics}")
     logger.info(f"Total time (train+pred): {time_total:.3f}s")
 

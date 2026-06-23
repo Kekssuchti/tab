@@ -1,27 +1,38 @@
 from dataclasses import dataclass
 
-import numpy as np
-
 from src.classes.dataset import Dataset
-from src.classes.evaluator import Evaluator
 from src.classes.plotter import Plotter
 from src.classes.preprocessor import Preprocessor
 from src.classes.trainer import Trainer
-from src.evaluation.evaluate import evaluate_predictions
+from src.evaluation.evaluation_utils import evaluate_classification_predictions
+from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.pipeline_schemas import PipelineParams
-from src.schemas.training_schemas import ModelTrainingResult
+from src.schemas.training_schemas import (
+    ClassificationMetrics,
+    ModelTrainingResult,
+)
+
+
+@dataclass(frozen=True)
+class TestSetEvaluationResult:
+    dataset_name: str
+    metrics: ClassificationMetrics
+    predict_time: float
 
 
 @dataclass(frozen=True)
 class ModelRunResult:
     model_name: str
-    metrics: dict[str, float]
+    test_results: tuple[TestSetEvaluationResult, ...]
     fit_time: float
-    predict_time: float
 
     @property
     def total_time(self) -> float:
-        return self.fit_time + self.predict_time
+        return self.fit_time + sum(result.predict_time for result in self.test_results)
+
+    @property
+    def metrics_by_test_set(self) -> dict[str, ClassificationMetrics]:
+        return {result.dataset_name: result.metrics for result in self.test_results}
 
 
 @dataclass(frozen=True)
@@ -37,7 +48,6 @@ class Pipeline:
         self.params.run_dir.mkdir(parents=True, exist_ok=True)
 
         self.dataset = Dataset(params.dataset)
-        self.evaluator = Evaluator(params.evaluation)
         self.plotter = Plotter(params.plotting)
 
     def run(self) -> PipelineResult:
@@ -73,29 +83,42 @@ class Pipeline:
     def _evaluate_trained_model(
         self,
         training_result: ModelTrainingResult,
-        data,
+        data: DatasetBundle,
     ) -> ModelRunResult:
-        adapter = training_result.trained_model
-
-        predictions, predict_time = adapter.predict(data.test_mimic.X.to_numpy())
-        metrics = self._evaluate(
-            training_result.task_type, predictions, data.test_mimic.y.to_numpy()
+        test_results = (
+            self._evaluate_test_set("mimic", training_result, data.test_mimic),
+            self._evaluate_test_set("tudd", training_result, data.test_tudd),
         )
 
         return ModelRunResult(
             model_name=training_result.model_name,
-            metrics=metrics,
+            test_results=test_results,
             fit_time=training_result.fit_time,
-            predict_time=predict_time,
         )
 
     @staticmethod
-    def _evaluate(
-        task_type: str,
-        predictions: np.ndarray,
-        y_test: np.ndarray,
-    ) -> dict[str, float]:
-        if task_type != "classification":
+    def _evaluate_test_set(
+        dataset_name: str,
+        training_result: ModelTrainingResult,
+        test_set: XYDataset,
+    ) -> TestSetEvaluationResult:
+        if training_result.task_type != "classification":
             raise NotImplementedError("Regression evaluation is not implemented yet")
 
-        return evaluate_predictions(predictions, y_test)
+        predictions, predict_time = training_result.trained_model.predict(
+            test_set.X.to_numpy()
+        )
+        scoring = (
+            training_result.tuning_result.scoring
+            if training_result.tuning_result is not None
+            else "roc_auc"
+        )
+        metrics = evaluate_classification_predictions(
+            scoring, predictions, test_set.y.to_numpy()
+        )
+
+        return TestSetEvaluationResult(
+            dataset_name=dataset_name,
+            metrics=metrics,
+            predict_time=predict_time,
+        )

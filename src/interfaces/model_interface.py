@@ -5,7 +5,7 @@ from typing import Any, Literal
 import numpy as np
 from numpy import ndarray
 
-TaskType = Literal["classification", "regression"]
+from src.schemas.base_schemas import TaskType
 
 
 class ModelAdapter(ABC):
