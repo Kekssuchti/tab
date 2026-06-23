@@ -6,7 +6,7 @@ from src.classes import dataset as dataset_module
 from src.classes.dataset import Dataset
 from src.schemas.dataset_schemas import DatasetParams, DataSplitParams
 
-TARGET_COLUMNS = {"mortality", "LOS", "hours_to_readmit"}
+TARGET_COLUMNS = {"mortality", "LOS", "LOS3", "hours_to_readmit"}
 
 
 def _make_rows(source: str, start_id: int, n_rows: int) -> pd.DataFrame:
@@ -104,6 +104,16 @@ def test_dataset_splits_selected_origin_without_train_test_overlap(
     _assert_labels_match_rows(bundle.train_data.X, bundle.train_data.y, labels)
     _assert_labels_match_rows(bundle.test_mimic.X, bundle.test_mimic.y, labels)
 
+    summary = dataset.summarize(bundle)
+    assert summary.target == "mortality"
+    assert summary.train.row_count == 6
+    assert summary.test_mimic.row_count == 4
+    assert summary.test_tudd.row_count == 4
+    assert summary.train.class_balance == {"0": 3, "1": 3}
+    assert {data_file.data_origin for data_file in summary.data_files} == {"mimic", "tudd"}
+    assert all(data_file.sha256 is not None for data_file in summary.data_files)
+    assert all(len(data_file.sha256) == 64 for data_file in summary.data_files)
+
 
 def test_dataset_combines_fractional_and_absolute_training_splits(
     tmp_path, monkeypatch
@@ -176,3 +186,31 @@ def test_readmission_dataset_uses_binary_readmission_labels_and_drops_targets(
     _assert_labels_match_rows(bundle.train_data.X, bundle.train_data.y, labels)
     _assert_labels_match_rows(bundle.test_mimic.X, bundle.test_mimic.y, labels)
     _assert_labels_match_rows(bundle.test_tudd.X, bundle.test_tudd.y, labels)
+
+
+def test_dataset_drops_source_specific_columns_from_all_feature_sets(
+    tmp_path, monkeypatch
+):
+    mimic = _make_rows("mimic", 100, 10).assign(
+        mimic_only_feature=[float(i) for i in range(10)]
+    )
+    tudd = _make_rows("tudd", 200, 10).assign(LOS3=[i % 2 for i in range(10)])
+    _write_filtered_data(tmp_path, mimic, tudd)
+    monkeypatch.setattr(dataset_module, "config", SimpleNamespace(dir_data=tmp_path))
+
+    dataset = Dataset(
+        _dataset_params(
+            target="mortality",
+            train_on=(
+                DataSplitParams(dataset="mimic", fraction=1.0),
+                DataSplitParams(dataset="tudd", fraction=1.0),
+            ),
+        )
+    )
+
+    bundle = dataset.get_dataset()
+
+    assert "LOS3" not in bundle.train_data.X.columns
+    assert "mimic_only_feature" not in bundle.train_data.X.columns
+    assert set(bundle.train_data.X.columns) == set(bundle.test_mimic.X.columns)
+    assert set(bundle.train_data.X.columns) == set(bundle.test_tudd.X.columns)

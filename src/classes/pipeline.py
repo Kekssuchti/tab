@@ -1,11 +1,11 @@
 from dataclasses import dataclass
+from time import perf_counter
 
 from src.classes.dataset import Dataset
 from src.classes.plotter import Plotter
-from src.classes.preprocessor import Preprocessor
 from src.classes.trainer import Trainer
 from src.evaluation.evaluation_utils import evaluate_classification_predictions
-from src.schemas.dataset_schemas import DatasetBundle, XYDataset
+from src.schemas.dataset_schemas import DatasetBundle, DatasetSummary, XYDataset
 from src.schemas.pipeline_schemas import PipelineParams
 from src.schemas.training_schemas import (
     ClassificationMetrics,
@@ -38,8 +38,10 @@ class ModelRunResult:
 @dataclass(frozen=True)
 class PipelineResult:
     run_id: str
+    dataset_summary: DatasetSummary
     model_results: tuple[ModelRunResult, ...]
     training_results: tuple[ModelTrainingResult, ...]
+    total_time: float
 
 
 class Pipeline:
@@ -51,21 +53,18 @@ class Pipeline:
         self.plotter = Plotter(params.plotting)
 
     def run(self) -> PipelineResult:
+        start_time = perf_counter()
         data = self.dataset.get_dataset()
-
-        preprocessor = Preprocessor(
-            params_imputer=self.params.dataset.imputer,
-            params_scaler=self.params.dataset.scaler_encoder,
-        )
-        preprocess_pipeline = preprocessor.build_pipeline()
+        dataset_summary = self.dataset.summarize(data)
 
         trainer = Trainer(
             params=self.params.training,
-            preprocess_pipeline=preprocess_pipeline,
+            default_imputer=self.params.dataset.imputer,
+            default_scaler=self.params.dataset.scaler_encoder,
         )
 
         training_results = trainer.train_models(
-            X_train=data.train_data.X.to_numpy(),
+            X_train=data.train_data.X,
             y_train=data.train_data.y.to_numpy(),
         )
 
@@ -73,11 +72,14 @@ class Pipeline:
         for tr in training_results:
             mr = self._evaluate_trained_model(tr, data)
             model_results.append(mr)
+            del tr, mr
 
         return PipelineResult(
             run_id=self.params.run_id,
+            dataset_summary=dataset_summary,
             model_results=tuple(model_results),
             training_results=tuple(training_results),
+            total_time=perf_counter() - start_time,
         )
 
     def _evaluate_trained_model(
@@ -105,9 +107,7 @@ class Pipeline:
         if training_result.task_type != "classification":
             raise NotImplementedError("Regression evaluation is not implemented yet")
 
-        predictions, predict_time = training_result.trained_model.predict(
-            test_set.X.to_numpy()
-        )
+        predictions, predict_time = training_result.trained_model.predict(test_set.X)
         scoring = (
             training_result.tuning_result.scoring
             if training_result.tuning_result is not None

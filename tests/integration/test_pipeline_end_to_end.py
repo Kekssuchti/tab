@@ -55,6 +55,10 @@ def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(
     result = Pipeline(params).run()
 
     assert result.run_id == "0001_2026-06-23"
+    assert result.total_time >= 0.0
+    assert result.dataset_summary.train.row_count == 24
+    assert result.dataset_summary.test_mimic.row_count == 8
+    assert result.dataset_summary.test_tudd.row_count == 8
     assert {model.model_name for model in result.model_results} == {
         "xgboost",
         "tabpfn-3",

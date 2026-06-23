@@ -1,13 +1,11 @@
 import numpy as np
 import pandas as pd
 
-from src.classes.preprocessor import Preprocessor
 from src.classes.trainer import Trainer
 from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 from src.schemas.training_schemas import (
     CVParams,
     ModelParams,
-    TrainingParams,
     TuningParams,
 )
 
@@ -35,25 +33,23 @@ def _regression_data():
 
 
 def _preprocess_pipeline():
-    return Preprocessor(
-        params_imputer=ImputerParams(imputation_method="none"),
-        params_scaler=ScalerEncoderParams(type="none"),
-    ).build_pipeline()
+    return {
+        "default_imputer": ImputerParams(imputation_method="none"),
+        "default_scaler": ScalerEncoderParams(type="none"),
+    }
 
 
 def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
     X, y = _classification_data()
     trainer = Trainer(
-        params=TrainingParams(
-            models=(
-                ModelParams(
-                    name="logistic-regression",
-                    task_type="classification",
-                    params={"max_iter": 200},
-                ),
-            )
+        params=(
+            ModelParams(
+                name="logistic-regression",
+                task_type="classification",
+                params={"max_iter": 200},
+            ),
         ),
-        preprocess_pipeline=_preprocess_pipeline(),
+        **_preprocess_pipeline(),
     )
 
     result = trainer.train_models(X, y)[0]
@@ -74,21 +70,19 @@ def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
 def test_trainer_uses_tuning_grid_and_returns_best_params():
     X, y = _classification_data()
     trainer = Trainer(
-        params=TrainingParams(
-            models=(
-                ModelParams(
-                    name="logistic-regression",
-                    task_type="classification",
-                    params={"max_iter": 200},
-                    tuning=TuningParams(
-                        grid={"C": [0.1, 1.0]},
-                        scoring="accuracy",
-                        cv=CVParams(n_splits=2, random_state=1),
-                    ),
+        params=(
+            ModelParams(
+                name="logistic-regression",
+                task_type="classification",
+                params={"max_iter": 200},
+                tuning=TuningParams(
+                    grid={"C": [0.1, 1.0]},
+                    scoring="accuracy",
+                    cv=CVParams(n_splits=2, random_state=1),
                 ),
-            )
+            ),
         ),
-        preprocess_pipeline=_preprocess_pipeline(),
+        **_preprocess_pipeline(),
     )
 
     result = trainer.train_models(X, y)[0]
@@ -117,15 +111,13 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
 def test_trainer_can_fit_regression_adapter_behind_same_interface():
     X, y = _regression_data()
     trainer = Trainer(
-        params=TrainingParams(
-            models=(
-                ModelParams(
-                    name="linear-regression",
-                    task_type="regression",
-                ),
-            )
+        params=(
+            ModelParams(
+                name="linear-regression",
+                task_type="regression",
+            ),
         ),
-        preprocess_pipeline=_preprocess_pipeline(),
+        **_preprocess_pipeline(),
     )
 
     result = trainer.train_models(X, y)[0]
@@ -134,4 +126,54 @@ def test_trainer_can_fit_regression_adapter_behind_same_interface():
     assert result.model_name == "linear-regression"
     assert result.training_metrics is None
     assert predictions.shape == (len(X),)
+    assert np.isfinite(predictions).all()
+
+
+def test_trainer_uses_model_specific_preprocessing_override():
+    X, y = _classification_data()
+    X.loc[0, "lab"] = np.nan
+    trainer = Trainer(
+        params=(
+            ModelParams(
+                name="logistic-regression",
+                task_type="classification",
+                params={"max_iter": 200},
+                preprocessing={
+                    "imputer": {"imputation_method": "mean"},
+                    "scaler_encoder": {"type": "none"},
+                },
+            ),
+        ),
+        default_imputer=ImputerParams(imputation_method="none"),
+        default_scaler=ScalerEncoderParams(type="none"),
+    )
+
+    result = trainer.train_models(X, y)[0]
+    predictions, _ = result.trained_model.predict(X)
+
+    assert result.model_name == "logistic-regression"
+    assert predictions.shape == (len(X), 2)
+    assert np.isfinite(predictions).all()
+
+
+def test_trainer_encodes_categorical_columns_before_xgboost():
+    X, y = _classification_data()
+    X["Sex"] = ["F", "M", "F", "M", "F", "M", "F", "M"]
+    trainer = Trainer(
+        params=(
+            ModelParams(
+                name="xgboost",
+                task_type="classification",
+                params={"n_estimators": 2, "max_depth": 1, "n_jobs": 1},
+            ),
+        ),
+        default_imputer=ImputerParams(imputation_method="none"),
+        default_scaler=ScalerEncoderParams(type="none"),
+    )
+
+    result = trainer.train_models(X, y)[0]
+    predictions, _ = result.trained_model.predict(X)
+
+    assert result.model_name == "xgboost"
+    assert predictions.shape == (len(X), 2)
     assert np.isfinite(predictions).all()

@@ -25,6 +25,7 @@ class TabICLAdapter(ModelAdapter):
             model = TabICLClassifier(**self.kwargs)
         else:
             model = TabICLRegressor(**self.kwargs)
+        logger.info(f"Loaded TabICL model with params: {model.get_params()}")
         return model
 
     def fit(self, X_train, y_train):

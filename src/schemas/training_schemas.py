@@ -11,6 +11,7 @@ from src.evaluation.evaluation_utils import (
     ScoringMethodREG,
 )
 from src.schemas.base_schemas import StrictParams, TaskType
+from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 
 
 class CVParams(StrictParams):
@@ -26,15 +27,17 @@ class TuningParams(StrictParams):
     cv: CVParams = Field(default_factory=CVParams)
 
 
+class ModelPreprocessingParams(StrictParams):
+    imputer: ImputerParams | None = None
+    scaler_encoder: ScalerEncoderParams | None = None
+
+
 class ModelParams(StrictParams):
     name: str
-    params: dict[str, Any] = Field(default_factory=dict)
     task_type: TaskType = "classification"
+    params: dict[str, Any] = Field(default_factory=dict)
+    preprocessing: ModelPreprocessingParams | None = None
     tuning: TuningParams | None = None
-
-
-class TrainingParams(StrictParams):
-    models: tuple[ModelParams, ...] = (ModelParams(name="tabpfn-3"),)
 
 
 @dataclass

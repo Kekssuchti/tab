@@ -49,6 +49,30 @@ def test_no_preprocessing_returns_input_values_unchanged():
     np.testing.assert_allclose(np.asarray(transformed), X_train.to_numpy())
 
 
+def test_categorical_columns_are_encoded_for_numeric_estimators():
+    X_train = pd.DataFrame(
+        {
+            "age": [40.0, 50.0, 60.0],
+            "Sex": ["F", "M", "F"],
+        }
+    )
+    X_test = pd.DataFrame(
+        {
+            "age": [70.0],
+            "Sex": ["unknown"],
+        }
+    )
+    pipeline = _preprocessor(X_train, X_test).build_pipeline()
+
+    transformed_train = pipeline.fit_transform(X_train)
+    transformed_test = pipeline.transform(X_test)
+
+    assert transformed_train.shape == (3, 3)
+    assert transformed_test.shape == (1, 3)
+    assert transformed_train.dtype.kind in {"f", "i"}
+    assert transformed_test.dtype.kind in {"f", "i"}
+
+
 def test_mean_imputation_uses_training_values_for_train_and_test_data():
     X_train = pd.DataFrame(
         {

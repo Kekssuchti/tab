@@ -1,31 +1,30 @@
-run_number: 1
-run_date: 2026-06-17
+run_number: 2
+run_date: 2026-06-23
 
 dataset:
   target: mortality
   random_state: 1337
   train_size: 0.8
   train_on:
-    - dataset: mimic
+    - dataset: tudd
       fraction: 1.0
   classification: true
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
-  scaler_encoder: {}
+  scaler_encoder:
+    type: none
   imputer:
-    imputation_method: knn
-    flag_missing: false
+    imputation_method: none
 
 training:
   - name: tabpfn-3
     task_type: classification
-    params: {}
-    tuning: null
-  - name: tabicl-2
-    task_type: classification
-    params: {}
-    tuning: null
+    params:
+      random_state: 1337
+      predict_batch_size: 512
+      fit_mode: "fit_with_cache"
+      inference_config: { "SUBSAMPLE_SAMPLES": 15_000 }
 
 plotting:
   enabled: true

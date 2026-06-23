@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -5,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import config
+from src.schemas.dataset_schemas import DatasetPartSummary, XYDataset
 from src.utils.logger import logger
 
 
@@ -131,3 +133,23 @@ def standard_preprocessing(
 
     # still wip, we have minimally less rows than expected
     return df
+
+
+def summarize_data_part(part: XYDataset) -> DatasetPartSummary:
+    counts = part.y.value_counts(dropna=False).sort_index()
+    class_balance = {str(label): int(count) for label, count in counts.items()}
+    return DatasetPartSummary(
+        row_count=len(part.y),
+        class_balance=class_balance,
+    )
+
+
+def hash_file_sha256(path: Path) -> str | None:
+    if not path.exists():
+        return None
+
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

@@ -1,3 +1,4 @@
+import hashlib
 from dataclasses import dataclass
 from os.path import exists
 from pathlib import Path
@@ -16,10 +17,14 @@ from src.classes.data_registry import (
 from src.config import config
 from src.schemas.dataset_schemas import (
     DatasetBundle,
+    DatasetFileSummary,
     DatasetParams,
+    DatasetPartSummary,
+    DatasetSummary,
     DataSplitParams,
     XYDataset,
 )
+from src.utils.datset_utils import hash_file_sha256, summarize_data_part
 from src.utils.logger import logger
 
 
@@ -144,6 +149,8 @@ class Dataset:
                 "y_test": y_test,
             }
 
+        self._align_split_feature_columns(splits_dict)
+
         X_train_parts: list[pd.DataFrame] = []
         y_train_parts: list[pd.Series] = []
 
@@ -200,6 +207,46 @@ class Dataset:
 
         return data_bundle
 
+    def _align_split_feature_columns(
+        self, splits_dict: dict[DatasetOrigin, _SplitResult]
+    ) -> None:
+        common_columns = set.intersection(
+            *(set(split["X_train"].columns) for split in splits_dict.values())
+        )
+        ordered_columns = [
+            column
+            for column in next(iter(splits_dict.values()))["X_train"].columns
+            if column in common_columns
+        ]
+
+        for split in splits_dict.values():
+            split["X_train"] = split["X_train"].loc[:, ordered_columns]
+            split["X_test"] = split["X_test"].loc[:, ordered_columns]
+
+    def summarize(self, bundle: DatasetBundle) -> DatasetSummary:
+        return DatasetSummary(
+            target=self.params.target,
+            train=summarize_data_part(bundle.train_data),
+            test_mimic=summarize_data_part(bundle.test_mimic),
+            test_tudd=summarize_data_part(bundle.test_tudd),
+            data_files=tuple(self._summarize_data_files()),
+        )
+
+    def _summarize_data_files(self) -> list[DatasetFileSummary]:
+        summaries = []
+        for dataset_name, data_file in self._data_files.items():
+            path = config.dir_data / "filtered" / data_file.file_name
+            summaries.append(
+                DatasetFileSummary(
+                    dataset_name=dataset_name,
+                    data_origin=data_file.data_origin,
+                    file_name=data_file.file_name,
+                    path=str(path),
+                    sha256=hash_file_sha256(path),
+                )
+            )
+        return summaries
+
     def _split_single_df(
         self, df: pd.DataFrame
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
@@ -210,13 +257,19 @@ class Dataset:
         cols_to_drop = [
             "mortality",
             "LOS",
+            "LOS3",
+            "LOS7",
             "hours_to_readmit",
         ]
 
         X = df.drop(columns=cols_to_drop, errors="ignore")
 
         stratify = None
-        if self.params.classification and y.nunique() > 1 and y.value_counts().min() >= 2:
+        if (
+            self.params.classification
+            and y.nunique() > 1
+            and y.value_counts().min() >= 2
+        ):
             stratify = y
 
         X_train, X_test, y_train, y_test = train_test_split(

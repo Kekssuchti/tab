@@ -16,6 +16,10 @@ data/erope/
 models/
 cache/
 run_results/
+mlflow.db
+mlflow.db-*
+mlartifacts/
+mlruns/
 data/raw
 data/filtered
 data/extracted

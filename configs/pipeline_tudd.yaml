@@ -1,0 +1,141 @@
+run_number: 1
+run_date: 2026-06-23
+
+dataset:
+  target: mortality
+  random_state: 1337
+  train_size: 0.8
+  train_on:
+    - dataset: tudd
+      fraction: 1.0
+  classification: true
+  data_cleaner:
+    outlier_limits_path: configs/data_limits.json
+    missing_threshold_row: 0.5
+  scaler_encoder:
+    type: standardization
+  imputer:
+    imputation_method: knn
+    flag_missing: false
+    knn_neighbors: 5
+
+training:
+  - name: xgboost
+    task_type: classification
+    params:
+      random_state: 1337
+      n_jobs: 1
+    preprocessing:
+      imputer:
+        imputation_method: none
+        flag_missing: false
+      scaler_encoder:
+        type: none
+    tuning:
+      scoring: roc_auc
+      grid:
+        n_estimators: [100]
+        max_depth: [3]
+        learning_rate: [0.1]
+        subsample: [1.0]
+      cv:
+        n_splits: 2
+        shuffle: true
+        random_state: 1337
+
+  - name: ebm
+    task_type: classification
+    params:
+      random_state: 1337
+      n_jobs: 1
+    preprocessing:
+      imputer:
+        imputation_method: mean
+        flag_missing: false
+      scaler_encoder:
+        type: none
+    tuning:
+      scoring: roc_auc
+      grid:
+        max_bins: [128]
+        learning_rate: [0.01]
+        interactions: [0]
+      cv:
+        n_splits: 2
+        shuffle: true
+        random_state: 1337
+
+  - name: logistic-regression
+    task_type: classification
+    params:
+      max_iter: 1000
+    preprocessing:
+      imputer:
+        imputation_method: knn
+        flag_missing: false
+        knn_neighbors: 5
+      scaler_encoder:
+        type: standardization
+    tuning:
+      scoring: roc_auc
+      grid:
+        C: [1.0]
+        penalty: [l2]
+        solver: [lbfgs]
+      cv:
+        n_splits: 2
+        shuffle: true
+        random_state: 1337
+
+  - name: tabpfn-3
+    task_type: classification
+    params:
+      random_state: 1337
+      predict_batch_size: 256
+      fit_mode: "fit_with_cache"
+    tuning:
+      scoring: roc_auc
+      grid:
+        n_estimators: [4]
+        average_before_softmax: [true]
+        softmax_temperature: [1.0]
+      cv:
+        n_splits: 2
+        shuffle: true
+        random_state: 1337
+
+  - name: tabicl-2
+    task_type: classification
+    params:
+      random_state: 1337
+      offload_mode: "cpu"
+    tuning:
+      scoring: roc_auc
+      grid:
+        n_estimators: [4]
+        class_shuffle_method: [shift]
+        softmax_temperature: [1.0]
+        average_logits: [true]
+      cv:
+        n_splits: 2
+        shuffle: true
+        random_state: 1337
+
+  - name: limix-16m
+    task_type: classification
+    params:
+      random_state: 1337
+    tuning: null
+
+plotting:
+  enabled: true
+  formats:
+    - png
+
+mlflow:
+  enabled: true
+  tracking_uri: sqlite:///mlflow.db
+  artifact_location: mlartifacts
+  experiment_name: tab
+  nested_model_runs: true
+  log_models: false

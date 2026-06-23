@@ -43,6 +43,14 @@ class ModelSpec:
             ) from exc
 
 
+tabpfn_search_spaces = {
+    "default": {
+        "n_estimators": [4, 8, 16],
+        "average_before_softmax": [True, False],
+        "softmax_temperature": [0.75, 0.9, 1.0, 1.1],
+    }
+}
+
 # Note that search spaaces with parametes that have only 1 value are still worth it
 # since we use the 1 value as the "default" for the hyperparameter
 # While adjusting the other hyperparameters with multiple values
@@ -80,13 +88,12 @@ MODEL_REGISTRY_CLS = {
     ),
     "tabpfn-3": ModelSpec(
         TabPFNAdapter,
-        search_spaces={
-            "default": {
-                "n_estimators": [4, 8, 16],
-                "average_before_softmax": [True, False],
-                "softmax_temperature": [0.75, 0.9, 1.0, 1.1],
-            }
-        },
+        search_spaces=tabpfn_search_spaces,
+    ),
+    "tabpfn-2.5": ModelSpec(
+        TabPFNAdapter,
+        default_params={"version": "v2.5"},
+        search_spaces=tabpfn_search_spaces,
     ),
     "tabicl-2": ModelSpec(
         TabICLAdapter,

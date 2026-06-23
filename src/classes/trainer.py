@@ -1,21 +1,21 @@
+import gc
 from timeit import default_timer as timer
 from typing import Any
 
 import numpy as np
-from sklearn.base import clone
-from sklearn.pipeline import Pipeline
 
+from src.classes.preprocessor import Preprocessor
 from src.evaluation.evaluation_utils import (
     evaluate_classification_predictions,
     mean_classification_metrics,
 )
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
+from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 from src.schemas.training_schemas import (
     ClassificationMetrics,
     FoldResult,
     ModelParams,
     ModelTrainingResult,
-    TrainingParams,
     TuningCVResults,
     TuningResult,
 )
@@ -26,9 +26,15 @@ from src.utils.tuning_utils import build_cv, get_candidate_params
 
 
 class Trainer:
-    def __init__(self, params: TrainingParams, preprocess_pipeline: Pipeline) -> None:
+    def __init__(
+        self,
+        params: tuple[ModelParams, ...],
+        default_imputer: ImputerParams,
+        default_scaler: ScalerEncoderParams,
+    ) -> None:
         self.params = params
-        self.preprocess_pipeline = preprocess_pipeline
+        self.default_imputer = default_imputer
+        self.default_scaler = default_scaler
 
     def train_models(
         self, X_train: np.ndarray, y_train: np.ndarray
@@ -36,7 +42,7 @@ class Trainer:
         logger.info("Starting with model training")
         results: list[ModelTrainingResult] = []
 
-        for model_params in self.params.models:
+        for model_params in self.params:
             logger.info(f"Training model: {model_params.name}")
             result = self._train_single_model(model_params, X_train, y_train)
             results.append(result)
@@ -80,9 +86,29 @@ class Trainer:
         y_train,
     ) -> tuple[ModelAdapter, float]:
         adapter = spec.create(model_params.task_type, params)
-        model = PreprocessedModelAdapter(adapter, clone(self.preprocess_pipeline))
+        model = PreprocessedModelAdapter(
+            adapter,
+            self._build_preprocess_pipeline(model_params),
+        )
         fit_time = model.fit(X_train, y_train)
         return model, fit_time
+
+    def _build_preprocess_pipeline(self, model_params: ModelParams):
+        preprocessing = model_params.preprocessing
+        imputer = (
+            preprocessing.imputer
+            if preprocessing is not None and preprocessing.imputer is not None
+            else self.default_imputer
+        )
+        scaler = (
+            preprocessing.scaler_encoder
+            if preprocessing is not None and preprocessing.scaler_encoder is not None
+            else self.default_scaler
+        )
+        return Preprocessor(
+            params_imputer=imputer,
+            params_scaler=scaler,
+        ).build_pipeline()
 
     def _tune_model(
         self,
@@ -135,6 +161,7 @@ class Trainer:
                     predictions,
                     self._take_rows(y_train, validation_index),
                 )
+                self._cleanup_model(fold_model)
 
                 candidate_scores.append(metrics.primary_score)
                 candidate_metrics.append(metrics)
@@ -224,3 +251,15 @@ class Trainer:
         predictions, _ = model.predict(X_train)
         scoring = model_params.tuning.scoring if model_params.tuning else "roc_auc"
         return evaluate_classification_predictions(scoring, predictions, y_train)
+
+    @staticmethod
+    def _cleanup_model(model: ModelAdapter) -> None:
+        del model
+        gc.collect()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            return

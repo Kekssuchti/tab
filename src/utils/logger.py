@@ -4,6 +4,8 @@ from logging.handlers import RotatingFileHandler
 
 from pythonjsonlogger.json import JsonFormatter
 
+# NOTE: mlflow must be imported before any FileHandler/RotatingFileHandler else this fks the logging
+import mlflow  # noqa: F401
 from src.config import config
 
 ACTIVE_LOG_FILE = "active.log"
@@ -15,7 +17,7 @@ APPEND_LOG_BACKUP_COUNT = 10
 @lru_cache
 def configure_logger():
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
 
     config.dir_log.mkdir(parents=True, exist_ok=True)
 
@@ -36,6 +38,21 @@ def configure_logger():
     )
     append_handler.setFormatter(formatter)
     logger.addHandler(append_handler)
+
+    # Suppress INFO spam from noisy third-party libraries.
+    _noisy_libs = [
+        "interpret",  # EBM (_native, _compressed_dataset, _boost)
+        "lightgbm",
+        "xgboost",
+        "sklearn",
+        "mlflow",
+        "optuna",
+        "tabpfn",
+        "tabicl",
+        "autogluon",
+    ]
+    for lib in _noisy_libs:
+        logging.getLogger(lib).setLevel(logging.WARNING)
 
     logger.info("logger is configured")
     return logger

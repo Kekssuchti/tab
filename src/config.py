@@ -15,6 +15,7 @@ class Config(BaseSettings):
     dir_run_results: Path = dir_root / "run_results"
     dir_configs: Path = dir_root / "configs"
     dir_plots: Path = dir_root / "plots"
+    dir_log: Path = dir_root / "logs"
 
     dir_data: Path = dir_root / "data"
     dir_data_toy: Path = dir_data / "toy"
@@ -23,7 +24,6 @@ class Config(BaseSettings):
 
     dir_src: Path = dir_root / "src"
     dir_mlflow: Path = dir_src / "mlflow"
-    dir_log: Path = dir_src / "logs"
     dir_evaluation: Path = dir_src / "evaluation"
     dir_external_dep: Path = dir_root / "external"
     dir_external_limix: Path = dir_external_dep / "limix"

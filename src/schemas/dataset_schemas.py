@@ -29,6 +29,30 @@ class DatasetBundle:
     test_tudd: XYDataset
 
 
+@dataclass(frozen=True)
+class DatasetPartSummary:
+    row_count: int
+    class_balance: dict[str, int]
+
+
+@dataclass(frozen=True)
+class DatasetFileSummary:
+    dataset_name: str
+    data_origin: str
+    file_name: str
+    path: str
+    sha256: str | None
+
+
+@dataclass(frozen=True)
+class DatasetSummary:
+    target: Target
+    train: DatasetPartSummary
+    test_mimic: DatasetPartSummary
+    test_tudd: DatasetPartSummary
+    data_files: tuple[DatasetFileSummary, ...]
+
+
 class DataCleanerParams(StrictParams):
     outlier_limits_path: Path = Path(config.dir_configs / "data_limits.json")
     missing_threshold_row: float = Field(default=0.5, ge=0, le=1)

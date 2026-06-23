@@ -1,6 +1,7 @@
+from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 from src.utils.logger import logger
@@ -16,13 +17,27 @@ class Preprocessor:
         self.scaler = params_scaler
 
     def build_pipeline(self) -> Pipeline:
-        return Pipeline(self._build_imputer().steps + self._build_scaler().steps)
+        return ColumnTransformer(
+            transformers=[
+                (
+                    "numeric",
+                    Pipeline(self._build_imputer().steps + self._build_scaler().steps),
+                    make_column_selector(dtype_exclude=object),
+                ),
+                (
+                    "categorical",
+                    OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+                    make_column_selector(dtype_include=object),
+                ),
+            ],
+            verbose_feature_names_out=False,
+        )
 
     def _build_imputer(self) -> Pipeline:
         # since only sex is categorical and we do not have missing values there (we removed the ones missing)
         # we only need imputation for numerical values
         method = self.imputer.imputation_method
-        logger.info(f"missing data imputation via: {method}")
+        logger.info(f"data imputation via: {method}")
 
         if method == "mean":
             return Pipeline(
