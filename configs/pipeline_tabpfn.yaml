@@ -1,6 +1,3 @@
-run_number: 3
-run_date: 2026-06-23
-
 dataset:
   target: mortality
   random_state: 1337
@@ -8,6 +5,8 @@ dataset:
   train_on:
     - dataset: tudd
       fraction: 1.0
+    - dataset: mimic
+      fraction: 500
   classification: true
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
@@ -28,7 +27,7 @@ training:
     tuning:
       scoring: roc_auc
       grid:
-        n_estimators: [8, 16, 32]
+        n_estimators: [16]
       cv:
         n_splits: 2
         shuffle: true

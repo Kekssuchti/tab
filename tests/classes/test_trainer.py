@@ -8,6 +8,7 @@ from src.schemas.training_schemas import (
     ModelParams,
     TuningParams,
 )
+from src.utils.model_lifecycle import release_model
 
 
 def _classification_data():
@@ -37,6 +38,28 @@ def _preprocess_pipeline():
         "default_imputer": ImputerParams(imputation_method="none"),
         "default_scaler": ScalerEncoderParams(type="none"),
     }
+
+
+class _ReleasableFoldModel:
+    active = 0
+    peak = 0
+    releases = 0
+
+    def __init__(self):
+        self.released = False
+        type(self).active += 1
+        type(self).peak = max(type(self).peak, type(self).active)
+
+    def predict(self, X_test):
+        probabilities = np.tile([0.4, 0.6], (len(X_test), 1))
+        return probabilities, 0.0
+
+    def release(self):
+        if self.released:
+            return
+        self.released = True
+        type(self).active -= 1
+        type(self).releases += 1
 
 
 def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
@@ -103,6 +126,45 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
     assert result.training_metrics is not None
     assert result.training_metrics.roc_auc is not None
     assert predictions.shape == (len(X), 2)
+
+
+def test_trainer_releases_models_between_tuning_folds(monkeypatch):
+    _ReleasableFoldModel.active = 0
+    _ReleasableFoldModel.peak = 0
+    _ReleasableFoldModel.releases = 0
+    X, y = _classification_data()
+    trainer = Trainer(
+        params=(),
+        **_preprocess_pipeline(),
+    )
+    model_params = ModelParams(
+        name="logistic-regression",
+        task_type="classification",
+        tuning=TuningParams(
+            grid={"C": [0.1, 1.0]},
+            scoring="accuracy",
+            cv=CVParams(n_splits=2, random_state=1),
+        ),
+    )
+
+    class _Spec:
+        def tuning_grid(self, search_space, overrides):
+            return overrides
+
+    def _fit_model(model_params, spec, params, X_train, y_train):
+        return _ReleasableFoldModel(), 0.0
+
+    monkeypatch.setattr(trainer, "_fit_model", _fit_model)
+
+    result = trainer._tune_model(model_params, _Spec(), X, y)
+
+    assert result.tuned
+    assert _ReleasableFoldModel.peak == 1
+    assert _ReleasableFoldModel.releases == 4
+    assert _ReleasableFoldModel.active == 1
+
+    release_model(result.trained_model)
+    assert _ReleasableFoldModel.active == 0
 
 
 def test_trainer_can_fit_regression_adapter_behind_same_interface():

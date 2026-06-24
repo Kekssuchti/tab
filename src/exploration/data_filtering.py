@@ -16,7 +16,7 @@ def _():
     sys.path.append("/var/home/keks/projects/tab")
 
     from src.config import config
-    from src.utils.datset_utils import standard_preprocessing
+    from src.utils.dataset_utils import standard_preprocessing
 
     return config, pd, standard_preprocessing
 
@@ -76,7 +76,9 @@ def _(config, df_tudd, pd, standard_preprocessing):
 def _(config, df_tudd_read, pd, standard_preprocessing):
     df_tudd_read_filter = standard_preprocessing(df_tudd_read, readmission=False)
 
-    df_tudd_read_filt = pd.read_csv(config.dir_data / "filtered" / "tudd_readmission.csv")
+    df_tudd_read_filt = pd.read_csv(
+        config.dir_data / "filtered" / "tudd_readmission.csv"
+    )
 
     print("original: \t\t", len(df_tudd_read))
     print("filter paper: \t", len(df_tudd_read_filt))
@@ -89,7 +91,9 @@ def _(config, df_tudd_read, pd, standard_preprocessing):
 
 @app.cell
 def _(df_tudd_filt, df_tudd_filter):
-    missing_cols = df_tudd_filt.columns[~df_tudd_filt.columns.isin(df_tudd_filter.columns)]
+    missing_cols = df_tudd_filt.columns[
+        ~df_tudd_filt.columns.isin(df_tudd_filter.columns)
+    ]
     missing_cols
     return
 
@@ -116,7 +120,7 @@ def _(df_tudd_filter):
 
 @app.cell
 def _(df_tudd_filt):
-    df_tudd_filt["Age"] =  min(df_tudd_filt["Age"] , 90)
+    df_tudd_filt["Age"] = min(df_tudd_filt["Age"], 90)
     df_tudd_filt["Age"]
     return
 

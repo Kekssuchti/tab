@@ -1,5 +1,6 @@
 from datetime import date
 from pathlib import Path
+from uuid import uuid4
 
 from pydantic import Field
 
@@ -12,7 +13,7 @@ from src.schemas.training_schemas import ModelParams
 
 class MLflowParams(StrictParams):
     enabled: bool = True
-    tracking_uri: str | None = "sqlite:///mlflow.db"
+    tracking_uri: str = "sqlite:///mlflow.db"
     artifact_location: str | None = "mlartifacts"
     experiment_name: str = "tab"
     run_name: str | None = None
@@ -21,8 +22,6 @@ class MLflowParams(StrictParams):
 
 
 class PipelineParams(StrictParams):
-    run_number: int = Field(default=1, ge=1, le=9999)
-    run_date: date = Field(default_factory=date.today)
     dataset: DatasetParams = Field()
     training: tuple[ModelParams, ...] = (ModelParams(name="tabpfn-3"),)
     plotting: PlottingParams = Field()
@@ -30,8 +29,5 @@ class PipelineParams(StrictParams):
 
     @property
     def run_id(self) -> str:
-        return f"{self.run_number:04d}_{self.run_date.isoformat()}"
-
-    @property
-    def run_dir(self) -> Path:
-        return config.dir_run_results / self.run_id
+        # today iso format + random uuid
+        return f"{date.today().isoformat()}_{uuid4().hex}"

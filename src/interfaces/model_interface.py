@@ -46,6 +46,21 @@ class ModelAdapter(ABC):
     def set_trained_estimator(self, estimator) -> None:
         self.model = estimator
 
+    def release(self) -> None:
+        estimator = getattr(self, "model", None)
+        if estimator is None:
+            return
+
+        close = getattr(estimator, "close", None)
+        if callable(close):
+            close()
+
+        cpu = getattr(estimator, "cpu", None)
+        if callable(cpu):
+            cpu()
+
+        self.model = None
+
     def predict_from_estimator(self, X_test) -> ndarray:
         if self.task_type == "classification" and hasattr(self.model, "predict_proba"):
             return np.asarray(self.model.predict_proba(X_test))
@@ -71,3 +86,8 @@ class PreprocessedModelAdapter(ModelAdapter):
         X_test_processed = self.preprocess_pipeline.transform(X_test)
         predictions, _ = self.adapter.predict(X_test_processed)
         return predictions, timer() - start
+
+    def release(self) -> None:
+        self.adapter.release()
+        self.model = None
+        self.preprocess_pipeline = None

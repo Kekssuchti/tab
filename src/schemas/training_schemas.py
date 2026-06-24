@@ -87,7 +87,7 @@ class ModelTrainingResult:
 
     model_name: str
     task_type: TaskType
-    trained_model: Any
+    trained_model: Any | None
     tuned: bool
     fit_time: float
     training_metrics: ClassificationMetrics | RegressionMetrics | None = None

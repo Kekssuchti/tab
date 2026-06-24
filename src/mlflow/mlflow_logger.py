@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import subprocess
 import sys
 import warnings
 from collections import Counter, defaultdict
@@ -36,9 +34,7 @@ class MLflowPipelineLogger:
         *,
         config_path: Path | None = None,
     ) -> None:
-        if params.mlflow.tracking_uri:
-            _allow_local_file_store(params.mlflow.tracking_uri)
-            mlflow.set_tracking_uri(params.mlflow.tracking_uri)
+        mlflow.set_tracking_uri(params.mlflow.tracking_uri)
         _set_experiment(params)
 
         with TemporaryDirectory() as temp_dir_name:
@@ -90,27 +86,78 @@ class MLflowPipelineLogger:
                     result,
                     model_filter=(model_id, training_result, model_result),
                 )
+                self._log_cv_candidate_runs(
+                    params,
+                    model_id,
+                    model_params,
+                    training_result,
+                )
 
                 cv_path = cv_dir / f"{model_id}.json"
                 if cv_path.exists():
                     mlflow.log_artifact(str(cv_path), artifact_path="cv_results")
 
+    def _log_cv_candidate_runs(
+        self,
+        params: PipelineParams,
+        model_id: str,
+        model_params: ModelParams,
+        training_result: ModelTrainingResult,
+    ) -> None:
+        tuning_result = training_result.tuning_result
+        if tuning_result is None:
+            return
+
+        for candidate_index, candidate_params in enumerate(
+            tuning_result.cv_results.params
+        ):
+            candidate_name = f"cv{candidate_index}"
+            with mlflow.start_run(run_name=candidate_name, nested=True):
+                mlflow.set_tag("parent_run_id", params.run_id)
+                mlflow.set_tag("pipeline_run_id", params.run_id)
+                mlflow.set_tag("run_type", "cv_candidate")
+                mlflow.set_tag("model_instance", model_id)
+                mlflow.set_tag("model_name", model_params.name)
+                mlflow.set_tag("candidate", candidate_name)
+                mlflow.set_tag("candidate_index", str(candidate_index))
+                mlflow.set_tag("task_type", model_params.task_type)
+                mlflow.set_tag("trained_on", _trained_on(params))
+                mlflow.set_tag("train_sources", _train_sources(params))
+
+                mlflow.log_param("cv.candidate", candidate_name)
+                for key, value in candidate_params.items():
+                    mlflow.log_param(f"cv.params.{key}", _param_value(value))
+
+                self._log_metric(
+                    "cv.mean_score",
+                    tuning_result.cv_results.mean_scores[candidate_index],
+                )
+                self._log_metric(
+                    "cv.std_score",
+                    tuning_result.cv_results.std_scores[candidate_index],
+                )
+                self._log_metrics(
+                    "cv.mean",
+                    tuning_result.cv_results.mean_metrics[candidate_index],
+                )
+
+                for fold in tuning_result.fold_results:
+                    if fold.candidate_index != candidate_index:
+                        continue
+                    self._log_metrics("cv", fold.metrics, step=fold.fold_index)
+                    self._log_metric("cv.time", fold.time, step=fold.fold_index)
+
     def _log_run_tags(self, params: PipelineParams, config_path: Path | None) -> None:
         tags = {
             "run_type": "pipeline",
             "run_id": params.run_id,
-            "pipeline_run_id": params.run_id,
             "target": params.dataset.target,
             "task_type": "classification"
             if params.dataset.classification
             else "regression",
             "trained_on": _trained_on(params),
             "train_sources": _train_sources(params),
-            "git_commit": _git_commit(),
-            "git_dirty": _git_dirty(),
         }
-        if config_path is not None:
-            tags["config_path"] = str(config_path)
 
         mlflow.set_tags(
             {key: value for key, value in tags.items() if value is not None}
@@ -257,36 +304,44 @@ class MLflowPipelineLogger:
         nested: bool,
     ) -> None:
         prefix = "" if nested else f"{model_id}."
+        self._log_training_metrics(prefix, training_result, model_result)
+        self._log_tuning_metrics(prefix, training_result)
+        self._log_test_metrics(prefix, model_result)
+
+    def _log_training_metrics(
+        self,
+        prefix: str,
+        training_result: ModelTrainingResult,
+        model_result: ModelRunResult,
+    ) -> None:
         self._log_metric(f"{prefix}train.fit_time", training_result.fit_time)
         self._log_metric(f"{prefix}model.total_time", model_result.total_time)
-
         if training_result.training_metrics is not None:
-            self._log_metrics(
-                f"{prefix}train", training_result.training_metrics, nested=nested
-            )
+            self._log_metrics(f"{prefix}train", training_result.training_metrics)
 
-        if training_result.tuning_result is not None:
-            tuning_result = training_result.tuning_result
-            self._log_metric(f"{prefix}cv.total_time", tuning_result.total_time)
-            self._log_metric(f"{prefix}cv.best_score", tuning_result.best_score)
-            self._log_metrics(
-                f"{prefix}cv.best", tuning_result.best_metrics, nested=nested
-            )
-            for index, score in enumerate(tuning_result.cv_results.mean_scores):
-                self._log_metric(
-                    f"{prefix}cv.candidate_{index}.mean.{tuning_result.scoring}",
-                    score,
-                )
+    def _log_tuning_metrics(
+        self,
+        prefix: str,
+        training_result: ModelTrainingResult,
+    ) -> None:
+        tuning_result = training_result.tuning_result
+        if tuning_result is None:
+            return
 
+        self._log_metric(f"{prefix}cv.total_time", tuning_result.total_time)
+
+    def _log_test_metrics(
+        self,
+        prefix: str,
+        model_result: ModelRunResult,
+    ) -> None:
         for test_result in model_result.test_results:
             dataset_name = test_result.dataset_name
             self._log_metric(
                 f"{prefix}test.{dataset_name}.predict_time",
                 test_result.predict_time,
             )
-            self._log_metrics(
-                f"{prefix}test.{dataset_name}", test_result.metrics, nested=nested
-            )
+            self._log_metrics(f"{prefix}test.{dataset_name}", test_result.metrics)
 
         self._log_metric_deltas(
             f"{prefix}test.mimic_minus_tudd",
@@ -298,11 +353,11 @@ class MLflowPipelineLogger:
         prefix: str,
         metrics: ClassificationMetrics | RegressionMetrics,
         *,
-        nested: bool,
+        step: int | None = None,
     ) -> None:
         for name, value in metrics.scores.items():
-            self._log_metric(f"{prefix}.{name}", value)
-        if isinstance(metrics, ClassificationMetrics):
+            self._log_metric(f"{prefix}.{name}", value, step=step)
+        if isinstance(metrics, ClassificationMetrics) and step is None:
             mlflow.log_param(f"{prefix}.n_classes", metrics.n_classes)
 
     def _log_metric_deltas(
@@ -313,12 +368,18 @@ class MLflowPipelineLogger:
         for name, value in deltas.scores.items():
             self._log_metric(f"{prefix}.{name}", value)
 
-    def _log_metric(self, name: str, value: float | int | None) -> None:
+    def _log_metric(
+        self,
+        name: str,
+        value: float | int | None,
+        *,
+        step: int | None = None,
+    ) -> None:
         if value is None:
             return
         value = float(value)
         if math.isfinite(value):
-            mlflow.log_metric(name, value)
+            mlflow.log_metric(name, value, step=step)
 
     def _log_evaluation_tables(
         self,
@@ -515,6 +576,7 @@ def _trained_on(params: PipelineParams) -> str:
     origins = {_dataset_origin(split.dataset) for split in params.dataset.train_on}
     if len(origins) == 1:
         return next(iter(origins))
+
     return "combination"
 
 
@@ -607,12 +669,7 @@ def _param_value(value: Any) -> str:
         text = str(value)
     else:
         text = json.dumps(value, sort_keys=True, default=str)
-    return text[:5000]
-
-
-def _allow_local_file_store(tracking_uri: str) -> None:
-    if "://" not in tracking_uri or tracking_uri.startswith("file://"):
-        os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
+    return text
 
 
 def _set_experiment(params: PipelineParams) -> None:
@@ -627,32 +684,6 @@ def _set_experiment(params: PipelineParams) -> None:
         return
 
     mlflow.set_experiment(experiment_name=params.mlflow.experiment_name)
-
-
-def _git_commit() -> str | None:
-    return _git_command("rev-parse", "HEAD")
-
-
-def _git_dirty() -> str | None:
-    status = _git_command("status", "--porcelain")
-    if status is None:
-        return None
-    return str(bool(status)).lower()
-
-
-def _git_command(*args: str) -> str | None:
-    try:
-        completed = subprocess.run(
-            ["git", *args],
-            cwd=Path(__file__).resolve().parents[2],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return completed.stdout.strip()
 
 
 def _environment_info() -> dict[str, Any]:

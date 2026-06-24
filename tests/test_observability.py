@@ -19,8 +19,11 @@ from src.schemas.dataset_schemas import (
 from src.schemas.pipeline_schemas import MLflowParams, PipelineParams
 from src.schemas.plotting_schemas import PlottingParams
 from src.schemas.training_schemas import (
+    FoldResult,
     ModelParams,
     ModelTrainingResult,
+    TuningCVResults,
+    TuningResult,
 )
 from src.utils.evaluation_utils import ClassificationMetrics
 from src.utils.evaluation_utils import final_test_metrics
@@ -30,15 +33,41 @@ class _FakeModel:
     pass
 
 
-def _metrics() -> ClassificationMetrics:
+def _metrics(value: float = 1.0) -> ClassificationMetrics:
     return ClassificationMetrics(
-        roc_auc=1.0,
-        prc_auc=1.0,
-        f1=1.0,
-        accuracy=1.0,
-        sensitivity=1.0,
-        precision=1.0,
+        roc_auc=value,
+        prc_auc=value,
+        f1=value,
+        accuracy=value,
+        sensitivity=value,
+        precision=value,
         n_classes=2,
+    )
+
+
+def _tuning_result() -> TuningResult:
+    cv0_fold0 = _metrics(0.7)
+    cv0_fold1 = _metrics(0.8)
+    cv1_fold0 = _metrics(0.9)
+    cv1_fold1 = _metrics(1.0)
+    return TuningResult(
+        best_params={"C": 1.0},
+        scoring="accuracy",
+        best_metrics=_metrics(0.95),
+        cv_results=TuningCVResults(
+            params=[{"C": 0.1}, {"C": 1.0}],
+            mean_scores=[0.75, 0.95],
+            std_scores=[0.05, 0.05],
+            fold_scores=[[0.7, 0.8], [0.9, 1.0]],
+            fold_times=[[0.01, 0.02], [0.03, 0.04]],
+            mean_metrics=[_metrics(0.75), _metrics(0.95)],
+        ),
+        fold_results=[
+            FoldResult(0, 0, cv0_fold0, 0.01, {"C": 0.1}),
+            FoldResult(0, 1, cv0_fold1, 0.02, {"C": 0.1}),
+            FoldResult(1, 0, cv1_fold0, 0.03, {"C": 1.0}),
+            FoldResult(1, 1, cv1_fold1, 0.04, {"C": 1.0}),
+        ],
     )
 
 
@@ -79,15 +108,17 @@ def _params(
     )
 
 
-def _result() -> PipelineResult:
+def _result(*, tuned: bool = False) -> PipelineResult:
     metrics = _metrics()
+    tuning_result = _tuning_result() if tuned else None
     training_result = ModelTrainingResult(
         model_name="logistic-regression",
         task_type="classification",
         trained_model=_FakeModel(),
-        tuned=False,
+        tuned=tuned,
         fit_time=0.2,
         training_metrics=metrics,
+        tuning_result=tuning_result,
     )
     model_result = ModelRunResult(
         model_name="logistic-regression",
@@ -149,7 +180,7 @@ def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
     tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     artifact_location = str(tmp_path / "mlartifacts")
     params = _params(tracking_uri, artifact_location, run_name="friendly-run")
-    result = _result()
+    result = _result(tuned=True)
     config_path = tmp_path / "config.yaml"
     config_path.write_text("run_number: 7\n", encoding="utf-8")
 
@@ -166,7 +197,7 @@ def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
     )
 
     run_names = {run.data.tags["mlflow.runName"] for run in runs}
-    assert run_names == {"friendly-run", "logistic-regression"}
+    assert run_names == {"friendly-run", "logistic-regression", "cv0", "cv1"}
 
     parent = next(
         run for run in runs if run.data.tags["mlflow.runName"] == "friendly-run"
@@ -174,6 +205,8 @@ def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
     child = next(
         run for run in runs if run.data.tags["mlflow.runName"] == "logistic-regression"
     )
+    cv0 = next(run for run in runs if run.data.tags["mlflow.runName"] == "cv0")
+    cv1 = next(run for run in runs if run.data.tags["mlflow.runName"] == "cv1")
 
     assert parent.data.params["dataset.target"] == "mortality"
     assert parent.data.params["mlflow.run_name"] == "friendly-run"
@@ -191,9 +224,27 @@ def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
     assert child.data.tags["trained_on"] == "mimic"
     assert child.data.metrics["model.total_time"] == 0.27
     assert child.data.metrics["train.accuracy"] == 1.0
+    assert child.data.metrics["cv.best.accuracy"] == 0.95
     assert child.data.metrics["test.mimic_minus_tudd.accuracy"] == 0.0
+    assert cv0.data.tags["mlflow.parentRunId"] == child.info.run_id
+    assert cv0.data.tags["run_type"] == "cv_candidate"
+    assert cv0.data.tags["model_name"] == "logistic-regression"
+    assert cv0.data.tags["candidate"] == "cv0"
+    assert cv0.data.metrics["cv.mean.accuracy"] == 0.75
+    assert cv1.data.metrics["cv.mean.accuracy"] == 0.95
+    assert cv1.data.metrics["cv.accuracy"] == 1.0
 
     client = mlflow.MlflowClient(tracking_uri=tracking_uri)
+    cv0_history = client.get_metric_history(cv0.info.run_id, "cv.accuracy")
+    assert [(metric.step, metric.value) for metric in cv0_history] == [
+        (0, 0.7),
+        (1, 0.8),
+    ]
+    cv1_history = client.get_metric_history(cv1.info.run_id, "cv.accuracy")
+    assert [(metric.step, metric.value) for metric in cv1_history] == [
+        (0, 0.9),
+        (1, 1.0),
+    ]
     artifact_names = {
         artifact.path for artifact in client.list_artifacts(parent.info.run_id)
     }
@@ -204,6 +255,7 @@ def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
         "_evaluations.json",
         "_metrics.json",
         "evaluation_metrics.json",
+        "cv_results",
     } <= artifact_names
     child_artifact_names = {
         artifact.path for artifact in client.list_artifacts(child.info.run_id)

@@ -1,6 +1,3 @@
-run_number: 1
-run_date: 2026-06-17
-
 dataset:
   target: mortality
   random_state: 1337

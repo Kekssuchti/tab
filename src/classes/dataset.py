@@ -24,7 +24,7 @@ from src.schemas.dataset_schemas import (
     DataSplitParams,
     XYDataset,
 )
-from src.utils.datset_utils import hash_file_sha256, summarize_data_part
+from src.utils.dataset_utils import hash_file_sha256, summarize_data_part
 from src.utils.logger import logger
 
 

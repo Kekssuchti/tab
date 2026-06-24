@@ -1,4 +1,3 @@
-import gc
 from timeit import default_timer as timer
 from typing import Any
 
@@ -21,6 +20,7 @@ from src.utils.evaluation_utils import (
     mean_classification_metrics,
 )
 from src.utils.logger import logger
+from src.utils.model_lifecycle import release_model
 from src.utils.model_registry import ModelSpec
 from src.utils.trainer_utils import get_model_spec
 from src.utils.tuning_utils import build_cv, get_candidate_params
@@ -44,18 +44,18 @@ class Trainer:
         results: list[ModelTrainingResult] = []
 
         for model_params in self.params:
-            logger.info(f"Training model: {model_params.name}")
-            result = self._train_single_model(model_params, X_train, y_train)
+            result = self.train_model(model_params, X_train, y_train)
             results.append(result)
 
         return results
 
-    def _train_single_model(
+    def train_model(
         self,
         model_params: ModelParams,
         X_train: np.ndarray,
         y_train: np.ndarray,
     ) -> ModelTrainingResult:
+        logger.info(f"Training model: {model_params.name}")
         spec = get_model_spec(model_params)
 
         if model_params.tuning is None:
@@ -142,39 +142,44 @@ class Trainer:
                 cv.split(X_train, y_train)
             ):
                 fold_start = timer()
-                fold_model, _ = self._fit_model(
-                    model_params,
-                    spec,
-                    params,
-                    self._take_rows(X_train, train_index),
-                    self._take_rows(y_train, train_index),
-                )
-                predictions, _ = fold_model.predict(
-                    self._take_rows(X_train, validation_index)
-                )
-                if model_params.task_type != "classification":
-                    raise NotImplementedError(
-                        "Regression tuning metrics are not implemented yet"
+                fold_model = None
+                predictions = None
+                try:
+                    fold_model, _ = self._fit_model(
+                        model_params,
+                        spec,
+                        params,
+                        self._take_rows(X_train, train_index),
+                        self._take_rows(y_train, train_index),
+                    )
+                    predictions, _ = fold_model.predict(
+                        self._take_rows(X_train, validation_index)
+                    )
+                    if model_params.task_type != "classification":
+                        raise NotImplementedError(
+                            "Regression tuning metrics are not implemented yet"
+                        )
+
+                    metrics = evaluate_classification_predictions(
+                        predictions,
+                        self._take_rows(y_train, validation_index),
                     )
 
-                metrics = evaluate_classification_predictions(
-                    predictions,
-                    self._take_rows(y_train, validation_index),
-                )
-                self._cleanup_model(fold_model)
-
-                candidate_scores.append(classification_score(metrics, tuning.scoring))
-                candidate_metrics.append(metrics)
-                candidate_times.append(timer() - fold_start)
-                fold_results.append(
-                    FoldResult(
-                        candidate_index=candidate_index,
-                        fold_index=fold_index,
-                        metrics=metrics,
-                        time=candidate_times[-1],
-                        params=params,
+                    candidate_scores.append(classification_score(metrics, tuning.scoring))
+                    candidate_metrics.append(metrics)
+                    candidate_times.append(timer() - fold_start)
+                    fold_results.append(
+                        FoldResult(
+                            candidate_index=candidate_index,
+                            fold_index=fold_index,
+                            metrics=metrics,
+                            time=candidate_times[-1],
+                            params=params,
+                        )
                     )
-                )
+                finally:
+                    predictions = None
+                    release_model(fold_model)
 
             fold_scores_by_candidate.append(candidate_scores)
             fold_metrics_by_candidate.append(candidate_metrics)
@@ -253,12 +258,4 @@ class Trainer:
 
     @staticmethod
     def _cleanup_model(model: ModelAdapter) -> None:
-        del model
-        gc.collect()
-        try:
-            import torch
-
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except ImportError:
-            return
+        release_model(model)

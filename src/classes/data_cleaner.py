@@ -5,7 +5,7 @@ import pandas as pd
 from src.classes.data_registry import DATA_FILES_ALL
 from src.config import config
 from src.schemas.dataset_schemas import DataCleanerParams
-from src.utils.datset_utils import standard_preprocessing
+from src.utils.dataset_utils import standard_preprocessing
 
 
 class DataCleaner:

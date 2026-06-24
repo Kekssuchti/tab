@@ -15,6 +15,7 @@ from src.utils.evaluation_utils import (
     evaluate_classification_predictions,
     final_test_metrics,
 )
+from src.utils.model_lifecycle import release_model
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,6 @@ class PipelineResult:
 class Pipeline:
     def __init__(self, params: PipelineParams):
         self.params = params
-        self.params.run_dir.mkdir(parents=True, exist_ok=True)
 
         self.dataset = Dataset(params.dataset)
         self.plotter = Plotter(params.plotting)
@@ -68,16 +68,22 @@ class Pipeline:
             default_scaler=self.params.dataset.scaler_encoder,
         )
 
-        training_results = trainer.train_models(
-            X_train=data.train_data.X,
-            y_train=data.train_data.y.to_numpy(),
-        )
-
+        training_results = []
         model_results = []
-        for tr in training_results:
-            mr = self._evaluate_trained_model(tr, data)
-            model_results.append(mr)
-            del tr, mr
+        y_train = data.train_data.y.to_numpy()
+        for model_params in self.params.training:
+            tr = trainer.train_model(
+                model_params=model_params,
+                X_train=data.train_data.X,
+                y_train=y_train,
+            )
+            try:
+                mr = self._evaluate_trained_model(tr, data)
+                model_results.append(mr)
+                training_results.append(tr)
+            finally:
+                release_model(tr.trained_model)
+                tr.trained_model = None
 
         return PipelineResult(
             run_id=self.params.run_id,
@@ -117,7 +123,9 @@ class Pipeline:
             raise NotImplementedError("Regression evaluation is not implemented yet")
 
         predictions, predict_time = training_result.trained_model.predict(test_set.X)
-        metrics = evaluate_classification_predictions(predictions, test_set.y.to_numpy())
+        metrics = evaluate_classification_predictions(
+            predictions, test_set.y.to_numpy()
+        )
 
         return TestSetEvaluationResult(
             dataset_name=dataset_name,

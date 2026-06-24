@@ -19,8 +19,6 @@ class Config(BaseSettings):
 
     dir_data: Path = dir_root / "data"
     dir_data_toy: Path = dir_data / "toy"
-    dir_mimic: Path = dir_data / "mimic"
-    dir_europe: Path = dir_data / "europe"
 
     dir_src: Path = dir_root / "src"
     dir_mlflow: Path = dir_src / "mlflow"
