@@ -5,6 +5,7 @@ import math
 import os
 import subprocess
 import sys
+import warnings
 from collections import Counter, defaultdict
 from importlib import metadata
 from pathlib import Path
@@ -12,14 +13,19 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 import mlflow
+from mlflow.evaluation import Evaluation, log_evaluations
 from src.classes.pipeline import ModelRunResult, PipelineResult
-from src.evaluation.evaluation_utils import ClassificationMetrics, RegressionMetrics
 from src.mlflow.serialization import (
     pipeline_params_to_dict,
     pipeline_result_to_dict,
 )
 from src.schemas.pipeline_schemas import PipelineParams
 from src.schemas.training_schemas import ModelParams, ModelTrainingResult
+from src.utils.evaluation_utils import (
+    ClassificationMetricDeltas,
+    ClassificationMetrics,
+    RegressionMetrics,
+)
 
 
 class MLflowPipelineLogger:
@@ -39,11 +45,12 @@ class MLflowPipelineLogger:
             temp_dir = Path(temp_dir_name)
             artifact_paths = self._write_artifacts(params, result, temp_dir)
 
-            with mlflow.start_run(run_name=params.run_id):
+            with mlflow.start_run(run_name=_run_name(params)):
                 self._log_run_tags(params, config_path)
                 self._log_run_params(params)
                 self._log_dataset_summary(result)
                 self._log_run_metrics(result)
+                self._log_evaluation_tables(params, result)
                 self._log_artifacts(artifact_paths, config_path)
 
                 if params.mlflow.nested_model_runs:
@@ -63,15 +70,25 @@ class MLflowPipelineLogger:
             result.model_results,
             strict=False,
         ):
-            with mlflow.start_run(run_name=model_id, nested=True):
+            with mlflow.start_run(run_name=model_params.name, nested=True):
                 mlflow.set_tag("parent_run_id", result.run_id)
+                mlflow.set_tag("pipeline_run_id", result.run_id)
+                mlflow.set_tag("run_type", "model")
+                mlflow.set_tag("model_instance", model_id)
                 mlflow.set_tag("model_name", model_params.name)
                 mlflow.set_tag("task_type", model_params.task_type)
+                mlflow.set_tag("trained_on", _trained_on(params))
+                mlflow.set_tag("train_sources", _train_sources(params))
                 self._log_model_params(
                     model_id, model_params, training_result, nested=True
                 )
                 self._log_model_metrics(
                     model_id, training_result, model_result, nested=True
+                )
+                self._log_evaluation_tables(
+                    params,
+                    result,
+                    model_filter=(model_id, training_result, model_result),
                 )
 
                 cv_path = cv_dir / f"{model_id}.json"
@@ -80,14 +97,15 @@ class MLflowPipelineLogger:
 
     def _log_run_tags(self, params: PipelineParams, config_path: Path | None) -> None:
         tags = {
+            "run_type": "pipeline",
             "run_id": params.run_id,
+            "pipeline_run_id": params.run_id,
             "target": params.dataset.target,
             "task_type": "classification"
             if params.dataset.classification
             else "regression",
-            "train_sources": ",".join(
-                split.dataset for split in params.dataset.train_on
-            ),
+            "trained_on": _trained_on(params),
+            "train_sources": _train_sources(params),
             "git_commit": _git_commit(),
             "git_dirty": _git_dirty(),
         }
@@ -101,13 +119,14 @@ class MLflowPipelineLogger:
     def _log_run_params(self, params: PipelineParams) -> None:
         run_params = {
             "run_id": params.run_id,
+            "mlflow.experiment_name": params.mlflow.experiment_name,
+            "mlflow.run_name": params.mlflow.run_name,
             "dataset.target": params.dataset.target,
             "dataset.random_state": params.dataset.random_state,
             "dataset.train_size": params.dataset.train_size,
             "dataset.classification": params.dataset.classification,
-            "training.model_names": ",".join(
-                model.name for model in params.training
-            ),
+            "dataset.trained_on": _trained_on(params),
+            "training.model_names": ",".join(model.name for model in params.training),
             "plotting.enabled": params.plotting.enabled,
             "plotting.formats": ",".join(params.plotting.formats),
         }
@@ -120,9 +139,7 @@ class MLflowPipelineLogger:
             mlflow.log_param(key, _param_value(value))
 
         model_ids = _model_instance_ids(params.training)
-        for model_id, model_params in zip(
-            model_ids, params.training, strict=False
-        ):
+        for model_id, model_params in zip(model_ids, params.training, strict=False):
             self._log_model_config_params(model_id, model_params)
 
     def _log_dataset_summary(self, result: PipelineResult) -> None:
@@ -256,7 +273,10 @@ class MLflowPipelineLogger:
                 f"{prefix}cv.best", tuning_result.best_metrics, nested=nested
             )
             for index, score in enumerate(tuning_result.cv_results.mean_scores):
-                self._log_metric(f"{prefix}cv.candidate_{index}.mean.primary", score)
+                self._log_metric(
+                    f"{prefix}cv.candidate_{index}.mean.{tuning_result.scoring}",
+                    score,
+                )
 
         for test_result in model_result.test_results:
             dataset_name = test_result.dataset_name
@@ -268,6 +288,11 @@ class MLflowPipelineLogger:
                 f"{prefix}test.{dataset_name}", test_result.metrics, nested=nested
             )
 
+        self._log_metric_deltas(
+            f"{prefix}test.mimic_minus_tudd",
+            model_result.final_test_metrics.mimic_minus_tudd,
+        )
+
     def _log_metrics(
         self,
         prefix: str,
@@ -275,12 +300,18 @@ class MLflowPipelineLogger:
         *,
         nested: bool,
     ) -> None:
-        self._log_metric(f"{prefix}.primary_score", metrics.primary_score)
-        mlflow.log_param(f"{prefix}.primary_metric", metrics.primary_metric)
         for name, value in metrics.scores.items():
             self._log_metric(f"{prefix}.{name}", value)
         if isinstance(metrics, ClassificationMetrics):
             mlflow.log_param(f"{prefix}.n_classes", metrics.n_classes)
+
+    def _log_metric_deltas(
+        self,
+        prefix: str,
+        deltas: ClassificationMetricDeltas,
+    ) -> None:
+        for name, value in deltas.scores.items():
+            self._log_metric(f"{prefix}.{name}", value)
 
     def _log_metric(self, name: str, value: float | int | None) -> None:
         if value is None:
@@ -288,6 +319,86 @@ class MLflowPipelineLogger:
         value = float(value)
         if math.isfinite(value):
             mlflow.log_metric(name, value)
+
+    def _log_evaluation_tables(
+        self,
+        params: PipelineParams,
+        result: PipelineResult,
+        *,
+        model_filter: tuple[str, ModelTrainingResult, ModelRunResult] | None = None,
+    ) -> None:
+        if model_filter is None:
+            model_rows = tuple(
+                zip(
+                    _result_model_instance_ids(result.training_results),
+                    result.training_results,
+                    result.model_results,
+                    strict=False,
+                )
+            )
+        else:
+            model_rows = (model_filter,)
+
+        evaluations = []
+        table_rows = []
+        for model_id, _training_result, model_result in model_rows:
+            for test_result in model_result.test_results:
+                metrics = {
+                    **test_result.metrics.scores,
+                    "predict_time": test_result.predict_time,
+                }
+                evaluations.append(
+                    _make_evaluation(
+                        params,
+                        model_id,
+                        model_result.model_name,
+                        test_result.dataset_name,
+                        "test",
+                        metrics,
+                    )
+                )
+                table_rows.extend(
+                    _evaluation_metric_rows(
+                        params,
+                        model_id,
+                        model_result.model_name,
+                        test_result.dataset_name,
+                        "test",
+                        metrics,
+                    )
+                )
+
+            delta_metrics = model_result.final_test_metrics.mimic_minus_tudd.scores
+            evaluations.append(
+                _make_evaluation(
+                    params,
+                    model_id,
+                    model_result.model_name,
+                    "mimic_minus_tudd",
+                    "test_delta",
+                    delta_metrics,
+                )
+            )
+            table_rows.extend(
+                _evaluation_metric_rows(
+                    params,
+                    model_id,
+                    model_result.model_name,
+                    "mimic_minus_tudd",
+                    "test_delta",
+                    delta_metrics,
+                )
+            )
+
+        if not evaluations:
+            return
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            log_evaluations(evaluations=evaluations)
+        mlflow.log_table(
+            data=_table_columns(table_rows), artifact_file="evaluation_metrics.json"
+        )
 
     def _write_artifacts(
         self,
@@ -390,6 +501,105 @@ def _result_model_instance_ids(results: tuple[ModelTrainingResult, ...]) -> list
             else f"{result.model_name}__{index}"
         )
     return model_ids
+
+
+def _run_name(params: PipelineParams) -> str:
+    return params.mlflow.run_name or params.run_id
+
+
+def _train_sources(params: PipelineParams) -> str:
+    return ",".join(split.dataset for split in params.dataset.train_on)
+
+
+def _trained_on(params: PipelineParams) -> str:
+    origins = {_dataset_origin(split.dataset) for split in params.dataset.train_on}
+    if len(origins) == 1:
+        return next(iter(origins))
+    return "combination"
+
+
+def _dataset_origin(dataset_name: str) -> str:
+    if dataset_name.startswith("mimic"):
+        return "mimic"
+    if dataset_name.startswith("tudd"):
+        return "tudd"
+    return dataset_name
+
+
+def _make_evaluation(
+    params: PipelineParams,
+    model_id: str,
+    model_name: str,
+    dataset_name: str,
+    scope: str,
+    metrics: dict[str, float | int],
+) -> Evaluation:
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        return Evaluation(
+            inputs={
+                "model_name": model_name,
+                "model_instance": model_id,
+                "dataset": dataset_name,
+            },
+            outputs={"scope": scope},
+            targets={"target": params.dataset.target},
+            metrics=metrics,
+            tags={
+                "model_name": model_name,
+                "model_instance": model_id,
+                "dataset": dataset_name,
+                "scope": scope,
+                "trained_on": _trained_on(params),
+            },
+        )
+
+
+def _evaluation_metric_rows(
+    params: PipelineParams,
+    model_id: str,
+    model_name: str,
+    dataset_name: str,
+    scope: str,
+    metrics: dict[str, float | int],
+) -> list[dict[str, str | float]]:
+    rows = []
+    for metric_name, metric_value in metrics.items():
+        value = float(metric_value)
+        if not math.isfinite(value):
+            continue
+        rows.append(
+            {
+                "pipeline_run_id": params.run_id,
+                "target": params.dataset.target,
+                "trained_on": _trained_on(params),
+                "model_name": model_name,
+                "model_instance": model_id,
+                "dataset": dataset_name,
+                "scope": scope,
+                "metric": metric_name,
+                "value": value,
+            }
+        )
+    return rows
+
+
+def _table_columns(rows: list[dict[str, str | float]]) -> dict[str, list[str | float]]:
+    columns = {
+        "pipeline_run_id": [],
+        "target": [],
+        "trained_on": [],
+        "model_name": [],
+        "model_instance": [],
+        "dataset": [],
+        "scope": [],
+        "metric": [],
+        "value": [],
+    }
+    for row in rows:
+        for key in columns:
+            columns[key].append(row[key])
+    return columns
 
 
 def _param_value(value: Any) -> str:

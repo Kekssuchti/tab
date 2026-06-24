@@ -8,7 +8,6 @@ from src.classes.pipeline import (
 from src.classes.pipeline import (
     TestSetEvaluationResult as EvaluationResult,
 )
-from src.evaluation.evaluation_utils import ClassificationMetrics
 from src.mlflow.mlflow_logger import MLflowPipelineLogger
 from src.mlflow.serialization import pipeline_result_to_dict
 from src.schemas.dataset_schemas import (
@@ -23,6 +22,8 @@ from src.schemas.training_schemas import (
     ModelParams,
     ModelTrainingResult,
 )
+from src.utils.evaluation_utils import ClassificationMetrics
+from src.utils.evaluation_utils import final_test_metrics
 
 
 class _FakeModel:
@@ -31,8 +32,6 @@ class _FakeModel:
 
 def _metrics() -> ClassificationMetrics:
     return ClassificationMetrics(
-        primary_metric="accuracy",
-        primary_score=1.0,
         roc_auc=1.0,
         prc_auc=1.0,
         f1=1.0,
@@ -43,7 +42,11 @@ def _metrics() -> ClassificationMetrics:
     )
 
 
-def _params(tracking_uri: str, artifact_location: str | None = None) -> PipelineParams:
+def _params(
+    tracking_uri: str,
+    artifact_location: str | None = None,
+    run_name: str | None = None,
+) -> PipelineParams:
     return PipelineParams(
         run_number=7,
         run_date="2026-06-23",
@@ -70,6 +73,7 @@ def _params(tracking_uri: str, artifact_location: str | None = None) -> Pipeline
             tracking_uri=tracking_uri,
             artifact_location=artifact_location,
             experiment_name="test-tab",
+            run_name=run_name,
             nested_model_runs=True,
         ),
     )
@@ -92,6 +96,7 @@ def _result() -> PipelineResult:
             EvaluationResult("mimic", metrics, 0.03),
             EvaluationResult("tudd", metrics, 0.04),
         ),
+        final_test_metrics=final_test_metrics(metrics, metrics),
     )
     dataset_summary = DatasetSummary(
         target="mortality",
@@ -131,12 +136,19 @@ def test_pipeline_result_serialization_omits_trained_model():
     assert serialized["dataset_summary"]["train"]["row_count"] == 8
     assert "trained_model" not in serialized["training_results"][0]
     assert serialized["training_results"][0]["training_metrics"]["accuracy"] == 1.0
+    assert "primary_metric" not in serialized["training_results"][0]["training_metrics"]
+    assert (
+        serialized["model_results"][0]["final_test_metrics"]["mimic_minus_tudd"][
+            "accuracy"
+        ]
+        == 0.0
+    )
 
 
 def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
     tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     artifact_location = str(tmp_path / "mlartifacts")
-    params = _params(tracking_uri, artifact_location)
+    params = _params(tracking_uri, artifact_location, run_name="friendly-run")
     result = _result()
     config_path = tmp_path / "config.yaml"
     config_path.write_text("run_number: 7\n", encoding="utf-8")
@@ -154,26 +166,57 @@ def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
     )
 
     run_names = {run.data.tags["mlflow.runName"] for run in runs}
-    assert run_names == {"0007_2026-06-23", "logistic-regression"}
+    assert run_names == {"friendly-run", "logistic-regression"}
 
     parent = next(
-        run for run in runs if run.data.tags["mlflow.runName"] == "0007_2026-06-23"
+        run for run in runs if run.data.tags["mlflow.runName"] == "friendly-run"
     )
     child = next(
         run for run in runs if run.data.tags["mlflow.runName"] == "logistic-regression"
     )
 
     assert parent.data.params["dataset.target"] == "mortality"
+    assert parent.data.params["mlflow.run_name"] == "friendly-run"
     assert parent.data.params["dataset.train.row_count"] == "8"
-    assert parent.data.params["model.logistic-regression.preprocessing.override"] == "True"
+    assert (
+        parent.data.params["model.logistic-regression.preprocessing.override"] == "True"
+    )
+    assert parent.data.tags["run_type"] == "pipeline"
+    assert parent.data.tags["trained_on"] == "mimic"
     assert parent.data.metrics["pipeline.total_time"] == 0.5
     assert child.data.tags["mlflow.parentRunId"] == parent.info.run_id
+    assert child.data.tags["run_type"] == "model"
+    assert child.data.tags["model_name"] == "logistic-regression"
+    assert child.data.tags["model_instance"] == "logistic-regression"
+    assert child.data.tags["trained_on"] == "mimic"
+    assert child.data.metrics["model.total_time"] == 0.27
     assert child.data.metrics["train.accuracy"] == 1.0
+    assert child.data.metrics["test.mimic_minus_tudd.accuracy"] == 0.0
 
     client = mlflow.MlflowClient(tracking_uri=tracking_uri)
     artifact_names = {
         artifact.path for artifact in client.list_artifacts(parent.info.run_id)
     }
-    assert {"config.json", "pipeline_result.json", "environment.json"} <= artifact_names
+    assert {
+        "config.json",
+        "pipeline_result.json",
+        "environment.json",
+        "_evaluations.json",
+        "_metrics.json",
+        "evaluation_metrics.json",
+    } <= artifact_names
+    child_artifact_names = {
+        artifact.path for artifact in client.list_artifacts(child.info.run_id)
+    }
+    assert {"_evaluations.json", "_metrics.json", "evaluation_metrics.json"} <= (
+        child_artifact_names
+    )
+    evaluation_metrics = mlflow.load_table(
+        "evaluation_metrics.json", run_ids=[parent.info.run_id]
+    )
+    assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(
+        evaluation_metrics["dataset"]
+    )
+    assert "accuracy" in set(evaluation_metrics["metric"])
     assert (tmp_path / "mlflow.db").exists()
     assert (tmp_path / "mlartifacts").exists()

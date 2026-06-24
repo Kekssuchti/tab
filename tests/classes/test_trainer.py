@@ -58,9 +58,8 @@ def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
     assert result.model_name == "logistic-regression"
     assert not result.tuned
     assert result.training_metrics is not None
-    assert result.training_metrics.primary_metric == "roc_auc"
-    assert result.training_metrics.primary_score == result.training_metrics.roc_auc
-    assert "accuracy" in result.training_metrics.side_scores
+    assert result.training_metrics.roc_auc is not None
+    assert "accuracy" in result.training_metrics.scores
     assert result.fit_time >= 0
     assert predict_time >= 0
     assert predictions.shape == (len(X), 2)
@@ -92,19 +91,17 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
     assert result.tuning_result is not None
     assert set(result.tuning_result.best_params) == {"C"}
     assert result.tuning_result.best_score >= 0
-    assert result.tuning_result.best_metrics.primary_metric == "accuracy"
     assert result.tuning_result.best_score == result.tuning_result.best_metrics.accuracy
     assert len(result.tuning_result.cv_results.params) == 2
     assert len(result.tuning_result.cv_results.mean_scores) == 2
     assert len(result.tuning_result.cv_results.mean_metrics) == 2
     assert len(result.tuning_result.fold_results) == 4
     assert all(
-        fold.metrics.primary_metric == "accuracy"
+        "accuracy" in fold.metrics.scores
         for fold in result.tuning_result.fold_results
     )
     assert result.training_metrics is not None
-    assert result.training_metrics.primary_metric == "accuracy"
-    assert "roc_auc" in result.training_metrics.side_scores
+    assert result.training_metrics.roc_auc is not None
     assert predictions.shape == (len(X), 2)
 
 

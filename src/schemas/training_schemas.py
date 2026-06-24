@@ -4,14 +4,15 @@ from typing import Any
 from pydantic import Field
 
 from src.config import config
-from src.evaluation.evaluation_utils import (
+from src.schemas.base_schemas import StrictParams, TaskType
+from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
+from src.utils.evaluation_utils import (
     ClassificationMetrics,
     RegressionMetrics,
     ScoringMethodCLS,
     ScoringMethodREG,
+    classification_score,
 )
-from src.schemas.base_schemas import StrictParams, TaskType
-from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 
 
 class CVParams(StrictParams):
@@ -71,7 +72,9 @@ class TuningResult:
 
     @property
     def best_score(self) -> float:
-        return self.best_metrics.primary_score
+        if isinstance(self.best_metrics, ClassificationMetrics):
+            return classification_score(self.best_metrics, self.scoring)
+        raise NotImplementedError("Regression tuning metrics are not implemented yet")
 
     @property
     def total_time(self) -> float:

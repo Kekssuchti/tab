@@ -4,12 +4,16 @@ from time import perf_counter
 from src.classes.dataset import Dataset
 from src.classes.plotter import Plotter
 from src.classes.trainer import Trainer
-from src.evaluation.evaluation_utils import evaluate_classification_predictions
 from src.schemas.dataset_schemas import DatasetBundle, DatasetSummary, XYDataset
 from src.schemas.pipeline_schemas import PipelineParams
 from src.schemas.training_schemas import (
     ClassificationMetrics,
     ModelTrainingResult,
+)
+from src.utils.evaluation_utils import (
+    FinalTestMetrics,
+    evaluate_classification_predictions,
+    final_test_metrics,
 )
 
 
@@ -24,6 +28,7 @@ class TestSetEvaluationResult:
 class ModelRunResult:
     model_name: str
     test_results: tuple[TestSetEvaluationResult, ...]
+    final_test_metrics: FinalTestMetrics
     fit_time: float
 
     @property
@@ -95,6 +100,10 @@ class Pipeline:
         return ModelRunResult(
             model_name=training_result.model_name,
             test_results=test_results,
+            final_test_metrics=final_test_metrics(
+                test_results[0].metrics,
+                test_results[1].metrics,
+            ),
             fit_time=training_result.fit_time,
         )
 
@@ -108,14 +117,7 @@ class Pipeline:
             raise NotImplementedError("Regression evaluation is not implemented yet")
 
         predictions, predict_time = training_result.trained_model.predict(test_set.X)
-        scoring = (
-            training_result.tuning_result.scoring
-            if training_result.tuning_result is not None
-            else "roc_auc"
-        )
-        metrics = evaluate_classification_predictions(
-            scoring, predictions, test_set.y.to_numpy()
-        )
+        metrics = evaluate_classification_predictions(predictions, test_set.y.to_numpy())
 
         return TestSetEvaluationResult(
             dataset_name=dataset_name,

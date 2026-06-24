@@ -20,8 +20,6 @@ ScoringMethodREG = Literal["r2", "mae", "mse"]
 class ClassificationMetrics:
     """Classification metrics for one prediction set."""
 
-    primary_metric: ScoringMethodCLS
-    primary_score: float
     roc_auc: float | None
     prc_auc: float | None
     f1: float
@@ -44,17 +42,56 @@ class ClassificationMetrics:
             scores["prc_auc"] = self.prc_auc
         return scores
 
+
+@dataclass
+class RegressionMetrics:
+    r2: float
+    mae: float
+    mse: float
+
     @property
-    def side_scores(self) -> dict[str, float]:
+    def scores(self) -> dict[str, float]:
         return {
-            name: score
-            for name, score in self.scores.items()
-            if name != self.primary_metric
+            "r2": self.r2,
+            "mae": self.mae,
+            "mse": self.mse,
         }
 
 
+@dataclass(frozen=True)
+class ClassificationMetricDeltas:
+    """Signed final-test deltas. Positive means mimic outperformed tudd."""
+
+    roc_auc: float | None
+    prc_auc: float | None
+    f1: float
+    accuracy: float
+    sensitivity: float
+    precision: float
+
+    @property
+    def scores(self) -> dict[str, float]:
+        scores = {
+            "f1": self.f1,
+            "accuracy": self.accuracy,
+            "sensitivity": self.sensitivity,
+            "precision": self.precision,
+        }
+        if self.roc_auc is not None:
+            scores["roc_auc"] = self.roc_auc
+        if self.prc_auc is not None:
+            scores["prc_auc"] = self.prc_auc
+        return scores
+
+
+@dataclass(frozen=True)
+class FinalTestMetrics:
+    mimic_test: ClassificationMetrics
+    tudd_test: ClassificationMetrics
+    mimic_minus_tudd: ClassificationMetricDeltas
+
+
 def evaluate_classification_predictions(
-    scoring: ScoringMethodCLS,
     predictions: np.ndarray,
     y_true,
 ) -> ClassificationMetrics:
@@ -89,18 +126,9 @@ def evaluate_classification_predictions(
     f1 = float(f1_score(y_true, y_pred, average=average))
     accuracy = float(accuracy_score(y_true, y_pred))
     sensitivity = float(recall_score(y_true, y_pred, average=average))
-    precision = float(
-        precision_score(y_true, y_pred, average=average, zero_division=0)
-    )
-
-    scores = {"roc_auc": roc_auc, "f1": f1, "accuracy": accuracy}
-    primary_score = scores[scoring]
-    if primary_score is None:
-        raise ValueError(f"Scoring method '{scoring}' requires 2D class probabilities")
+    precision = float(precision_score(y_true, y_pred, average=average, zero_division=0))
 
     return ClassificationMetrics(
-        primary_metric=scoring,
-        primary_score=primary_score,
         roc_auc=roc_auc,
         prc_auc=prc_auc,
         f1=f1,
@@ -111,8 +139,18 @@ def evaluate_classification_predictions(
     )
 
 
+def classification_score(
+    metrics: ClassificationMetrics,
+    scoring: ScoringMethodCLS,
+) -> float:
+    score = metrics.scores.get(scoring)
+    if score is None:
+        raise ValueError(f"Scoring method '{scoring}' requires 2D class probabilities")
+    return score
+
+
 def mean_classification_metrics(
-    scoring: ScoringMethodCLS, metrics: list[ClassificationMetrics]
+    metrics: list[ClassificationMetrics],
 ) -> ClassificationMetrics:
     if not metrics:
         raise ValueError("Cannot aggregate empty metric list")
@@ -124,14 +162,7 @@ def mean_classification_metrics(
     sensitivity = float(np.mean([metric.sensitivity for metric in metrics]))
     precision = float(np.mean([metric.precision for metric in metrics]))
 
-    scores = {"roc_auc": roc_auc, "f1": f1, "accuracy": accuracy}
-    primary_score = scores[scoring]
-    if primary_score is None:
-        raise ValueError(f"Scoring method '{scoring}' requires 2D class probabilities")
-
     return ClassificationMetrics(
-        primary_metric=scoring,
-        primary_score=primary_score,
         roc_auc=roc_auc,
         prc_auc=prc_auc,
         f1=f1,
@@ -140,6 +171,30 @@ def mean_classification_metrics(
         precision=precision,
         n_classes=metrics[0].n_classes,
     )
+
+
+def final_test_metrics(
+    mimic_test: ClassificationMetrics,
+    tudd_test: ClassificationMetrics,
+) -> FinalTestMetrics:
+    return FinalTestMetrics(
+        mimic_test=mimic_test,
+        tudd_test=tudd_test,
+        mimic_minus_tudd=ClassificationMetricDeltas(
+            roc_auc=_optional_delta(mimic_test.roc_auc, tudd_test.roc_auc),
+            prc_auc=_optional_delta(mimic_test.prc_auc, tudd_test.prc_auc),
+            f1=mimic_test.f1 - tudd_test.f1,
+            accuracy=mimic_test.accuracy - tudd_test.accuracy,
+            sensitivity=mimic_test.sensitivity - tudd_test.sensitivity,
+            precision=mimic_test.precision - tudd_test.precision,
+        ),
+    )
+
+
+def _optional_delta(left: float | None, right: float | None) -> float | None:
+    if left is None or right is None:
+        return None
+    return left - right
 
 
 def _mean_optional(values: list[float | None]) -> float | None:
@@ -151,28 +206,3 @@ def _mean_optional(values: list[float | None]) -> float | None:
 
 def _classification_average(n_classes: int) -> str:
     return "binary" if n_classes == 2 else "macro"
-
-
-@dataclass
-class RegressionMetrics:
-    primary_metric: ScoringMethodREG
-    primary_score: float
-    r2: float
-    mae: float
-    mse: float
-
-    @property
-    def scores(self) -> dict[str, float]:
-        return {
-            "r2": self.r2,
-            "mae": self.mae,
-            "mse": self.mse,
-        }
-
-    @property
-    def side_scores(self) -> dict[str, float]:
-        return {
-            name: score
-            for name, score in self.scores.items()
-            if name != self.primary_metric
-        }

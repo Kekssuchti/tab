@@ -5,10 +5,6 @@ from typing import Any
 import numpy as np
 
 from src.classes.preprocessor import Preprocessor
-from src.evaluation.evaluation_utils import (
-    evaluate_classification_predictions,
-    mean_classification_metrics,
-)
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
 from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 from src.schemas.training_schemas import (
@@ -18,6 +14,11 @@ from src.schemas.training_schemas import (
     ModelTrainingResult,
     TuningCVResults,
     TuningResult,
+)
+from src.utils.evaluation_utils import (
+    classification_score,
+    evaluate_classification_predictions,
+    mean_classification_metrics,
 )
 from src.utils.logger import logger
 from src.utils.model_registry import ModelSpec
@@ -157,13 +158,12 @@ class Trainer:
                     )
 
                 metrics = evaluate_classification_predictions(
-                    tuning.scoring,
                     predictions,
                     self._take_rows(y_train, validation_index),
                 )
                 self._cleanup_model(fold_model)
 
-                candidate_scores.append(metrics.primary_score)
+                candidate_scores.append(classification_score(metrics, tuning.scoring))
                 candidate_metrics.append(metrics)
                 candidate_times.append(timer() - fold_start)
                 fold_results.append(
@@ -183,7 +183,7 @@ class Trainer:
         mean_scores = [float(np.mean(scores)) for scores in fold_scores_by_candidate]
         std_scores = [float(np.std(scores)) for scores in fold_scores_by_candidate]
         mean_metrics = [
-            mean_classification_metrics(tuning.scoring, metrics)
+            mean_classification_metrics(metrics)
             for metrics in fold_metrics_by_candidate
         ]
         best_index = int(np.argmax(mean_scores))
@@ -249,8 +249,7 @@ class Trainer:
             return None
 
         predictions, _ = model.predict(X_train)
-        scoring = model_params.tuning.scoring if model_params.tuning else "roc_auc"
-        return evaluate_classification_predictions(scoring, predictions, y_train)
+        return evaluate_classification_predictions(predictions, y_train)
 
     @staticmethod
     def _cleanup_model(model: ModelAdapter) -> None:

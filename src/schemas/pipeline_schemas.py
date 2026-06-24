@@ -15,6 +15,7 @@ class MLflowParams(StrictParams):
     tracking_uri: str | None = "sqlite:///mlflow.db"
     artifact_location: str | None = "mlartifacts"
     experiment_name: str = "tab"
+    run_name: str | None = None
     nested_model_runs: bool = True
     log_models: bool = False
 

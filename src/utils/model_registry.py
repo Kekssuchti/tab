@@ -45,9 +45,7 @@ class ModelSpec:
 
 tabpfn_search_spaces = {
     "default": {
-        "n_estimators": [4, 8, 16],
         "average_before_softmax": [True, False],
-        "softmax_temperature": [0.75, 0.9, 1.0, 1.1],
     }
 }
 
