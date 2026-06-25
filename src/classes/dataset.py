@@ -1,5 +1,3 @@
-import hashlib
-from dataclasses import dataclass
 from os.path import exists
 from pathlib import Path
 from typing import TypedDict
@@ -9,19 +7,16 @@ from sklearn.model_selection import train_test_split
 
 from src.classes.data_cleaner import DataCleaner
 from src.classes.data_registry import (
-    DATA_FILES_ALL,
-    DATA_FILES_NORMAL,
-    DATA_FILES_READMISSION,
     DatasetOrigin,
+    dataset_task_for_target,
+    origin_for_dataset_name,
 )
 from src.config import config
 from src.schemas.dataset_schemas import (
     DatasetBundle,
     DatasetFileSummary,
     DatasetParams,
-    DatasetPartSummary,
     DatasetSummary,
-    DataSplitParams,
     XYDataset,
 )
 from src.utils.dataset_utils import hash_file_sha256, summarize_data_part
@@ -35,24 +30,8 @@ class _SplitResult(TypedDict):
     y_test: pd.Series
 
 
-@dataclass(frozen=True)
-class PreparedTestSet:
-    X: pd.DataFrame
-    y: pd.Series
-
-
-@dataclass(frozen=True)
-class PreparedDataset:
-    X_train: pd.DataFrame
-    y_train: pd.Series
-    test_sets: dict[str, PreparedTestSet]
-
-
 class Dataset:
-    """
-    Custom logic explanaition:
-        we always have source and target df. they can be from the same data source of different.
-    """
+    """Build train/test data for one clinical target across MIMIC and TUDD."""
 
     def __init__(
         self,
@@ -61,12 +40,7 @@ class Dataset:
         self.params = params
         self.seed = self.params.random_state
         self.data_cleaner = DataCleaner(params.data_cleaner)
-        self._target = self.params.target
-        self._data_files = (
-            DATA_FILES_READMISSION
-            if self._target == "hours_to_readmit"
-            else DATA_FILES_NORMAL
-        )
+        self._task = dataset_task_for_target(self.params.target)
 
     def get_dataset(self) -> DatasetBundle:
         """
@@ -75,35 +49,20 @@ class Dataset:
         Train XYDataset are the specified combination of Datasplits given the DatasetParams
         This can include only 1 of the 2 datasets, both datasets, fractions of any of those datasets or combinations of both
         """
-        # combine data given params
-        # save to self.data: PreparedDataset
-        dfs = self._load_data(self.params.train_on)
-        # dfs is always len 2 and has both mimic and tudd datasets
-        # either "normal" or readmission
-
+        dfs = self._load_data()
         return self._split_data(dfs)
 
-    def _load_data(
-        self,
-        df_splits: tuple[DataSplitParams, ...],
-    ) -> dict[DatasetOrigin, pd.DataFrame]:
-        """
-        Args:
-            df_names:   List of strings of keys for what df you want returned
-                        Available Keys are: 'mimic', 'mimic_readmission', 'tudd', 'tudd_readmission'
-
-        Returns:
-            list of pd.DataFrame in the order of df_names
-        """
+    def _load_data(self) -> dict[DatasetOrigin, pd.DataFrame]:
+        """Load the filtered files required by the configured clinical target."""
 
         # ensure filtered csvs exist
         data_preprocessed = True
 
-        for data_file in DATA_FILES_ALL.values():
+        for data_file in self._task.data_files.values():
             path = config.dir_data / "filtered" / data_file.file_name
             if not exists(path):
                 logger.debug(f"Path: {path} doesnt exist")
-                # if any file is missing we assume something bad happened and reprocess all!
+                # if any required file is missing we assume something bad happened and reprocess all!
                 data_preprocessed = False
 
         if not data_preprocessed or self.params.force_repreprocess:
@@ -111,7 +70,7 @@ class Dataset:
 
         dfs = {}
         # load csvs
-        for data_file in self._data_files.values():
+        for data_file in self._task.data_files.values():
             name = data_file.file_name
             # normalized mimic or tudd without readmission flag
             data_origin = data_file.data_origin
@@ -159,7 +118,10 @@ class Dataset:
             for dataset_origin, split in splits_dict.items():
                 # compared against all keys we have (aka mimic and tudd)
                 # skip if not in training_data_split.dataset
-                if str(dataset_origin) not in str(training_data_split.dataset):
+                if (
+                    origin_for_dataset_name(training_data_split.dataset)
+                    != dataset_origin
+                ):
                     continue
 
                 # if we do train on the split -> apply fraction of training data
@@ -234,7 +196,7 @@ class Dataset:
 
     def _summarize_data_files(self) -> list[DatasetFileSummary]:
         summaries = []
-        for dataset_name, data_file in self._data_files.items():
+        for dataset_name, data_file in self._task.data_files.items():
             path = config.dir_data / "filtered" / data_file.file_name
             summaries.append(
                 DatasetFileSummary(
@@ -250,19 +212,8 @@ class Dataset:
     def _split_single_df(
         self, df: pd.DataFrame
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-        y = df[self._target]
-        if self._target == "hours_to_readmit":
-            y = y.notna().astype(int)
-
-        cols_to_drop = [
-            "mortality",
-            "LOS",
-            "LOS3",
-            "LOS7",
-            "hours_to_readmit",
-        ]
-
-        X = df.drop(columns=cols_to_drop, errors="ignore")
+        y = self._task.labels_from(df)
+        X = self._task.features_from(df)
 
         stratify = None
         if (

@@ -22,10 +22,9 @@ class DataCleaner:
         for dataset in DATA_FILES_ALL.values():
             file_name = dataset.file_name
             df = pd.read_csv(Path(extracted_path / file_name))
-            readmission = True if "readmission" in file_name else False
             df_filtered = standard_preprocessing(
                 df,
-                readmission,
+                dataset.is_readmission,
                 self.params.missing_threshold_row,
                 self.params.outlier_limits_path,
             )
