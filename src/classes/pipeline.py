@@ -16,6 +16,7 @@ from src.utils.evaluation_utils import (
     final_test_metrics,
 )
 from src.utils.logger import logger
+from src.utils.model_identity import model_instance_ids
 from src.utils.model_lifecycle import release_training_result_model
 
 
@@ -43,12 +44,36 @@ class ModelRunResult:
 
 
 @dataclass(frozen=True)
+class ModelRunRecord:
+    model_instance_id: str
+    training_result: ModelTrainingResult
+    model_result: ModelRunResult | None
+
+    @property
+    def model_name(self) -> str:
+        return self.training_result.model_name
+
+    @property
+    def succeeded(self) -> bool:
+        return self.training_result.succeeded
+
+
+@dataclass(frozen=True)
 class PipelineResult:
     run_id: str
     dataset_summary: DatasetSummary
-    model_results: tuple[ModelRunResult, ...]
-    training_results: tuple[ModelTrainingResult, ...]
+    model_runs: tuple[ModelRunRecord, ...]
     total_time: float
+
+    @property
+    def model_results(self) -> tuple[ModelRunResult, ...]:
+        return tuple(
+            run.model_result for run in self.model_runs if run.model_result is not None
+        )
+
+    @property
+    def training_results(self) -> tuple[ModelTrainingResult, ...]:
+        return tuple(run.training_result for run in self.model_runs)
 
 
 class Pipeline:
@@ -60,6 +85,11 @@ class Pipeline:
 
     def run(self) -> PipelineResult:
         start_time = perf_counter()
+        target = getattr(self.params.dataset, "target", "unknown")
+        logger.info(
+            f"Pipeline {self.params.run_id} starting: "
+            f"target={target} models={len(self.params.training)}"
+        )
         trainer = Trainer(
             params=self.params.training,
             default_imputer=self.params.dataset.imputer,
@@ -70,12 +100,16 @@ class Pipeline:
         data = self.dataset.get_dataset()
         dataset_summary = self.dataset.summarize(data)
 
-        training_results = []
-        model_results = []
+        model_runs = []
         y_train = data.train_data.y.to_numpy()
-        for model_params in self.params.training:
+        for model_instance_id, model_params in zip(
+            model_instance_ids(self.params.training),
+            self.params.training,
+            strict=True,
+        ):
             model_start_time = perf_counter()
             tr = None
+            mr = None
             failure_stage = "training"
             try:
                 tr = trainer.train_model(
@@ -85,7 +119,7 @@ class Pipeline:
                 )
                 failure_stage = "evaluation"
                 mr = self._evaluate_trained_model(tr, data)
-                model_results.append(mr)
+                logger.info(f"Model {model_instance_id} evaluated successfully")
             except Exception as exc:
                 logger.exception(
                     f"Model {model_params.name} failed during {failure_stage}; continuing"
@@ -103,14 +137,25 @@ class Pipeline:
             finally:
                 if tr is not None:
                     release_training_result_model(tr)
-                    training_results.append(tr)
+                    model_runs.append(
+                        ModelRunRecord(
+                            model_instance_id=model_instance_id,
+                            training_result=tr,
+                            model_result=mr,
+                        )
+                    )
 
+        total_time = perf_counter() - start_time
+        logger.info(
+            f"Pipeline {self.params.run_id} completed: "
+            f"successful_models={len([run for run in model_runs if run.succeeded])}/"
+            f"{len(model_runs)} total_time={total_time:.3f}s"
+        )
         return PipelineResult(
             run_id=self.params.run_id,
             dataset_summary=dataset_summary,
-            model_results=tuple(model_results),
-            training_results=tuple(training_results),
-            total_time=perf_counter() - start_time,
+            model_runs=tuple(model_runs),
+            total_time=total_time,
         )
 
     def _evaluate_trained_model(

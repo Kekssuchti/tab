@@ -3,6 +3,7 @@ from pathlib import Path
 import mlflow
 import pytest
 from src.classes.pipeline import (
+    ModelRunRecord,
     ModelRunResult,
     PipelineResult,
 )
@@ -153,8 +154,13 @@ def _result(*, tuned: bool = False) -> PipelineResult:
     return PipelineResult(
         run_id="test-pipeline-id",
         dataset_summary=dataset_summary,
-        model_results=(model_result,),
-        training_results=(training_result,),
+        model_runs=(
+            ModelRunRecord(
+                model_instance_id="logistic-regression",
+                training_result=training_result,
+                model_result=model_result,
+            ),
+        ),
         total_time=0.5,
     )
 
@@ -164,6 +170,9 @@ def test_pipeline_result_serialization_omits_trained_model():
 
     assert serialized["run_id"] == "test-pipeline-id"
     assert serialized["dataset_summary"]["train"]["row_count"] == 8
+    assert serialized["model_runs"][0]["model_instance_id"] == "logistic-regression"
+    assert serialized["model_runs"][0]["status"] == "success"
+    assert "trained_model" not in serialized["model_runs"][0]["training_result"]
     assert "trained_model" not in serialized["training_results"][0]
     assert serialized["training_results"][0]["training_metrics"]["accuracy"] == 1.0
     assert serialized["training_results"][0]["error"] is None
@@ -328,8 +337,13 @@ def test_mlflow_logger_writes_failed_nested_model_run(tmp_path):
     result = PipelineResult(
         run_id=result.run_id,
         dataset_summary=result.dataset_summary,
-        model_results=(),
-        training_results=(failed_training_result,),
+        model_runs=(
+            ModelRunRecord(
+                model_instance_id="logistic-regression",
+                training_result=failed_training_result,
+                model_result=None,
+            ),
+        ),
         total_time=0.2,
     )
 
@@ -345,6 +359,6 @@ def test_mlflow_logger_writes_failed_nested_model_run(tmp_path):
     )
 
     assert child.data.tags["status"] == "failed"
-    assert child.data.params["model.failure_stage"] == "training"
-    assert child.data.params["model.error"] == "ValueError: bad params"
+    assert child.data.tags["failure_stage"] == "training"
+    assert child.data.tags["error"] == "ValueError: bad params"
     assert child.data.metrics["train.fit_time"] == 0.1

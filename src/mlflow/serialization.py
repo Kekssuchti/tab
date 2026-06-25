@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-from src.classes.pipeline import PipelineResult
+from src.classes.pipeline import ModelRunRecord, PipelineResult
 from src.schemas.pipeline_schemas import PipelineParams
 from src.schemas.training_schemas import ModelTrainingResult
 
@@ -18,17 +18,30 @@ def pipeline_result_to_dict(result: PipelineResult) -> dict[str, Any]:
         "run_id": result.run_id,
         "total_time": _json_safe(result.total_time),
         "dataset_summary": _dataclass_to_dict(result.dataset_summary),
+        "model_runs": [
+            _model_run_to_dict(model_run) for model_run in result.model_runs
+        ],
         "model_results": [
             _dataclass_to_dict(model_result) for model_result in result.model_results
         ],
         "training_results": [
-            _training_result_to_dict(training_result)
+            training_result_to_dict(training_result)
             for training_result in result.training_results
         ],
     }
 
 
-def _training_result_to_dict(result: ModelTrainingResult) -> dict[str, Any]:
+def _model_run_to_dict(model_run: ModelRunRecord) -> dict[str, Any]:
+    return {
+        "model_instance_id": model_run.model_instance_id,
+        "model_name": model_run.model_name,
+        "status": "success" if model_run.succeeded else "failed",
+        "training_result": training_result_to_dict(model_run.training_result),
+        "model_result": _dataclass_to_dict(model_run.model_result),
+    }
+
+
+def training_result_to_dict(result: ModelTrainingResult) -> dict[str, Any]:
     return {
         "model_name": result.model_name,
         "task_type": result.task_type,

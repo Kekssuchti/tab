@@ -6,6 +6,7 @@ from src.classes.data_registry import DATA_FILES_ALL
 from src.config import config
 from src.schemas.dataset_schemas import DataCleanerParams
 from src.utils.dataset_utils import standard_preprocessing
+from src.utils.logger import logger
 
 
 class DataCleaner:
@@ -18,6 +19,7 @@ class DataCleaner:
 
         extracted_path = Path(config.dir_data / "extracted")
         filtered_path = Path(config.dir_data / "filtered")
+        logger.info("Preprocessing extracted clinical CSVs into filtered CSVs")
 
         for dataset in DATA_FILES_ALL.values():
             file_name = dataset.file_name
@@ -30,3 +32,6 @@ class DataCleaner:
             )
 
             df_filtered.to_csv(Path(filtered_path / file_name), index=False)
+            logger.info(
+                f"Filtered {file_name}: rows {len(df)} -> {len(df_filtered)}"
+            )

@@ -38,6 +38,7 @@ class Trainer:
         self.default_scaler = default_scaler
 
     def validate_model_configs(self) -> None:
+        logger.info(f"Validating {len(self.params)} model config(s)")
         errors: list[str] = []
         for model_params in self.params:
             try:
@@ -55,6 +56,7 @@ class Trainer:
         if errors:
             joined_errors = "\n- ".join(errors)
             raise ValueError(f"Model preflight validation failed:\n- {joined_errors}")
+        logger.info("Model config validation completed")
 
     def train_model(
         self,
@@ -178,6 +180,10 @@ class Trainer:
         grid = spec.tuning_grid(tuning.search_space, tuning.grid)
         candidates = get_candidate_params(grid)
         cv = build_cv(model_params, tuning)
+        logger.info(
+            f"Tuning {model_params.name}: candidates={len(candidates)} "
+            f"folds={tuning.cv.n_splits} scoring={tuning.scoring}"
+        )
 
         fold_results: list[FoldResult] = []
         fold_scores_by_candidate: list[list[float]] = []

@@ -31,17 +31,6 @@ training:
         shuffle: true
         random_state: 1337
 
-  - name: ebm
-    task_type: classification
-    params:
-      random_state: 1337
-    tuning:
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
   - name: logistic-regression
     task_type: classification
     params:

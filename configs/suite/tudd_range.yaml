@@ -1,5 +1,5 @@
 name: training-size
-base_config: ../pipeline/tabpfn.yaml
+base_config: ../pipeline/test.yaml
 matrix:
   - path: dataset.train_on.1.fraction
     range:

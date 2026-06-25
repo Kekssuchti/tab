@@ -1,24 +1,32 @@
 from dataclasses import dataclass, field
-from typing import Any
+from functools import lru_cache
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
 
-from src.adapter.limix_adapter import LimixAdapter
-from src.adapter.mitra_adapter import MitraAdapter
-from src.adapter.orion_bix_adapter import OrionBixAdapter
-from src.adapter.orion_msp_adapter import OrionMSPAdapter
-from src.adapter.sklearn_adapter import EBMAdapter, LinearModelAdapter, XGBoostAdapter
-from src.adapter.tabicl_adapter import TabICLAdapter
-from src.adapter.tabpfn_adapter import TabPFNAdapter
-from src.interfaces.model_interface import ModelAdapter, TaskType
+from src.schemas.base_schemas import TaskType
+from src.utils.logger import logger
+
+if TYPE_CHECKING:
+    from src.interfaces.model_interface import ModelAdapter
+
+SKLEARN_ADAPTER = "src.adapter.sklearn_adapter"
+TABPFN_ADAPTER = "src.adapter.tabpfn_adapter:TabPFNAdapter"
+TABICL_ADAPTER = "src.adapter.tabicl_adapter:TabICLAdapter"
+LIMIX_ADAPTER = "src.adapter.limix_adapter:LimixAdapter"
+MITRA_ADAPTER = "src.adapter.mitra_adapter:MitraAdapter"
+ORION_MSP_ADAPTER = "src.adapter.orion_msp_adapter:OrionMSPAdapter"
+ORION_BIX_ADAPTER = "src.adapter.orion_bix_adapter:OrionBixAdapter"
 
 
 @dataclass(frozen=True)
 class ModelSpec:
-    adapter_cls: type[ModelAdapter]
+    adapter_path: str
     default_params: dict[str, Any] = field(default_factory=dict)
     search_spaces: dict[str, dict[str, list[Any]]] = field(default_factory=dict)
 
-    def create(self, task_type: TaskType, params: dict[str, Any]) -> ModelAdapter:
-        return self.adapter_cls(
+    def create(self, task_type: TaskType, params: dict[str, Any]) -> "ModelAdapter":
+        adapter_cls = _load_adapter_cls(self.adapter_path)
+        return adapter_cls(
             task_type=task_type, **{**self.default_params, **params}
         )
 
@@ -43,18 +51,36 @@ class ModelSpec:
             ) from exc
 
 
+@lru_cache
+def _load_adapter_cls(adapter_path: str):
+    module_name, class_name = adapter_path.split(":", maxsplit=1)
+    logger.info(f"Loading model adapter: {adapter_path}")
+    try:
+        module = import_module(module_name)
+    except ImportError as exc:
+        raise ImportError(
+            f"Could not import model adapter module '{module_name}'"
+        ) from exc
+    try:
+        return getattr(module, class_name)
+    except AttributeError as exc:
+        raise ImportError(
+            f"Model adapter '{class_name}' not found in '{module_name}'"
+        ) from exc
+
+
 tabpfn_search_spaces = {
     "default": {
         "average_before_softmax": [True, False],
     }
 }
 
-# Note that search spaaces with parametes that have only 1 value are still worth it
+# Note that search spaces with parameters that have only 1 value are still worth it
 # since we use the 1 value as the "default" for the hyperparameter
 # While adjusting the other hyperparameters with multiple values
 MODEL_REGISTRY_CLS = {
     "logistic-regression": ModelSpec(
-        LinearModelAdapter,
+        f"{SKLEARN_ADAPTER}:LinearModelAdapter",
         search_spaces={
             "default": {
                 "C": [0.1, 1.0, 10.0],
@@ -64,7 +90,7 @@ MODEL_REGISTRY_CLS = {
         },
     ),
     "xgboost": ModelSpec(
-        XGBoostAdapter,
+        f"{SKLEARN_ADAPTER}:XGBoostAdapter",
         search_spaces={
             "default": {
                 "n_estimators": [100, 300],
@@ -76,7 +102,7 @@ MODEL_REGISTRY_CLS = {
         },
     ),
     "ebm": ModelSpec(
-        EBMAdapter,
+        f"{SKLEARN_ADAPTER}:EBMAdapter",
         search_spaces={
             "default": {
                 "max_bins": [128, 256, 1024],
@@ -86,16 +112,16 @@ MODEL_REGISTRY_CLS = {
         },
     ),
     "tabpfn-3": ModelSpec(
-        TabPFNAdapter,
+        TABPFN_ADAPTER,
         search_spaces=tabpfn_search_spaces,
     ),
     "tabpfn-2.5": ModelSpec(
-        TabPFNAdapter,
+        TABPFN_ADAPTER,
         default_params={"version": "v2.5"},
         search_spaces=tabpfn_search_spaces,
     ),
     "tabicl-2": ModelSpec(
-        TabICLAdapter,
+        TABICL_ADAPTER,
         search_spaces={
             "default": {
                 "n_estimators": [4, 8, 16],
@@ -105,18 +131,18 @@ MODEL_REGISTRY_CLS = {
             }
         },
     ),
-    "limix-2m": ModelSpec(LimixAdapter, default_params={"size": "2M"}),
-    "limix-16m": ModelSpec(LimixAdapter, default_params={"size": "16M"}),
-    "mitra": ModelSpec(MitraAdapter),
-    "orion-msp": ModelSpec(OrionMSPAdapter),
-    "orion-bix": ModelSpec(OrionBixAdapter),
+    "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
+    "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
+    "mitra": ModelSpec(MITRA_ADAPTER),
+    "orion-msp": ModelSpec(ORION_MSP_ADAPTER),
+    "orion-bix": ModelSpec(ORION_BIX_ADAPTER),
 }
 
 
 MODEL_REGISTRY_REG = {
-    "linear-regression": ModelSpec(LinearModelAdapter),
+    "linear-regression": ModelSpec(f"{SKLEARN_ADAPTER}:LinearModelAdapter"),
     "xgboost": ModelSpec(
-        XGBoostAdapter,
+        f"{SKLEARN_ADAPTER}:XGBoostAdapter",
         search_spaces={
             "default": {
                 "n_estimators": [100, 300],
@@ -127,7 +153,7 @@ MODEL_REGISTRY_REG = {
         },
     ),
     "ebm": ModelSpec(
-        EBMAdapter,
+        f"{SKLEARN_ADAPTER}:EBMAdapter",
         search_spaces={
             "default": {
                 "max_bins": [128, 256],
@@ -136,9 +162,9 @@ MODEL_REGISTRY_REG = {
             }
         },
     ),
-    "tabpfn-3": ModelSpec(TabPFNAdapter),
-    "tabicl-2": ModelSpec(TabICLAdapter),
-    "limix-2m": ModelSpec(LimixAdapter, default_params={"size": "2M"}),
-    "limix-16m": ModelSpec(LimixAdapter, default_params={"size": "16M"}),
-    "mitra": ModelSpec(MitraAdapter),
+    "tabpfn-3": ModelSpec(TABPFN_ADAPTER),
+    "tabicl-2": ModelSpec(TABICL_ADAPTER),
+    "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
+    "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
+    "mitra": ModelSpec(MITRA_ADAPTER),
 }

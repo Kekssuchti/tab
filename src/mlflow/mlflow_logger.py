@@ -4,7 +4,7 @@ import json
 import math
 import sys
 import warnings
-from collections import Counter, defaultdict
+from collections import defaultdict
 from importlib import metadata
 from pathlib import Path
 from statistics import pstdev
@@ -13,11 +13,12 @@ from typing import Any
 
 import mlflow
 from mlflow.evaluation import Evaluation, log_evaluations
-from src.classes.pipeline import ModelRunResult, PipelineResult
+from src.classes.pipeline import ModelRunRecord, ModelRunResult, PipelineResult
 from src.config import config
 from src.mlflow.serialization import (
     pipeline_params_to_dict,
     pipeline_result_to_dict,
+    training_result_to_dict,
 )
 from src.schemas.pipeline_schemas import PipelineParams
 from src.schemas.training_schemas import FoldResult, ModelParams, ModelTrainingResult
@@ -26,6 +27,7 @@ from src.utils.evaluation_utils import (
     ClassificationMetrics,
     RegressionMetrics,
 )
+from src.utils.model_identity import model_instance_ids
 
 
 class MLflowPipelineLogger:
@@ -66,19 +68,16 @@ class MLflowPipelineLogger:
         *,
         pipeline_mlflow_run_id: str,
     ) -> None:
-        model_ids = _model_instance_ids(params.training)
-        model_results_by_training = _model_results_by_training_result(result)
-        for model_id, model_params, training_result, model_result in zip(
-            model_ids,
-            params.training,
-            result.training_results,
-            model_results_by_training,
-            strict=False,
-        ):
-            with mlflow.start_run(run_name=model_id, nested=True) as model_run:
+        model_params_by_id = _model_params_by_instance_id(params.training)
+        for run_record in result.model_runs:
+            model_id = run_record.model_instance_id
+            model_params = model_params_by_id[model_id]
+            training_result = run_record.training_result
+            model_result = run_record.model_result
+            with mlflow.start_run(run_name=model_id, nested=True) as mlflow_model_run:
                 mlflow.set_tag("pipeline_id", params.run_id)
                 mlflow.set_tag("pipeline_mlflow_run_id", pipeline_mlflow_run_id)
-                mlflow.set_tag("model_mlflow_run_id", model_run.info.run_id)
+                mlflow.set_tag("model_mlflow_run_id", mlflow_model_run.info.run_id)
                 mlflow.set_tag("run_type", "model")
                 mlflow.set_tag("model_instance", model_id)
                 mlflow.set_tag("model_name", model_params.name)
@@ -96,7 +95,7 @@ class MLflowPipelineLogger:
                     self._log_evaluation_tables(
                         params,
                         result,
-                        model_filter=(model_id, training_result, model_result),
+                        model_filter=run_record,
                     )
                     self._log_cv_candidate_runs(
                         params,
@@ -104,7 +103,7 @@ class MLflowPipelineLogger:
                         model_params,
                         training_result,
                         pipeline_mlflow_run_id=pipeline_mlflow_run_id,
-                        model_mlflow_run_id=model_run.info.run_id,
+                        model_mlflow_run_id=mlflow_model_run.info.run_id,
                     )
 
                 cv_path = cv_dir / f"{model_id}.json"
@@ -217,7 +216,7 @@ class MLflowPipelineLogger:
         for key, value in run_params.items():
             mlflow.log_param(key, _param_value(value))
 
-        model_ids = _model_instance_ids(params.training)
+        model_ids = model_instance_ids(params.training)
         for model_id, model_params in zip(model_ids, params.training, strict=False):
             self._log_model_config_params(model_id, model_params)
 
@@ -326,9 +325,9 @@ class MLflowPipelineLogger:
     def _log_model_failure(self, training_result: ModelTrainingResult) -> None:
         self._log_metric("train.fit_time", training_result.fit_time)
         if training_result.failure_stage is not None:
-            mlflow.log_param("model.failure_stage", training_result.failure_stage)
+            mlflow.set_tag("failure_stage", training_result.failure_stage)
         if training_result.error is not None:
-            mlflow.log_param("model.error", training_result.error)
+            mlflow.set_tag("error", training_result.error)
 
     def _log_training_metrics(
         self,
@@ -408,25 +407,24 @@ class MLflowPipelineLogger:
         params: PipelineParams,
         result: PipelineResult,
         *,
-        model_filter: tuple[str, ModelTrainingResult, ModelRunResult] | None = None,
+        model_filter: ModelRunRecord | None = None,
     ) -> None:
         if model_filter is None:
             model_rows = tuple(
-                (model_id, training_result, model_result)
-                for model_id, training_result, model_result in zip(
-                    _result_model_instance_ids(result.training_results),
-                    result.training_results,
-                    _model_results_by_training_result(result),
-                    strict=False,
-                )
-                if model_result is not None
+                model_run
+                for model_run in result.model_runs
+                if model_run.model_result is not None
             )
         else:
             model_rows = (model_filter,)
 
         evaluations = []
         table_rows = []
-        for model_id, _training_result, model_result in model_rows:
+        for model_run in model_rows:
+            model_id = model_run.model_instance_id
+            model_result = model_run.model_result
+            if model_result is None:
+                continue
             for test_result in model_result.test_results:
                 metrics = {
                     **test_result.metrics.scores,
@@ -507,25 +505,14 @@ class MLflowPipelineLogger:
             json.dumps(_environment_info(), indent=2), encoding="utf-8"
         )
 
-        for model_id, training_result in zip(
-            _result_model_instance_ids(result.training_results),
-            result.training_results,
-            strict=False,
-        ):
+        for model_run in result.model_runs:
+            training_result = model_run.training_result
             if training_result.tuning_result is None:
                 continue
-            cv_path = cv_dir / f"{model_id}.json"
+            cv_path = cv_dir / f"{model_run.model_instance_id}.json"
             cv_path.write_text(
                 json.dumps(
-                    pipeline_result_to_dict(
-                        PipelineResult(
-                            run_id=result.run_id,
-                            dataset_summary=result.dataset_summary,
-                            model_results=(),
-                            training_results=(training_result,),
-                            total_time=result.total_time,
-                        )
-                    )["training_results"][0]["tuning_result"],
+                    training_result_to_dict(training_result)["tuning_result"],
                     indent=2,
                 ),
                 encoding="utf-8",
@@ -564,45 +551,10 @@ class MLflowPipelineLogger:
             mlflow.log_artifact(str(log_path), artifact_path="environment")
 
 
-def _model_instance_ids(models: tuple[ModelParams, ...]) -> list[str]:
-    counts = Counter(model.name for model in models)
-    seen: defaultdict[str, int] = defaultdict(int)
-    model_ids = []
-    for model in models:
-        index = seen[model.name]
-        seen[model.name] += 1
-        model_ids.append(
-            model.name if counts[model.name] == 1 else f"{model.name}__{index}"
-        )
-    return model_ids
-
-
-def _result_model_instance_ids(results: tuple[ModelTrainingResult, ...]) -> list[str]:
-    counts = Counter(result.model_name for result in results)
-    seen: defaultdict[str, int] = defaultdict(int)
-    model_ids = []
-    for result in results:
-        index = seen[result.model_name]
-        seen[result.model_name] += 1
-        model_ids.append(
-            result.model_name
-            if counts[result.model_name] == 1
-            else f"{result.model_name}__{index}"
-        )
-    return model_ids
-
-
-def _model_results_by_training_result(
-    result: PipelineResult,
-) -> list[ModelRunResult | None]:
-    model_results = iter(result.model_results)
-    paired_results: list[ModelRunResult | None] = []
-    for training_result in result.training_results:
-        if training_result.succeeded:
-            paired_results.append(next(model_results, None))
-        else:
-            paired_results.append(None)
-    return paired_results
+def _model_params_by_instance_id(
+    models: tuple[ModelParams, ...],
+) -> dict[str, ModelParams]:
+    return dict(zip(model_instance_ids(models), models, strict=True))
 
 
 def _run_name(params: PipelineParams) -> str:

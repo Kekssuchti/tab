@@ -49,8 +49,20 @@ class Dataset:
         Train XYDataset are the specified combination of Datasplits given the DatasetParams
         This can include only 1 of the 2 datasets, both datasets, fractions of any of those datasets or combinations of both
         """
+        logger.info(
+            f"Preparing dataset target={self.params.target} "
+            f"files={','.join(file.file_name for file in self._task.data_files.values())}"
+        )
         dfs = self._load_data()
-        return self._split_data(dfs)
+        bundle = self._split_data(dfs)
+        logger.info(
+            "Dataset ready: "
+            f"train_rows={len(bundle.train_data.y)} "
+            f"test_mimic_rows={len(bundle.test_mimic.y)} "
+            f"test_tudd_rows={len(bundle.test_tudd.y)} "
+            f"features={bundle.train_data.X.shape[1]}"
+        )
+        return bundle
 
     def _load_data(self) -> dict[DatasetOrigin, pd.DataFrame]:
         """Load the filtered files required by the configured clinical target."""
@@ -66,6 +78,7 @@ class Dataset:
                 data_preprocessed = False
 
         if not data_preprocessed or self.params.force_repreprocess:
+            logger.info("Required filtered data missing or force_repreprocess=true")
             self.data_cleaner.preprocess_extracted_to_filtered()
 
         dfs = {}
