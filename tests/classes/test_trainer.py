@@ -163,8 +163,8 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
     )
 
     class _Spec:
-        def tuning_grid(self, search_space, overrides):
-            return overrides
+        def tuning_candidates(self, search_space, overrides):
+            return [{"C": value} for value in overrides["C"]]
 
     def _fit_model(model_params, spec, params, X_train, y_train):
         return _ReleasableFoldModel(), 0.0

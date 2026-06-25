@@ -2,6 +2,7 @@ from timeit import default_timer as timer
 from typing import Any
 
 import numpy as np
+from sklearn.model_selection import KFold, StratifiedKFold
 
 from src.classes.preprocessor import Preprocessor
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
@@ -21,9 +22,7 @@ from src.utils.evaluation_utils import (
 )
 from src.utils.logger import logger
 from src.utils.model_lifecycle import release_model
-from src.utils.model_registry import ModelSpec
-from src.utils.trainer_utils import get_model_spec
-from src.utils.tuning_utils import build_cv, get_candidate_params
+from src.utils.model_registry import ModelSpec, get_model_spec
 
 
 class Trainer:
@@ -156,13 +155,12 @@ class Trainer:
         if model_params.tuning is None:
             return [model_params.params]
 
-        grid = spec.tuning_grid(
-            model_params.tuning.search_space,
-            model_params.tuning.grid,
-        )
         return [
             {**model_params.params, **candidate_params}
-            for candidate_params in get_candidate_params(grid)
+            for candidate_params in spec.tuning_candidates(
+                model_params.tuning.search_space,
+                model_params.tuning.grid,
+            )
         ]
 
     def _tune_model(
@@ -177,9 +175,8 @@ class Trainer:
             raise ValueError("Tuning requested without tuning parameters")
 
         logger.info(f"Start tuning: {model_params.name}")
-        grid = spec.tuning_grid(tuning.search_space, tuning.grid)
-        candidates = get_candidate_params(grid)
-        cv = build_cv(model_params, tuning)
+        candidates = spec.tuning_candidates(tuning.search_space, tuning.grid)
+        cv = self._build_cv(model_params, tuning)
         logger.info(
             f"Tuning {model_params.name}: candidates={len(candidates)} "
             f"folds={tuning.cv.n_splits} scoring={tuning.scoring}"
@@ -311,6 +308,17 @@ class Trainer:
         if hasattr(data, "iloc"):
             return data.iloc[rows]
         return np.asarray(data)[rows]
+
+    @staticmethod
+    def _build_cv(model_params: ModelParams, tuning):
+        cv_cls = (
+            StratifiedKFold if model_params.task_type == "classification" else KFold
+        )
+        return cv_cls(
+            n_splits=tuning.cv.n_splits,
+            shuffle=tuning.cv.shuffle,
+            random_state=tuning.cv.random_state,
+        )
 
     def _training_metrics(
         self,

@@ -4,16 +4,29 @@ import sys
 import numpy as np
 import pytest
 
+from src.schemas.training_schemas import ModelParams
+from src.utils import model_registry
 from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
 from src.utils.model_lifecycle import release_model
-from src.utils import model_registry
 
-LIGHTWEIGHT_CLASSIFICATION_MODELS = ("logistic-regression", "xgboost")
+ADAPTER_MODULES = {
+    "src.adapter.sklearn_adapter",
+    "src.adapter.tabpfn_adapter",
+    "src.adapter.tabicl_adapter",
+    "src.adapter.limix_adapter",
+    "src.adapter.mitra_adapter",
+    "src.adapter.orion_msp_adapter",
+    "src.adapter.orion_bix_adapter",
+}
+CLASSIFICATION_MODELS = [name for name in model_registry.MODEL_REGISTRY_CLS]
 LIGHTWEIGHT_REGRESSION_MODELS = ("linear-regression", "xgboost")
 
 
-def _make_model(model_name, registry, task_type):
-    return registry[model_name].create(task_type=task_type, params={})
+def _make_model(model_name, task_type):
+    spec = model_registry.get_model_spec(
+        ModelParams(name=model_name, task_type=task_type)
+    )
+    return spec.create(task_type=task_type, params={})
 
 
 def _as_numpy(predictions):
@@ -45,42 +58,55 @@ def _load_regression_data_for_model_smoke_test():
     return X, y
 
 
-def test_model_registry_import_does_not_load_adapter_modules():
-    adapter_modules = {
-        "src.adapter.sklearn_adapter",
-        "src.adapter.tabpfn_adapter",
-        "src.adapter.tabicl_adapter",
-        "src.adapter.limix_adapter",
-        "src.adapter.mitra_adapter",
-        "src.adapter.orion_msp_adapter",
-        "src.adapter.orion_bix_adapter",
-    }
-    for module_name in adapter_modules:
+def test_model_catalog_lookup_and_search_spaces_are_lazy():
+    for module_name in ADAPTER_MODULES:
         sys.modules.pop(module_name, None)
 
     importlib.reload(model_registry)
 
-    assert adapter_modules.isdisjoint(sys.modules)
+    spec = model_registry.get_model_spec(
+        ModelParams(name="logistic-regression", task_type="classification")
+    )
+    candidates = spec.tuning_candidates(search_space=None, overrides=None)
+
+    assert ADAPTER_MODULES.isdisjoint(sys.modules)
+    assert spec.adapter_path == "src.adapter.sklearn_adapter:LinearModelAdapter"
+    assert candidates == [
+        {"C": 0.1, "penalty": "l2", "solver": "lbfgs"},
+        {"C": 1.0, "penalty": "l2", "solver": "lbfgs"},
+        {"C": 10.0, "penalty": "l2", "solver": "lbfgs"},
+    ]
 
 
-def test_classification_registry_entries_are_lazy_model_specs():
-    assert all(
-        spec.adapter_path.startswith("src.adapter.")
-        for spec in model_registry.MODEL_REGISTRY_CLS.values()
+def test_model_catalog_reports_task_specific_unknown_models():
+    with pytest.raises(
+        ValueError,
+        match="Unknown classification model 'linear-regression'.*logistic-regression",
+    ):
+        model_registry.get_model_spec(
+            ModelParams(name="linear-regression", task_type="classification")
+        )
+
+
+def test_model_spec_uses_explicit_tuning_grid_as_the_search_space():
+    spec = model_registry.get_model_spec(
+        ModelParams(name="logistic-regression", task_type="classification")
     )
 
+    assert spec.tuning_candidates(None, {"C": [0.1, 1.0]}) == [
+        {"C": 0.1},
+        {"C": 1.0},
+    ]
+    with pytest.raises(ValueError, match="non-empty grid"):
+        spec.tuning_candidates(None, {})
+    with pytest.raises(ValueError, match="values must be non-empty"):
+        spec.tuning_candidates(None, {"C": []})
 
-def test_regression_registry_entries_are_lazy_model_specs():
-    assert all(
-        spec.adapter_path.startswith("src.adapter.")
-        for spec in model_registry.MODEL_REGISTRY_REG.values()
-    )
 
-
-@pytest.mark.parametrize("model_name", LIGHTWEIGHT_CLASSIFICATION_MODELS)
-def test_lightweight_registered_classification_models_fit_and_predict(model_name):
+@pytest.mark.parametrize("model_name", CLASSIFICATION_MODELS)
+def test_registered_classification_models_fit_and_predict(model_name):
     X, y = load_toy_data_cls()
-    model = _make_model(model_name, model_registry.MODEL_REGISTRY_CLS, "classification")
+    model = _make_model(model_name, "classification")
 
     try:
         _assert_valid_fit_and_predict(model_name, model, X, y, "classification")
@@ -88,10 +114,11 @@ def test_lightweight_registered_classification_models_fit_and_predict(model_name
         release_model(model)
 
 
+# keep regression lightweight since its not really used yet
 @pytest.mark.parametrize("model_name", LIGHTWEIGHT_REGRESSION_MODELS)
 def test_lightweight_registered_regression_models_fit_and_predict(model_name):
     X, y = _load_regression_data_for_model_smoke_test()
-    model = _make_model(model_name, model_registry.MODEL_REGISTRY_REG, "regression")
+    model = _make_model(model_name, "regression")
 
     try:
         _assert_valid_fit_and_predict(model_name, model, X, y, "regression")
