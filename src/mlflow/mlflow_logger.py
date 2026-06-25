@@ -14,6 +14,7 @@ from typing import Any
 import mlflow
 from mlflow.evaluation import Evaluation, log_evaluations
 from src.classes.pipeline import ModelRunResult, PipelineResult
+from src.config import config
 from src.mlflow.serialization import (
     pipeline_params_to_dict,
     pipeline_result_to_dict,
@@ -558,9 +559,9 @@ class MLflowPipelineLogger:
         if uv_lock.exists():
             mlflow.log_artifact(str(uv_lock), artifact_path="environment")
 
-        log_path = Path("logs/active.log")
+        log_path = Path(config.dir_log / "active.log")
         if log_path.exists():
-            mlflow.log_artifact(str(log_path), artifact_path="logs")
+            mlflow.log_artifact(str(log_path), artifact_path="environment")
 
 
 def _model_instance_ids(models: tuple[ModelParams, ...]) -> list[str]:

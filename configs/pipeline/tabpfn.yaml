@@ -26,10 +26,8 @@ training:
       inference_config: { "SUBSAMPLE_SAMPLES": 15_000 }
     tuning:
       scoring: roc_auc
-      grid:
-        n_estimators: [16]
       cv:
-        n_splits: 2
+        n_splits: 5
         shuffle: true
         random_state: 1337
 

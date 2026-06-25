@@ -4,11 +4,17 @@ from typing import Any
 import yaml
 
 from src.schemas.pipeline_schemas import PipelineParams
+from src.schemas.suite_schemas import ExperimentSuiteParams
 
 
 def load_pipeline_params(path: str | Path) -> PipelineParams:
     config_data = _load_yaml(path)
     return PipelineParams.model_validate(config_data)
+
+
+def load_experiment_suite_params(path: str | Path) -> ExperimentSuiteParams:
+    config_data = _load_yaml(path)
+    return ExperimentSuiteParams.model_validate(config_data)
 
 
 def dump_pipeline_params(params: PipelineParams, path: str | Path) -> None:

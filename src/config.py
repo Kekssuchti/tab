@@ -17,7 +17,8 @@ class Config(BaseSettings):
     dir_log: Path = dir_root / "logs"
 
     dir_configs: Path = dir_root / "configs"
-    dir_pipelines: Path = dir_root / "pipelines"
+    dir_pipelines: Path = dir_configs / "pipeline"
+    dir_suites: Path = dir_configs / "suite"
 
     dir_data: Path = dir_root / "data"
     dir_data_toy: Path = dir_data / "toy"

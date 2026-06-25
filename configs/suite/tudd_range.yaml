@@ -1,0 +1,8 @@
+name: training-size
+base_config: ../pipeline/tabpfn.yaml
+matrix:
+  - path: dataset.train_on.1.fraction
+    range:
+      start: 500
+      stop: 1500
+      step: 500
