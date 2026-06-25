@@ -20,6 +20,7 @@ def _make_dataset(start_id: int, n_rows: int) -> pd.DataFrame:
             "noise": np.linspace(1.0, 2.0, n_rows),
             "mortality": labels,
             "LOS": 24.0 + np.arange(n_rows),
+            "LOS7": labels,
             "hours_to_readmit": [12.0 if label else None for label in labels],
         }
     )

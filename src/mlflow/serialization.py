@@ -36,6 +36,8 @@ def _training_result_to_dict(result: ModelTrainingResult) -> dict[str, Any]:
         "fit_time": _json_safe(result.fit_time),
         "training_metrics": _dataclass_to_dict(result.training_metrics),
         "tuning_result": _dataclass_to_dict(result.tuning_result),
+        "error": result.error,
+        "failure_stage": result.failure_stage,
     }
 
 

@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 from src.classes.pipeline import Pipeline
@@ -25,4 +26,12 @@ def run_pipeline(config_path: str | Path):
 
 
 if __name__ == "__main__":
-    run_pipeline(Path(config.dir_configs) / "pipeline_xgb_ebm_lin.yaml")
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "config_name",
+        type=str,
+        help="Name of the pipeline config file in config/pipelines/ dir. E.g. 'default'",
+    )
+    args = parser.parse_args()
+
+    run_pipeline(Path(config.dir_pipelines) / f"{args.config_name}.yaml")

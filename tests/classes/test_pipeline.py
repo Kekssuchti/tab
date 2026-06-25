@@ -91,6 +91,12 @@ def test_pipeline_releases_each_model_before_training_next(monkeypatch):
         def __init__(self, params, default_imputer, default_scaler):
             self.params = params
 
+        def validate_model_configs(self):
+            pass
+
+        def validate_training_data(self, X_train, y_train):
+            pass
+
         def train_model(self, model_params, X_train, y_train):
             assert _ReleasablePredictor.active == 0
             return ModelTrainingResult(
@@ -123,3 +129,60 @@ def test_pipeline_releases_each_model_before_training_next(monkeypatch):
     assert _ReleasablePredictor.peak == 1
     assert _ReleasablePredictor.active == 0
     assert [tr.trained_model for tr in result.training_results] == [None, None]
+
+
+def test_pipeline_records_failed_model_and_continues(monkeypatch):
+    bundle = DatasetBundle(
+        train_data=_test_set([0, 1]),
+        test_mimic=_test_set([0, 1, 0, 1]),
+        test_tudd=_test_set([1, 0, 1, 0], signal=[0, 1, 0, 1]),
+    )
+
+    class _FakeDataset:
+        def get_dataset(self):
+            return bundle
+
+        def summarize(self, data):
+            return SimpleNamespace()
+
+    class _FakeTrainer:
+        def __init__(self, params, default_imputer, default_scaler):
+            self.params = params
+
+        def validate_model_configs(self):
+            pass
+
+        def validate_training_data(self, X_train, y_train):
+            pass
+
+        def train_model(self, model_params, X_train, y_train):
+            if model_params.name == "model-a":
+                raise ValueError("bad params")
+            return ModelTrainingResult(
+                model_name=model_params.name,
+                task_type="classification",
+                trained_model=_PredictsFromFirstColumn(),
+                tuned=False,
+                fit_time=0.2,
+            )
+
+    monkeypatch.setattr(pipeline_module, "Trainer", _FakeTrainer)
+
+    pipeline = object.__new__(Pipeline)
+    pipeline.dataset = _FakeDataset()
+    pipeline.params = SimpleNamespace(
+        run_id="run",
+        dataset=SimpleNamespace(imputer=None, scaler_encoder=None),
+        training=(
+            SimpleNamespace(name="model-a", task_type="classification"),
+            SimpleNamespace(name="model-b", task_type="classification"),
+        ),
+    )
+
+    result = pipeline.run()
+
+    assert [tr.model_name for tr in result.training_results] == ["model-a", "model-b"]
+    assert result.training_results[0].failure_stage == "training"
+    assert result.training_results[0].error == "ValueError: bad params"
+    assert result.training_results[1].succeeded
+    assert [model.model_name for model in result.model_results] == ["model-b"]

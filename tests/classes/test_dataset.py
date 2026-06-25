@@ -6,7 +6,7 @@ from src.classes import dataset as dataset_module
 from src.classes.dataset import Dataset
 from src.schemas.dataset_schemas import DatasetParams, DataSplitParams
 
-TARGET_COLUMNS = {"mortality", "LOS", "LOS3", "hours_to_readmit"}
+TARGET_COLUMNS = {"mortality", "LOS", "LOS3", "LOS7", "hours_to_readmit"}
 
 
 def _make_rows(source: str, start_id: int, n_rows: int) -> pd.DataFrame:
@@ -19,6 +19,7 @@ def _make_rows(source: str, start_id: int, n_rows: int) -> pd.DataFrame:
             "feature_value": [float(i * 10) for i in range(n_rows)],
             "mortality": [record_id % 2 for record_id in record_ids],
             "LOS": [48.0 + i for i in range(n_rows)],
+            "LOS7": [int(i % 2 == 0) for i in range(n_rows)],
             "hours_to_readmit": [12.0 if i % 3 else None for i in range(n_rows)],
         }
     )
@@ -125,7 +126,7 @@ def test_dataset_combines_fractional_and_absolute_training_splits(
 
     dataset = Dataset(
         _dataset_params(
-            target="LOS",
+            target="LOS7",
             train_size=0.5,
             train_on=(
                 DataSplitParams(dataset="mimic", fraction=0.5),
@@ -145,7 +146,7 @@ def test_dataset_combines_fractional_and_absolute_training_splits(
     assert train_by_source["mimic"].isdisjoint(bundle.test_mimic.X["record_id"])
     assert train_by_source["tudd"].isdisjoint(bundle.test_tudd.X["record_id"])
 
-    labels = _labels_by_record_id(pd.concat([mimic, tudd]), "LOS")
+    labels = _labels_by_record_id(pd.concat([mimic, tudd]), "LOS7")
     _assert_labels_match_rows(bundle.train_data.X, bundle.train_data.y, labels)
 
 

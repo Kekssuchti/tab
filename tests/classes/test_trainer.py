@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.classes.trainer import Trainer
 from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
@@ -120,8 +121,7 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
     assert len(result.tuning_result.cv_results.mean_metrics) == 2
     assert len(result.tuning_result.fold_results) == 4
     assert all(
-        "accuracy" in fold.metrics.scores
-        for fold in result.tuning_result.fold_results
+        "accuracy" in fold.metrics.scores for fold in result.tuning_result.fold_results
     )
     assert result.training_metrics is not None
     assert result.training_metrics.roc_auc is not None
@@ -236,3 +236,19 @@ def test_trainer_encodes_categorical_columns_before_xgboost():
     assert result.model_name == "xgboost"
     assert predictions.shape == (len(X), 2)
     assert np.isfinite(predictions).all()
+
+
+def test_trainer_preflight_rejects_bad_model_params():
+    trainer = Trainer(
+        params=(
+            ModelParams(
+                name="logistic-regression",
+                task_type="classification",
+                params={"bad_param": 1},
+            ),
+        ),
+        **_preprocess_pipeline(),
+    )
+
+    with pytest.raises(ValueError, match="Model preflight validation failed"):
+        trainer.validate_model_configs()

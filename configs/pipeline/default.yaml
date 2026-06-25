@@ -34,5 +34,3 @@ mlflow:
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
   experiment_name: tab
-  nested_model_runs: true
-  log_models: false

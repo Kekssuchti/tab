@@ -37,6 +37,25 @@ class Trainer:
         self.default_imputer = default_imputer
         self.default_scaler = default_scaler
 
+    def validate_model_configs(self) -> None:
+        errors: list[str] = []
+        for model_params in self.params:
+            try:
+                spec = get_model_spec(model_params)
+                self._build_preprocess_pipeline(model_params)
+                for params in self._preflight_param_sets(model_params, spec):
+                    model = None
+                    try:
+                        model = spec.create(model_params.task_type, params)
+                    finally:
+                        release_model(model)
+            except Exception as exc:
+                errors.append(f"{model_params.name}: {exc}")
+
+        if errors:
+            joined_errors = "\n- ".join(errors)
+            raise ValueError(f"Model preflight validation failed:\n- {joined_errors}")
+
     def train_models(
         self, X_train: np.ndarray, y_train: np.ndarray
     ) -> list[ModelTrainingResult]:
@@ -131,6 +150,23 @@ class Trainer:
             params_imputer=imputer,
             params_scaler=scaler,
         ).build_pipeline()
+
+    def _preflight_param_sets(
+        self,
+        model_params: ModelParams,
+        spec: ModelSpec,
+    ) -> list[dict[str, Any]]:
+        if model_params.tuning is None:
+            return [model_params.params]
+
+        grid = spec.tuning_grid(
+            model_params.tuning.search_space,
+            model_params.tuning.grid,
+        )
+        return [
+            {**model_params.params, **candidate_params}
+            for candidate_params in get_candidate_params(grid)
+        ]
 
     def _tune_model(
         self,

@@ -92,3 +92,9 @@ class ModelTrainingResult:
     fit_time: float
     training_metrics: ClassificationMetrics | RegressionMetrics | None = None
     tuning_result: TuningResult | None = None
+    error: str | None = None
+    failure_stage: str | None = None
+
+    @property
+    def succeeded(self) -> bool:
+        return self.error is None

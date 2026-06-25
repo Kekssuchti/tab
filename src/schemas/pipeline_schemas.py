@@ -21,8 +21,6 @@ class MLflowParams(StrictParams):
     artifact_location: str | None = "mlartifacts"
     experiment_name: str = "tab"
     run_name: str | None = None
-    nested_model_runs: bool = True
-    log_models: bool = False
 
 
 class PipelineParams(StrictParams):

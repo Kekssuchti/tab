@@ -15,6 +15,7 @@ from src.utils.evaluation_utils import (
     evaluate_classification_predictions,
     final_test_metrics,
 )
+from src.utils.logger import logger
 from src.utils.model_lifecycle import release_model
 
 
@@ -59,31 +60,51 @@ class Pipeline:
 
     def run(self) -> PipelineResult:
         start_time = perf_counter()
-        data = self.dataset.get_dataset()
-        dataset_summary = self.dataset.summarize(data)
-
         trainer = Trainer(
             params=self.params.training,
             default_imputer=self.params.dataset.imputer,
             default_scaler=self.params.dataset.scaler_encoder,
         )
+        trainer.validate_model_configs()
+
+        data = self.dataset.get_dataset()
+        dataset_summary = self.dataset.summarize(data)
 
         training_results = []
         model_results = []
         y_train = data.train_data.y.to_numpy()
         for model_params in self.params.training:
-            tr = trainer.train_model(
-                model_params=model_params,
-                X_train=data.train_data.X,
-                y_train=y_train,
-            )
+            model_start_time = perf_counter()
+            tr = None
+            failure_stage = "training"
             try:
+                tr = trainer.train_model(
+                    model_params=model_params,
+                    X_train=data.train_data.X,
+                    y_train=y_train,
+                )
+                failure_stage = "evaluation"
                 mr = self._evaluate_trained_model(tr, data)
                 model_results.append(mr)
-                training_results.append(tr)
+            except Exception as exc:
+                logger.exception(
+                    f"Model {model_params.name} failed during {failure_stage}; continuing"
+                )
+                if tr is None:
+                    tr = self._failed_training_result(
+                        model_params=model_params,
+                        fit_time=perf_counter() - model_start_time,
+                        failure_stage=failure_stage,
+                        exc=exc,
+                    )
+                else:
+                    tr.error = _format_exception(exc)
+                    tr.failure_stage = failure_stage
             finally:
-                release_model(tr.trained_model)
-                tr.trained_model = None
+                if tr is not None:
+                    release_model(tr.trained_model)
+                    tr.trained_model = None
+                    training_results.append(tr)
 
         return PipelineResult(
             run_id=self.params.run_id,
@@ -132,3 +153,24 @@ class Pipeline:
             metrics=metrics,
             predict_time=predict_time,
         )
+
+    @staticmethod
+    def _failed_training_result(
+        model_params,
+        fit_time: float,
+        failure_stage: str,
+        exc: Exception,
+    ) -> ModelTrainingResult:
+        return ModelTrainingResult(
+            model_name=model_params.name,
+            task_type=model_params.task_type,
+            trained_model=None,
+            tuned=False,
+            fit_time=fit_time,
+            error=_format_exception(exc),
+            failure_stage=failure_stage,
+        )
+
+
+def _format_exception(exc: Exception) -> str:
+    return f"{type(exc).__name__}: {exc}"

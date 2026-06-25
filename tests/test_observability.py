@@ -103,7 +103,6 @@ def _params(
             artifact_location=artifact_location,
             experiment_name="test-tab",
             run_name=run_name,
-            nested_model_runs=True,
         ),
     )
 
@@ -167,6 +166,8 @@ def test_pipeline_result_serialization_omits_trained_model():
     assert serialized["dataset_summary"]["train"]["row_count"] == 8
     assert "trained_model" not in serialized["training_results"][0]
     assert serialized["training_results"][0]["training_metrics"]["accuracy"] == 1.0
+    assert serialized["training_results"][0]["error"] is None
+    assert serialized["training_results"][0]["failure_stage"] is None
     assert "primary_metric" not in serialized["training_results"][0]["training_metrics"]
     assert (
         serialized["model_results"][0]["final_test_metrics"]["mimic_minus_tudd"][
@@ -176,7 +177,7 @@ def test_pipeline_result_serialization_omits_trained_model():
     )
 
 
-def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
+def test_mlflow_logger_writes_parent_and_model_runs(tmp_path):
     tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     artifact_location = str(tmp_path / "mlartifacts")
     params = _params(tracking_uri, artifact_location, run_name="friendly-run")
@@ -308,3 +309,42 @@ def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
     assert "accuracy" in set(evaluation_metrics["metric"])
     assert (tmp_path / "mlflow.db").exists()
     assert (tmp_path / "mlartifacts").exists()
+
+
+def test_mlflow_logger_writes_failed_nested_model_run(tmp_path):
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
+    artifact_location = str(tmp_path / "mlartifacts")
+    params = _params(tracking_uri, artifact_location, run_name="failed-run")
+    result = _result()
+    failed_training_result = ModelTrainingResult(
+        model_name="logistic-regression",
+        task_type="classification",
+        trained_model=None,
+        tuned=False,
+        fit_time=0.1,
+        error="ValueError: bad params",
+        failure_stage="training",
+    )
+    result = PipelineResult(
+        run_id=result.run_id,
+        dataset_summary=result.dataset_summary,
+        model_results=(),
+        training_results=(failed_training_result,),
+        total_time=0.2,
+    )
+
+    MLflowPipelineLogger().log_pipeline_run(params, result)
+
+    mlflow.set_tracking_uri(tracking_uri)
+    runs = mlflow.search_runs(
+        experiment_names=["test-tab"],
+        output_format="list",
+    )
+    child = next(
+        run for run in runs if run.data.tags["mlflow.runName"] == "logistic-regression"
+    )
+
+    assert child.data.tags["status"] == "failed"
+    assert child.data.params["model.failure_stage"] == "training"
+    assert child.data.params["model.error"] == "ValueError: bad params"
+    assert child.data.metrics["train.fit_time"] == 0.1

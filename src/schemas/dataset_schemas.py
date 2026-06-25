@@ -13,7 +13,7 @@ from src.schemas.preprocessing_schemas import (
 )
 
 DatasetName = Literal["mimic", "tudd", "mimic_readmission", "tudd_readmission"]
-Target = Literal["mortality", "LOS", "hours_to_readmit"]
+Target = Literal["mortality", "LOS7", "hours_to_readmit"]
 
 
 @dataclass
