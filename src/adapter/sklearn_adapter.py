@@ -2,7 +2,12 @@ from timeit import default_timer as timer
 from typing import Literal
 
 import numpy as np
+from interpret.glassbox import (
+    ExplainableBoostingClassifier,
+    ExplainableBoostingRegressor,
+)
 from sklearn.linear_model import LinearRegression, LogisticRegression
+from xgboost import XGBClassifier, XGBRegressor
 
 from src.interfaces.model_interface import ModelAdapter
 from src.schemas.base_schemas import TaskType
@@ -46,12 +51,8 @@ class XGBoostAdapter(ModelAdapter):
 
     def _load_model(self):
         if self.task_type == "classification":
-            from xgboost import XGBClassifier
-
             params = {"eval_metric": "logloss", **self.kwargs}
             return XGBClassifier(**params)
-
-        from xgboost import XGBRegressor
 
         return XGBRegressor(**self.kwargs)
 
@@ -77,11 +78,7 @@ class EBMAdapter(ModelAdapter):
 
     def _load_model(self):
         if self.task_type == "classification":
-            from interpret.glassbox import ExplainableBoostingClassifier
-
             return ExplainableBoostingClassifier(**self.kwargs)
-
-        from interpret.glassbox import ExplainableBoostingRegressor
 
         return ExplainableBoostingRegressor(**self.kwargs)
 

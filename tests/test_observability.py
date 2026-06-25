@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import mlflow
+import pytest
 from src.classes.pipeline import (
     ModelRunResult,
     PipelineResult,
@@ -77,8 +78,7 @@ def _params(
     run_name: str | None = None,
 ) -> PipelineParams:
     return PipelineParams(
-        run_number=7,
-        run_date="2026-06-23",
+        run_id="test-pipeline-id",
         dataset={
             "target": "mortality",
             "random_state": 42,
@@ -152,7 +152,7 @@ def _result(*, tuned: bool = False) -> PipelineResult:
         ),
     )
     return PipelineResult(
-        run_id="0007_2026-06-23",
+        run_id="test-pipeline-id",
         dataset_summary=dataset_summary,
         model_results=(model_result,),
         training_results=(training_result,),
@@ -163,7 +163,7 @@ def _result(*, tuned: bool = False) -> PipelineResult:
 def test_pipeline_result_serialization_omits_trained_model():
     serialized = pipeline_result_to_dict(_result())
 
-    assert serialized["run_id"] == "0007_2026-06-23"
+    assert serialized["run_id"] == "test-pipeline-id"
     assert serialized["dataset_summary"]["train"]["row_count"] == 8
     assert "trained_model" not in serialized["training_results"][0]
     assert serialized["training_results"][0]["training_metrics"]["accuracy"] == 1.0
@@ -197,7 +197,12 @@ def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
     )
 
     run_names = {run.data.tags["mlflow.runName"] for run in runs}
-    assert run_names == {"friendly-run", "logistic-regression", "cv0", "cv1"}
+    assert run_names == {
+        "friendly-run",
+        "logistic-regression",
+        "logistic-regression/cv00",
+        "logistic-regression/cv01",
+    }
 
     parent = next(
         run for run in runs if run.data.tags["mlflow.runName"] == "friendly-run"
@@ -205,32 +210,63 @@ def test_mlflow_logger_writes_parent_and_nested_model_runs(tmp_path):
     child = next(
         run for run in runs if run.data.tags["mlflow.runName"] == "logistic-regression"
     )
-    cv0 = next(run for run in runs if run.data.tags["mlflow.runName"] == "cv0")
-    cv1 = next(run for run in runs if run.data.tags["mlflow.runName"] == "cv1")
+    cv0 = next(
+        run
+        for run in runs
+        if run.data.tags["mlflow.runName"] == "logistic-regression/cv00"
+    )
+    cv1 = next(
+        run
+        for run in runs
+        if run.data.tags["mlflow.runName"] == "logistic-regression/cv01"
+    )
 
     assert parent.data.params["dataset.target"] == "mortality"
+    assert parent.data.params["run_id"] == "test-pipeline-id"
     assert parent.data.params["mlflow.run_name"] == "friendly-run"
     assert parent.data.params["dataset.train.row_count"] == "8"
     assert (
         parent.data.params["model.logistic-regression.preprocessing.override"] == "True"
     )
     assert parent.data.tags["run_type"] == "pipeline"
+    assert parent.data.tags["pipeline_id"] == "test-pipeline-id"
+    assert parent.data.tags["run_id"] == "test-pipeline-id"
     assert parent.data.tags["trained_on"] == "mimic"
+    assert parent.data.tags["trained_models"] == "logistic-regression"
     assert parent.data.metrics["pipeline.total_time"] == 0.5
+    assert not any(
+        metric_name.startswith("logistic-regression.")
+        for metric_name in parent.data.metrics
+    )
+
     assert child.data.tags["mlflow.parentRunId"] == parent.info.run_id
     assert child.data.tags["run_type"] == "model"
+    assert child.data.tags["pipeline_id"] == "test-pipeline-id"
+    assert child.data.tags["pipeline_mlflow_run_id"] == parent.info.run_id
+    assert child.data.tags["model_mlflow_run_id"] == child.info.run_id
     assert child.data.tags["model_name"] == "logistic-regression"
     assert child.data.tags["model_instance"] == "logistic-regression"
     assert child.data.tags["trained_on"] == "mimic"
     assert child.data.metrics["model.total_time"] == 0.27
     assert child.data.metrics["train.accuracy"] == 1.0
-    assert child.data.metrics["cv.best.accuracy"] == 0.95
+    assert "cv.best.accuracy" not in child.data.metrics
+    assert "cv.best_score" not in child.data.metrics
     assert child.data.metrics["test.mimic_minus_tudd.accuracy"] == 0.0
+
     assert cv0.data.tags["mlflow.parentRunId"] == child.info.run_id
     assert cv0.data.tags["run_type"] == "cv_candidate"
+    assert cv0.data.tags["pipeline_id"] == "test-pipeline-id"
+    assert cv0.data.tags["pipeline_mlflow_run_id"] == parent.info.run_id
+    assert cv0.data.tags["model_mlflow_run_id"] == child.info.run_id
     assert cv0.data.tags["model_name"] == "logistic-regression"
-    assert cv0.data.tags["candidate"] == "cv0"
+    assert cv0.data.tags["candidate"] == "cv00"
+    assert cv0.data.tags["candidate_rank"] == "2"
+    assert cv1.data.tags["candidate_rank"] == "1"
+    assert cv0.data.params["cv.candidate"] == "cv00"
+    assert cv0.data.params["cv.candidate_index"] == "0"
+    assert cv0.data.metrics["cv.rank"] == 2.0
     assert cv0.data.metrics["cv.mean.accuracy"] == 0.75
+    assert cv0.data.metrics["cv.std.accuracy"] == pytest.approx(0.05)
     assert cv1.data.metrics["cv.mean.accuracy"] == 0.95
     assert cv1.data.metrics["cv.accuracy"] == 1.0
 

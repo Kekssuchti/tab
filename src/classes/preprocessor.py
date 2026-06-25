@@ -37,7 +37,6 @@ class Preprocessor:
         # since only sex is categorical and we do not have missing values there (we removed the ones missing)
         # we only need imputation for numerical values
         method = self.imputer.imputation_method
-        logger.info(f"data imputation via: {method}")
 
         if method == "mean":
             return Pipeline(
@@ -83,7 +82,6 @@ class Preprocessor:
 
     def _build_scaler(self) -> Pipeline:
         scaler_type = self.scaler.type
-        logger.info(f"scaling data using: {scaler_type}")
         if scaler_type == "standardization":
             return Pipeline([("scaler", StandardScaler())])
         elif scaler_type == "none":

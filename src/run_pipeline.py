@@ -25,4 +25,4 @@ def run_pipeline(config_path: str | Path):
 
 
 if __name__ == "__main__":
-    run_pipeline(Path(config.dir_configs) / "pipeline_tabpfn.yaml")
+    run_pipeline(Path(config.dir_configs) / "pipeline_xgb_ebm_lin.yaml")

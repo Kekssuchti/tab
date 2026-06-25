@@ -11,6 +11,10 @@ from src.schemas.plotting_schemas import PlottingParams
 from src.schemas.training_schemas import ModelParams
 
 
+def _default_run_id() -> str:
+    return f"{date.today().isoformat()}_{uuid4().hex}"
+
+
 class MLflowParams(StrictParams):
     enabled: bool = True
     tracking_uri: str = "sqlite:///mlflow.db"
@@ -22,12 +26,8 @@ class MLflowParams(StrictParams):
 
 
 class PipelineParams(StrictParams):
+    run_id: str = Field(default_factory=_default_run_id)
     dataset: DatasetParams = Field()
     training: tuple[ModelParams, ...] = (ModelParams(name="tabpfn-3"),)
     plotting: PlottingParams = Field()
     mlflow: MLflowParams = Field(default_factory=MLflowParams)
-
-    @property
-    def run_id(self) -> str:
-        # today iso format + random uuid
-        return f"{date.today().isoformat()}_{uuid4().hex}"

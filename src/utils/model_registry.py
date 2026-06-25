@@ -70,6 +70,7 @@ MODEL_REGISTRY_CLS = {
                 "n_estimators": [100, 300],
                 "max_depth": [3, 5],
                 "learning_rate": [0.03, 0.1],
+                "gamma": [0.0, 0.1],
                 "subsample": [0.8, 1.0],
             }
         },
@@ -78,9 +79,9 @@ MODEL_REGISTRY_CLS = {
         EBMAdapter,
         search_spaces={
             "default": {
-                "max_bins": [128, 256],
-                "learning_rate": [0.01, 0.05],
-                "interactions": [0, 5],
+                "max_bins": [128, 256, 1024],
+                "learning_rate": [0.015, 0.03, 0.05],
+                "interactions": [0, 1, 3, 5],
             }
         },
     ),

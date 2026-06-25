@@ -7,6 +7,7 @@ import warnings
 from collections import Counter, defaultdict
 from importlib import metadata
 from pathlib import Path
+from statistics import pstdev
 from tempfile import TemporaryDirectory
 from typing import Any
 
@@ -18,7 +19,7 @@ from src.mlflow.serialization import (
     pipeline_result_to_dict,
 )
 from src.schemas.pipeline_schemas import PipelineParams
-from src.schemas.training_schemas import ModelParams, ModelTrainingResult
+from src.schemas.training_schemas import FoldResult, ModelParams, ModelTrainingResult
 from src.utils.evaluation_utils import (
     ClassificationMetricDeltas,
     ClassificationMetrics,
@@ -41,7 +42,7 @@ class MLflowPipelineLogger:
             temp_dir = Path(temp_dir_name)
             artifact_paths = self._write_artifacts(params, result, temp_dir)
 
-            with mlflow.start_run(run_name=_run_name(params)):
+            with mlflow.start_run(run_name=_run_name(params)) as pipeline_run:
                 self._log_run_tags(params, config_path)
                 self._log_run_params(params)
                 self._log_dataset_summary(result)
@@ -50,13 +51,20 @@ class MLflowPipelineLogger:
                 self._log_artifacts(artifact_paths, config_path)
 
                 if params.mlflow.nested_model_runs:
-                    self._log_model_runs(params, result, artifact_paths["cv_dir"])
+                    self._log_model_runs(
+                        params,
+                        result,
+                        artifact_paths["cv_dir"],
+                        pipeline_mlflow_run_id=pipeline_run.info.run_id,
+                    )
 
     def _log_model_runs(
         self,
         params: PipelineParams,
         result: PipelineResult,
         cv_dir: Path,
+        *,
+        pipeline_mlflow_run_id: str,
     ) -> None:
         model_ids = _model_instance_ids(params.training)
         for model_id, model_params, training_result, model_result in zip(
@@ -66,9 +74,10 @@ class MLflowPipelineLogger:
             result.model_results,
             strict=False,
         ):
-            with mlflow.start_run(run_name=model_params.name, nested=True):
-                mlflow.set_tag("parent_run_id", result.run_id)
-                mlflow.set_tag("pipeline_run_id", result.run_id)
+            with mlflow.start_run(run_name=model_id, nested=True) as model_run:
+                mlflow.set_tag("pipeline_id", params.run_id)
+                mlflow.set_tag("pipeline_mlflow_run_id", pipeline_mlflow_run_id)
+                mlflow.set_tag("model_mlflow_run_id", model_run.info.run_id)
                 mlflow.set_tag("run_type", "model")
                 mlflow.set_tag("model_instance", model_id)
                 mlflow.set_tag("model_name", model_params.name)
@@ -91,6 +100,8 @@ class MLflowPipelineLogger:
                     model_id,
                     model_params,
                     training_result,
+                    pipeline_mlflow_run_id=pipeline_mlflow_run_id,
+                    model_mlflow_run_id=model_run.info.run_id,
                 )
 
                 cv_path = cv_dir / f"{model_id}.json"
@@ -103,31 +114,45 @@ class MLflowPipelineLogger:
         model_id: str,
         model_params: ModelParams,
         training_result: ModelTrainingResult,
+        *,
+        pipeline_mlflow_run_id: str,
+        model_mlflow_run_id: str,
     ) -> None:
         tuning_result = training_result.tuning_result
         if tuning_result is None:
             return
 
+        ranks = _candidate_ranks(tuning_result.cv_results.mean_scores)
         for candidate_index, candidate_params in enumerate(
             tuning_result.cv_results.params
         ):
-            candidate_name = f"cv{candidate_index}"
+            candidate_label = f"cv{candidate_index:02d}"
+            candidate_name = f"{model_id}/{candidate_label}"
+            candidate_folds = [
+                fold
+                for fold in tuning_result.fold_results
+                if fold.candidate_index == candidate_index
+            ]
             with mlflow.start_run(run_name=candidate_name, nested=True):
-                mlflow.set_tag("parent_run_id", params.run_id)
-                mlflow.set_tag("pipeline_run_id", params.run_id)
+                mlflow.set_tag("pipeline_id", params.run_id)
+                mlflow.set_tag("pipeline_mlflow_run_id", pipeline_mlflow_run_id)
+                mlflow.set_tag("model_mlflow_run_id", model_mlflow_run_id)
                 mlflow.set_tag("run_type", "cv_candidate")
                 mlflow.set_tag("model_instance", model_id)
                 mlflow.set_tag("model_name", model_params.name)
-                mlflow.set_tag("candidate", candidate_name)
+                mlflow.set_tag("candidate", candidate_label)
                 mlflow.set_tag("candidate_index", str(candidate_index))
+                mlflow.set_tag("candidate_rank", str(ranks[candidate_index]))
                 mlflow.set_tag("task_type", model_params.task_type)
                 mlflow.set_tag("trained_on", _trained_on(params))
                 mlflow.set_tag("train_sources", _train_sources(params))
 
-                mlflow.log_param("cv.candidate", candidate_name)
+                mlflow.log_param("cv.candidate", candidate_label)
+                mlflow.log_param("cv.candidate_index", candidate_index)
                 for key, value in candidate_params.items():
                     mlflow.log_param(f"cv.params.{key}", _param_value(value))
 
+                self._log_metric("cv.rank", ranks[candidate_index])
                 self._log_metric(
                     "cv.mean_score",
                     tuning_result.cv_results.mean_scores[candidate_index],
@@ -140,16 +165,17 @@ class MLflowPipelineLogger:
                     "cv.mean",
                     tuning_result.cv_results.mean_metrics[candidate_index],
                 )
+                for name, value in _metric_stds(candidate_folds).items():
+                    self._log_metric(f"cv.std.{name}", value)
 
-                for fold in tuning_result.fold_results:
-                    if fold.candidate_index != candidate_index:
-                        continue
+                for fold in candidate_folds:
                     self._log_metrics("cv", fold.metrics, step=fold.fold_index)
                     self._log_metric("cv.time", fold.time, step=fold.fold_index)
 
     def _log_run_tags(self, params: PipelineParams, config_path: Path | None) -> None:
         tags = {
             "run_type": "pipeline",
+            "pipeline_id": params.run_id,
             "run_id": params.run_id,
             "target": params.dataset.target,
             "task_type": "classification"
@@ -157,6 +183,9 @@ class MLflowPipelineLogger:
             else "regression",
             "trained_on": _trained_on(params),
             "train_sources": _train_sources(params),
+            "trained_models": ",".join(
+                model_params.name for model_params in params.training
+            ),
         }
 
         mlflow.set_tags(
@@ -208,17 +237,6 @@ class MLflowPipelineLogger:
 
     def _log_run_metrics(self, result: PipelineResult) -> None:
         self._log_metric("pipeline.total_time", result.total_time)
-
-        for model_id, training_result, model_result in zip(
-            _result_model_instance_ids(result.training_results),
-            result.training_results,
-            result.model_results,
-            strict=False,
-        ):
-            self._log_model_params(model_id, None, training_result, nested=False)
-            self._log_model_metrics(
-                model_id, training_result, model_result, nested=False
-            )
 
     def _log_model_config_params(
         self, model_id: str, model_params: ModelParams
@@ -535,6 +553,10 @@ class MLflowPipelineLogger:
         if uv_lock.exists():
             mlflow.log_artifact(str(uv_lock), artifact_path="environment")
 
+        log_path = Path("logs/active.log")
+        if log_path.exists():
+            mlflow.log_artifact(str(log_path), artifact_path="logs")
+
 
 def _model_instance_ids(models: tuple[ModelParams, ...]) -> list[str]:
     counts = Counter(model.name for model in models)
@@ -608,6 +630,7 @@ def _make_evaluation(
             targets={"target": params.dataset.target},
             metrics=metrics,
             tags={
+                "pipeline_id": params.run_id,
                 "model_name": model_name,
                 "model_instance": model_id,
                 "dataset": dataset_name,
@@ -644,6 +667,29 @@ def _evaluation_metric_rows(
             }
         )
     return rows
+
+
+def _candidate_ranks(scores: list[float]) -> list[int]:
+    ranked_indices = sorted(
+        range(len(scores)), key=lambda index: scores[index], reverse=True
+    )
+    ranks = [0] * len(scores)
+    for rank, index in enumerate(ranked_indices, start=1):
+        ranks[index] = rank
+    return ranks
+
+
+def _metric_stds(folds: list[FoldResult]) -> dict[str, float]:
+    values_by_metric: defaultdict[str, list[float]] = defaultdict(list)
+    for fold in folds:
+        for name, value in fold.metrics.scores.items():
+            values_by_metric[name].append(float(value))
+
+    return {
+        name: float(pstdev(values))
+        for name, values in values_by_metric.items()
+        if values
+    }
 
 
 def _table_columns(rows: list[dict[str, str | float]]) -> dict[str, list[str | float]]:

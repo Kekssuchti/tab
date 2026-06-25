@@ -56,17 +56,38 @@ class Trainer:
         y_train: np.ndarray,
     ) -> ModelTrainingResult:
         logger.info(f"Training model: {model_params.name}")
+
+        # way to complicated just for good logging but idk
+        if model_params.preprocessing:
+            if model_params.preprocessing.imputer:
+                imputer = model_params.preprocessing.imputer
+            else:
+                imputer = self.default_imputer.imputation_method
+            if model_params.preprocessing.scaler_encoder:
+                scaler_encoder = model_params.preprocessing.scaler_encoder.type
+            else:
+                scaler_encoder = self.default_scaler.type
+        else:
+            imputer = self.default_imputer.imputation_method
+            scaler_encoder = self.default_scaler.type
+
+        logger.info(f"data imputation via: {imputer}")
+        logger.info(f"scaling data using: {scaler_encoder}")
+
         spec = get_model_spec(model_params)
 
         if model_params.tuning is None:
             trained_model, fit_time = self._fit_model(
                 model_params, spec, model_params.params, X_train, y_train
             )
-            training_metrics = self._training_metrics(
+            logger.info(f"Model {model_params.name} fit in {fit_time:.3f}s")
+
+            training_metrics, predict_time = self._training_metrics(
                 model_params, trained_model, X_train, y_train
             )
+            logger.info(f"Training predictions took {predict_time:.3f}s")
+            logger.info(f"Training metrics: {training_metrics}")
 
-            logger.info(f"Model {model_params.name} fit in {fit_time:.3f}s")
             return ModelTrainingResult(
                 model_name=model_params.name,
                 task_type=model_params.task_type,
@@ -122,6 +143,7 @@ class Trainer:
         if tuning is None:
             raise ValueError("Tuning requested without tuning parameters")
 
+        logger.info(f"Start tuning: {model_params.name}")
         grid = spec.tuning_grid(tuning.search_space, tuning.grid)
         candidates = get_candidate_params(grid)
         cv = build_cv(model_params, tuning)
@@ -165,9 +187,12 @@ class Trainer:
                         self._take_rows(y_train, validation_index),
                     )
 
-                    candidate_scores.append(classification_score(metrics, tuning.scoring))
+                    candidate_scores.append(
+                        classification_score(metrics, tuning.scoring)
+                    )
                     candidate_metrics.append(metrics)
                     candidate_times.append(timer() - fold_start)
+
                     fold_results.append(
                         FoldResult(
                             candidate_index=candidate_index,
@@ -194,18 +219,20 @@ class Trainer:
         best_index = int(np.argmax(mean_scores))
         best_params = candidates[best_index]
 
-        start = timer()
-        trained_model, _ = self._fit_model(
+        logger.info(f"CV Done. Best params: {best_params}")
+        trained_model, fit_time = self._fit_model(
             model_params,
             spec,
             {**model_params.params, **best_params},
             X_train,
             y_train,
         )
-        fit_time = timer() - start
-        training_metrics = self._training_metrics(
+        training_metrics, predict_time = self._training_metrics(
             model_params, trained_model, X_train, y_train
         )
+
+        logger.info(f"Model {model_params.name} fit in {fit_time:.3f}s")
+        logger.info(f"Training predictions took {predict_time:.3f}s")
 
         tuning_result = TuningResult(
             best_params=best_params,
@@ -223,7 +250,7 @@ class Trainer:
         )
 
         logger.info(
-            f"Model {model_params.name} tuning complete in {tuning_result.total_time:.3f}s. "
+            f"Model tuning complete in {tuning_result.total_time:.3f}s. "
             f"Best {tuning.scoring}: {tuning_result.best_score:.4f}"
         )
 
@@ -249,12 +276,12 @@ class Trainer:
         model: ModelAdapter,
         X_train,
         y_train,
-    ) -> ClassificationMetrics | None:
+    ) -> tuple[ClassificationMetrics | None, float]:
         if model_params.task_type != "classification":
-            return None
+            return None, 0.0
 
-        predictions, _ = model.predict(X_train)
-        return evaluate_classification_predictions(predictions, y_train)
+        predictions, predict_time = model.predict(X_train)
+        return evaluate_classification_predictions(predictions, y_train), predict_time
 
     @staticmethod
     def _cleanup_model(model: ModelAdapter) -> None:
