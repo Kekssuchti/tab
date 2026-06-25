@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
+from src.utils.model_lifecycle import release_model
 from src.utils.model_registry import MODEL_REGISTRY_CLS, MODEL_REGISTRY_REG
 
 LIGHTWEIGHT_CLASSIFICATION_MODELS = ("logistic-regression", "xgboost")
@@ -18,7 +19,7 @@ def _as_numpy(predictions):
     return np.asarray(predictions)
 
 
-def _assert_valid_fit_and_predict(model_name, model, X, y):
+def _assert_valid_fit_and_predict(model_name, model, X, y, task_type):
     fit_time = model.fit(X, y)
     predictions, predict_time = model.predict(X)
 
@@ -27,6 +28,8 @@ def _assert_valid_fit_and_predict(model_name, model, X, y):
     assert fit_time >= 0, f"{model_name} returned invalid fit time"
     assert predict_time >= 0, f"{model_name} returned invalid predict time"
     assert len(predictions) == len(X), f"{model_name} returned wrong prediction count"
+    if task_type == "classification":
+        assert predictions.ndim == 2, f"{model_name} must return class probabilities"
     assert np.isfinite(predictions).all(), (
         f"{model_name} returned non-finite predictions"
     )
@@ -52,7 +55,10 @@ def test_lightweight_registered_classification_models_fit_and_predict(model_name
     X, y = load_toy_data_cls()
     model = _make_model(model_name, MODEL_REGISTRY_CLS, "classification")
 
-    _assert_valid_fit_and_predict(model_name, model, X, y)
+    try:
+        _assert_valid_fit_and_predict(model_name, model, X, y, "classification")
+    finally:
+        release_model(model)
 
 
 @pytest.mark.parametrize("model_name", MODEL_REGISTRY_REG)
@@ -60,4 +66,7 @@ def test_lightweight_registered_regression_models_fit_and_predict(model_name):
     X, y = _load_regression_data_for_model_smoke_test()
     model = _make_model(model_name, MODEL_REGISTRY_REG, "regression")
 
-    _assert_valid_fit_and_predict(model_name, model, X, y)
+    try:
+        _assert_valid_fit_and_predict(model_name, model, X, y, "regression")
+    finally:
+        release_model(model)

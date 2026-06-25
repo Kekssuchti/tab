@@ -91,42 +91,40 @@ class FinalTestMetrics:
     mimic_minus_tudd: ClassificationMetricDeltas
 
 
+@dataclass(frozen=True)
+class ClassificationPredictionBatch:
+    probabilities: np.ndarray
+    y_true: np.ndarray
+    y_pred: np.ndarray
+    n_classes: int
+
+
 def evaluate_classification_predictions(
     predictions: np.ndarray,
     y_true,
 ) -> ClassificationMetrics:
-    y_true = np.asarray(y_true).ravel()
-    predictions = np.asarray(predictions)
+    batch = classification_prediction_batch(predictions, y_true)
 
-    if predictions.ndim == 2:
-        y_true = LabelEncoder().fit_transform(y_true)
-        y_pred = predictions.argmax(axis=1)
-        n_classes = predictions.shape[1]
+    if batch.n_classes == 2:
+        roc_auc = float(roc_auc_score(batch.y_true, batch.probabilities[:, 1]))
+        prc_auc = float(average_precision_score(batch.y_true, batch.probabilities[:, 1]))
     else:
-        encoder = LabelEncoder().fit(np.concatenate([y_true, predictions.ravel()]))
-        y_true = encoder.transform(y_true)
-        y_pred = encoder.transform(predictions.ravel())
-        n_classes = len(np.unique(y_true))
+        roc_auc = float(
+            roc_auc_score(batch.y_true, batch.probabilities, multi_class="ovr")
+        )
+        classes = np.arange(batch.n_classes)
+        y_binary = label_binarize(batch.y_true, classes=classes)
+        prc_auc = float(
+            average_precision_score(y_binary, batch.probabilities, average="macro")
+        )
 
-    roc_auc = None
-    prc_auc = None
-    if predictions.ndim == 2:
-        if n_classes == 2:
-            roc_auc = float(roc_auc_score(y_true, predictions[:, 1]))
-            prc_auc = float(average_precision_score(y_true, predictions[:, 1]))
-        else:
-            roc_auc = float(roc_auc_score(y_true, predictions, multi_class="ovr"))
-            classes = np.arange(n_classes)
-            y_binary = label_binarize(y_true, classes=classes)
-            prc_auc = float(
-                average_precision_score(y_binary, predictions, average="macro")
-            )
-
-    average = _classification_average(n_classes)
-    f1 = float(f1_score(y_true, y_pred, average=average))
-    accuracy = float(accuracy_score(y_true, y_pred))
-    sensitivity = float(recall_score(y_true, y_pred, average=average))
-    precision = float(precision_score(y_true, y_pred, average=average, zero_division=0))
+    average = _classification_average(batch.n_classes)
+    f1 = float(f1_score(batch.y_true, batch.y_pred, average=average))
+    accuracy = float(accuracy_score(batch.y_true, batch.y_pred))
+    sensitivity = float(recall_score(batch.y_true, batch.y_pred, average=average))
+    precision = float(
+        precision_score(batch.y_true, batch.y_pred, average=average, zero_division=0)
+    )
 
     return ClassificationMetrics(
         roc_auc=roc_auc,
@@ -135,7 +133,38 @@ def evaluate_classification_predictions(
         accuracy=accuracy,
         sensitivity=sensitivity,
         precision=precision,
-        n_classes=n_classes,
+        n_classes=batch.n_classes,
+    )
+
+
+def classification_prediction_batch(
+    predictions: np.ndarray,
+    y_true,
+) -> ClassificationPredictionBatch:
+    y_true = np.asarray(y_true).ravel()
+    probabilities = np.asarray(predictions)
+
+    if probabilities.ndim != 2:
+        raise ValueError(
+            "Classification adapters must return a 2D class-probability array "
+            "with shape (n_samples, n_classes)"
+        )
+    if probabilities.shape[0] != y_true.shape[0]:
+        raise ValueError(
+            "Classification prediction row count does not match y_true: "
+            f"got {probabilities.shape[0]} predictions for {y_true.shape[0]} labels"
+        )
+    if probabilities.shape[1] < 2:
+        raise ValueError("Classification probabilities must include at least two classes")
+    if not np.isfinite(probabilities).all():
+        raise ValueError("Classification probabilities must be finite")
+
+    y_true = LabelEncoder().fit_transform(y_true)
+    return ClassificationPredictionBatch(
+        probabilities=probabilities,
+        y_true=y_true,
+        y_pred=probabilities.argmax(axis=1),
+        n_classes=probabilities.shape[1],
     )
 
 

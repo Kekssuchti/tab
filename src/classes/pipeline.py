@@ -16,7 +16,7 @@ from src.utils.evaluation_utils import (
     final_test_metrics,
 )
 from src.utils.logger import logger
-from src.utils.model_lifecycle import release_model
+from src.utils.model_lifecycle import release_training_result_model
 
 
 @dataclass(frozen=True)
@@ -102,8 +102,7 @@ class Pipeline:
                     tr.failure_stage = failure_stage
             finally:
                 if tr is not None:
-                    release_model(tr.trained_model)
-                    tr.trained_model = None
+                    release_training_result_model(tr)
                     training_results.append(tr)
 
         return PipelineResult(

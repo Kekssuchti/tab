@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
 from timeit import default_timer as timer
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 from numpy import ndarray
 
 from src.schemas.base_schemas import TaskType
+
+PredictionOutput = tuple[ndarray, float]
 
 
 class ModelAdapter(ABC):
@@ -17,26 +19,25 @@ class ModelAdapter(ABC):
     @abstractmethod
     def fit(self, X_train, y_train) -> float:
         """
-        Fit model.
-        For tabular foundation model this doesnt do much except the preprocessing steps for training data
+        Fit the model.
+
+        Tabular foundation model adapters may only cache the training data here.
 
         Returns:
-            Training time in ms
+            Fit time in seconds.
         """
         pass
 
     @abstractmethod
-    def predict(self, X_test) -> tuple[ndarray, float]:
+    def predict(self, X_test) -> PredictionOutput:
         """
-        Fit model.
-        For tabular foundation model this is where the ICL happens
+        Predict for a fitted model.
+
+        Classification adapters must return class probabilities with shape
+        (n_samples, n_classes). Regression adapters return predictions.
 
         Returns:
-            Prediction probability for classification model
-            Prediction for regression model
-
-            and
-            Prediction time in ms (since this is realistically our "train" time compared to classical ML)
+            Prediction values and prediction time in seconds.
         """
         pass
 
@@ -60,6 +61,9 @@ class ModelAdapter(ABC):
             cpu()
 
         self.model = None
+        for attr in ("X_train", "y_train"):
+            if hasattr(self, attr):
+                setattr(self, attr, None)
 
     def predict_from_estimator(self, X_test) -> ndarray:
         if self.task_type == "classification" and hasattr(self.model, "predict_proba"):
@@ -81,13 +85,16 @@ class PreprocessedModelAdapter(ModelAdapter):
         self.adapter.fit(X_train_processed, y_train)
         return timer() - start
 
-    def predict(self, X_test) -> tuple[ndarray, float]:
+    def predict(self, X_test) -> PredictionOutput:
         start = timer()
         X_test_processed = self.preprocess_pipeline.transform(X_test)
         predictions, _ = self.adapter.predict(X_test_processed)
         return predictions, timer() - start
 
     def release(self) -> None:
-        self.adapter.release()
+        adapter = getattr(self, "adapter", None)
+        if adapter is not None:
+            adapter.release()
+        self.adapter = None
         self.model = None
         self.preprocess_pipeline = None

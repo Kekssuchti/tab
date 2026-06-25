@@ -34,6 +34,14 @@ class _ReleasablePredictor(_PredictsFromFirstColumn):
         type(self).active -= 1
 
 
+class _FailingReleasablePredictor(_ReleasablePredictor):
+    active = 0
+    peak = 0
+
+    def predict(self, X_test):
+        raise RuntimeError("bad evaluation")
+
+
 def _test_set(labels, signal=None):
     y = pd.Series(labels)
     signal = labels if signal is None else signal
@@ -186,3 +194,66 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
     assert result.training_results[0].error == "ValueError: bad params"
     assert result.training_results[1].succeeded
     assert [model.model_name for model in result.model_results] == ["model-b"]
+
+
+def test_pipeline_releases_model_after_evaluation_failure_and_continues(monkeypatch):
+    _FailingReleasablePredictor.active = 0
+    _FailingReleasablePredictor.peak = 0
+    _ReleasablePredictor.active = 0
+    _ReleasablePredictor.peak = 0
+    bundle = DatasetBundle(
+        train_data=_test_set([0, 1]),
+        test_mimic=_test_set([0, 1, 0, 1]),
+        test_tudd=_test_set([1, 0, 1, 0], signal=[0, 1, 0, 1]),
+    )
+
+    class _FakeDataset:
+        def get_dataset(self):
+            return bundle
+
+        def summarize(self, data):
+            return SimpleNamespace()
+
+    class _FakeTrainer:
+        def __init__(self, params, default_imputer, default_scaler):
+            self.params = params
+
+        def validate_model_configs(self):
+            pass
+
+        def train_model(self, model_params, X_train, y_train):
+            model = (
+                _FailingReleasablePredictor()
+                if model_params.name == "model-a"
+                else _ReleasablePredictor()
+            )
+            return ModelTrainingResult(
+                model_name=model_params.name,
+                task_type="classification",
+                trained_model=model,
+                tuned=False,
+                fit_time=0.2,
+            )
+
+    monkeypatch.setattr(pipeline_module, "Trainer", _FakeTrainer)
+
+    pipeline = object.__new__(Pipeline)
+    pipeline.dataset = _FakeDataset()
+    pipeline.params = SimpleNamespace(
+        run_id="run",
+        dataset=SimpleNamespace(imputer=None, scaler_encoder=None),
+        training=(
+            SimpleNamespace(name="model-a", task_type="classification"),
+            SimpleNamespace(name="model-b", task_type="classification"),
+        ),
+    )
+
+    result = pipeline.run()
+
+    assert result.training_results[0].failure_stage == "evaluation"
+    assert result.training_results[0].error == "RuntimeError: bad evaluation"
+    assert result.training_results[0].trained_model is None
+    assert result.training_results[1].succeeded
+    assert [model.model_name for model in result.model_results] == ["model-b"]
+    assert _FailingReleasablePredictor.active == 0
+    assert _ReleasablePredictor.active == 0

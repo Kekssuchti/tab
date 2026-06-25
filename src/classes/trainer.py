@@ -56,18 +56,6 @@ class Trainer:
             joined_errors = "\n- ".join(errors)
             raise ValueError(f"Model preflight validation failed:\n- {joined_errors}")
 
-    def train_models(
-        self, X_train: np.ndarray, y_train: np.ndarray
-    ) -> list[ModelTrainingResult]:
-        logger.info("Starting with model training")
-        results: list[ModelTrainingResult] = []
-
-        for model_params in self.params:
-            result = self.train_model(model_params, X_train, y_train)
-            results.append(result)
-
-        return results
-
     def train_model(
         self,
         model_params: ModelParams,
@@ -76,26 +64,26 @@ class Trainer:
     ) -> ModelTrainingResult:
         logger.info(f"Training model: {model_params.name}")
 
-        # way to complicated just for good logging but idk
-        if model_params.preprocessing:
-            if model_params.preprocessing.imputer:
-                imputer = model_params.preprocessing.imputer
-            else:
-                imputer = self.default_imputer.imputation_method
-            if model_params.preprocessing.scaler_encoder:
-                scaler_encoder = model_params.preprocessing.scaler_encoder.type
-            else:
-                scaler_encoder = self.default_scaler.type
-        else:
-            imputer = self.default_imputer.imputation_method
-            scaler_encoder = self.default_scaler.type
-
-        logger.info(f"data imputation via: {imputer}")
-        logger.info(f"scaling data using: {scaler_encoder}")
+        imputer, scaler = self._resolved_preprocessing(model_params)
+        logger.info(f"data imputation via: {imputer.imputation_method}")
+        logger.info(f"scaling data using: {scaler.type}")
 
         spec = get_model_spec(model_params)
 
         if model_params.tuning is None:
+            return self._train_without_tuning(model_params, spec, X_train, y_train)
+
+        return self._tune_model(model_params, spec, X_train, y_train)
+
+    def _train_without_tuning(
+        self,
+        model_params: ModelParams,
+        spec: ModelSpec,
+        X_train,
+        y_train,
+    ) -> ModelTrainingResult:
+        trained_model = None
+        try:
             trained_model, fit_time = self._fit_model(
                 model_params, spec, model_params.params, X_train, y_train
             )
@@ -115,8 +103,9 @@ class Trainer:
                 fit_time=fit_time,
                 training_metrics=training_metrics,
             )
-
-        return self._tune_model(model_params, spec, X_train, y_train)
+        except Exception:
+            release_model(trained_model)
+            raise
 
     def _fit_model(
         self,
@@ -135,6 +124,15 @@ class Trainer:
         return model, fit_time
 
     def _build_preprocess_pipeline(self, model_params: ModelParams):
+        imputer, scaler = self._resolved_preprocessing(model_params)
+        return Preprocessor(
+            params_imputer=imputer,
+            params_scaler=scaler,
+        ).build_pipeline()
+
+    def _resolved_preprocessing(
+        self, model_params: ModelParams
+    ) -> tuple[ImputerParams, ScalerEncoderParams]:
         preprocessing = model_params.preprocessing
         imputer = (
             preprocessing.imputer
@@ -146,10 +144,7 @@ class Trainer:
             if preprocessing is not None and preprocessing.scaler_encoder is not None
             else self.default_scaler
         )
-        return Preprocessor(
-            params_imputer=imputer,
-            params_scaler=scaler,
-        ).build_pipeline()
+        return imputer, scaler
 
     def _preflight_param_sets(
         self,
@@ -256,49 +251,54 @@ class Trainer:
         best_params = candidates[best_index]
 
         logger.info(f"CV Done. Best params: {best_params}")
-        trained_model, fit_time = self._fit_model(
-            model_params,
-            spec,
-            {**model_params.params, **best_params},
-            X_train,
-            y_train,
-        )
-        training_metrics, predict_time = self._training_metrics(
-            model_params, trained_model, X_train, y_train
-        )
+        trained_model = None
+        try:
+            trained_model, fit_time = self._fit_model(
+                model_params,
+                spec,
+                {**model_params.params, **best_params},
+                X_train,
+                y_train,
+            )
+            training_metrics, predict_time = self._training_metrics(
+                model_params, trained_model, X_train, y_train
+            )
 
-        logger.info(f"Model {model_params.name} fit in {fit_time:.3f}s")
-        logger.info(f"Training predictions took {predict_time:.3f}s")
+            logger.info(f"Model {model_params.name} fit in {fit_time:.3f}s")
+            logger.info(f"Training predictions took {predict_time:.3f}s")
 
-        tuning_result = TuningResult(
-            best_params=best_params,
-            scoring=tuning.scoring,
-            best_metrics=mean_metrics[best_index],
-            cv_results=TuningCVResults(
-                params=candidates,
-                mean_scores=mean_scores,
-                std_scores=std_scores,
-                fold_scores=fold_scores_by_candidate,
-                fold_times=fold_times_by_candidate,
-                mean_metrics=mean_metrics,
-            ),
-            fold_results=fold_results,
-        )
+            tuning_result = TuningResult(
+                best_params=best_params,
+                scoring=tuning.scoring,
+                best_metrics=mean_metrics[best_index],
+                cv_results=TuningCVResults(
+                    params=candidates,
+                    mean_scores=mean_scores,
+                    std_scores=std_scores,
+                    fold_scores=fold_scores_by_candidate,
+                    fold_times=fold_times_by_candidate,
+                    mean_metrics=mean_metrics,
+                ),
+                fold_results=fold_results,
+            )
 
-        logger.info(
-            f"Model tuning complete in {tuning_result.total_time:.3f}s. "
-            f"Best {tuning.scoring}: {tuning_result.best_score:.4f}"
-        )
+            logger.info(
+                f"Model tuning complete in {tuning_result.total_time:.3f}s. "
+                f"Best {tuning.scoring}: {tuning_result.best_score:.4f}"
+            )
 
-        return ModelTrainingResult(
-            model_name=model_params.name,
-            task_type=model_params.task_type,
-            trained_model=trained_model,
-            tuned=True,
-            fit_time=fit_time,
-            training_metrics=training_metrics,
-            tuning_result=tuning_result,
-        )
+            return ModelTrainingResult(
+                model_name=model_params.name,
+                task_type=model_params.task_type,
+                trained_model=trained_model,
+                tuned=True,
+                fit_time=fit_time,
+                training_metrics=training_metrics,
+                tuning_result=tuning_result,
+            )
+        except Exception:
+            release_model(trained_model)
+            raise
 
     @staticmethod
     def _take_rows(data, rows: np.ndarray):
@@ -318,7 +318,3 @@ class Trainer:
 
         predictions, predict_time = model.predict(X_train)
         return evaluate_classification_predictions(predictions, y_train), predict_time
-
-    @staticmethod
-    def _cleanup_model(model: ModelAdapter) -> None:
-        release_model(model)
