@@ -4,6 +4,7 @@ import numpy as np
 from tabpfn import TabPFNClassifier, TabPFNRegressor
 from tabpfn.classifier import ModelVersion
 
+from src.config import config
 from src.interfaces.model_interface import ModelAdapter
 from src.schemas.base_schemas import TaskType
 from src.utils.logger import logger
@@ -22,7 +23,12 @@ class TabPFNAdapter(ModelAdapter):
         self.predict_batch_size = kwargs.pop(
             "predict_batch_size", 99999999
         )  # default no batching
-        self.kwargs = kwargs
+        default_kwargs = {
+            "fit_mode": "fit_with_cache",
+            "random_state": config.seed,
+        }
+        # override default kwargs with user-provided kwargs
+        self.kwargs = {**default_kwargs, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):

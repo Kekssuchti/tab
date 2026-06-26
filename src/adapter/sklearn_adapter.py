@@ -9,6 +9,7 @@ from interpret.glassbox import (
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from xgboost import XGBClassifier, XGBRegressor
 
+from src.config import config
 from src.interfaces.model_interface import ModelAdapter
 from src.schemas.base_schemas import TaskType
 
@@ -20,7 +21,12 @@ class LinearModelAdapter(ModelAdapter):
         **kwargs,
     ) -> None:
         self.task_type = task_type
-        self.kwargs = kwargs
+        default_params = (
+            {"random_state": config.seed}
+            if self.task_type == "classification"
+            else {}
+        )
+        self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):
@@ -46,13 +52,13 @@ class XGBoostAdapter(ModelAdapter):
         **kwargs,
     ) -> None:
         self.task_type = task_type
-        self.kwargs = kwargs
+        default_params = {"random_state": config.seed, "eval_metric": "logloss"}
+        self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):
         if self.task_type == "classification":
-            params = {"eval_metric": "logloss", **self.kwargs}
-            return XGBClassifier(**params)
+            return XGBClassifier(**self.kwargs)
 
         return XGBRegressor(**self.kwargs)
 
@@ -73,7 +79,11 @@ class EBMAdapter(ModelAdapter):
         **kwargs,
     ) -> None:
         self.task_type = task_type
-        self.kwargs = kwargs
+        default_params = {
+            "random_state": config.seed,
+            "interactions": 0,
+        }
+        self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):

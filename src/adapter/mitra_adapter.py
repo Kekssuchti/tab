@@ -5,6 +5,7 @@ from autogluon.tabular.models.mitra.sklearn_interface import (
     MitraRegressor,
 )
 
+from src.config import config
 from src.interfaces.model_interface import ModelAdapter
 from src.schemas.base_schemas import TaskType
 from src.utils.logger import logger
@@ -18,7 +19,12 @@ class MitraAdapter(ModelAdapter):
     ) -> None:
         super().__init__()
         self.task_type = task_type
-        self.kwargs = kwargs
+        seed = kwargs.pop("random_state", config.seed)
+        default_params = {
+            "seed": seed,
+            "fine_tune": False,
+        }
+        self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):

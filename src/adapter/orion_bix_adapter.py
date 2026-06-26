@@ -3,6 +3,7 @@ from typing import Literal
 
 from orion_bix import OrionBixClassifier
 
+from src.config import config
 from src.interfaces.model_interface import ModelAdapter
 from src.utils.logger import logger
 
@@ -16,7 +17,12 @@ class OrionBixAdapter(ModelAdapter):
             logger.error("Got wrong task type for Orion Bix model")
             raise ValueError
         self.task_type = "classification"  # regression not supported
-        self.kwargs = kwargs
+        default_kwargs = {
+            "random_state": config.seed,
+            "feat_shuffle_method": "latin",
+            "use_amp": True,
+        }
+        self.kwargs = {**default_kwargs, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):

@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.model_selection import KFold, StratifiedKFold
 
 from src.classes.preprocessor import Preprocessor
+from src.config import config
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
 from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 from src.schemas.training_schemas import (
@@ -328,6 +329,10 @@ class Trainer:
         y_train,
     ) -> tuple[ClassificationMetrics | None, float]:
         if model_params.task_type != "classification":
+            return None, 0.0
+
+        if not model_params.compute_training_metrics:
+            logger.info(f"Skipping training metrics for {model_params.name}")
             return None, 0.0
 
         predictions, predict_time = model.predict(X_train)

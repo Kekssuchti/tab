@@ -7,7 +7,7 @@ from src.classes.pipeline import Pipeline
 from src.config import config
 from src.mlflow.mlflow_logger import MLflowPipelineLogger
 from src.schemas.pipeline_schemas import PipelineParams
-from src.schemas.suite_schemas import SuiteDryRunSummary, SuiteRunResult
+from src.schemas.suite_schemas import SuiteRunResult
 from src.utils.config_io import (
     dump_pipeline_params,
     load_experiment_suite_params,

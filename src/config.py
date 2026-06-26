@@ -1,9 +1,13 @@
-import sys
+import os
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
+
+# Keep os env stuff here that needs to ALWAYS be set
+# MUST use for memory-efficient SDPA kernels on AMD GPUs.
+os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
 
 
 class Config(BaseSettings):

@@ -11,6 +11,7 @@ from src.utils.logger import logger
 
 if TYPE_CHECKING:
     from src.interfaces.model_interface import ModelAdapter
+from tabpfn.classifier import ClassifierEvalMetrics
 
 SKLEARN_ADAPTER = "src.adapter.sklearn_adapter"
 TABPFN_ADAPTER = "src.adapter.tabpfn_adapter:TabPFNAdapter"
@@ -116,38 +117,63 @@ def _load_adapter_cls(adapter_path: str):
 CLASSIFICATION_SEARCH_SPACES = {
     "logistic-regression": {
         "default": {
-            "C": [0.1, 1.0, 10.0],
-            "penalty": ["l2"],
-            "solver": ["lbfgs"],
+            "C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0],
+            "penalty": ["l2", "l1", "elasticnet"],
+            "solver": ["lbfgs", "liblinear", "saga"],
+            "l1_ratio": [0.25, 0.5, 0.75],
+            "max_iter": [100, 300],
         }
     },
     "xgboost": {
         "default": {
-            "n_estimators": [100, 300],
-            "max_depth": [3, 5],
-            "learning_rate": [0.03, 0.1],
-            "gamma": [0.0, 0.1],
-            "subsample": [0.8, 1.0],
+            "max_depth": [3, 6, 9, 12, None],
+            "learning_rate": [0.01, 0.1, 0.3],
+            "n_estimators": [50, 100, 200, 500, 1000, 2000],
         }
     },
     "ebm": {
         "default": {
-            "max_bins": [128, 256, 1024],
-            "learning_rate": [0.015, 0.03, 0.05],
-            "interactions": [0, 1, 3, 5],
+            "learning_rate": [0.005, 0.015, 0.1],
+            "max_bins": [256, 512, 1024],
+            "outer_bags": [8, 14],
+            "inner_bags": [0, 4],
+            "min_sample_leaf": [4, 10],
         }
     },
     "tabpfn": {
         "default": {
-            "average_before_softmax": [True, False],
+            "n_estimators": [4, 8, 16],
+            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "balance_probabilities": [True, False],
+            "eval_metric": [ClassifierEvalMetrics.ROC_AUC, ClassifierEvalMetrics.F1],
         },
     },
     "tabicl-2": {
         "default": {
             "n_estimators": [4, 8, 16],
-            "class_shuffle_method": ["shift"],
-            "softmax_temperature": [0.75, 0.9, 1.0, 1.1],
+            "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
+            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
             "average_logits": [True, False],
+        }
+    },
+    "limix": {
+        "default": {
+            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+        }
+    },
+    "orion": {
+        "default": {
+            "n_estimators": [4, 8, 16],
+            "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
+            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+        }
+    },
+    "mitra": {
+        "default": {
+            "n_estimators": [4, 8, 16],
+            "shuffle_classes": [True, False],
+            "shuffle_features": [True, False],
+            "use_random_transforms": [True, False],
         }
     },
 }
@@ -199,11 +225,25 @@ MODEL_REGISTRY_CLS = {
         TABICL_ADAPTER,
         search_spaces=CLASSIFICATION_SEARCH_SPACES["tabicl-2"],
     ),
-    "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
-    "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
-    "mitra": ModelSpec(MITRA_ADAPTER),
-    "orion-msp": ModelSpec(ORION_MSP_ADAPTER),
-    "orion-bix": ModelSpec(ORION_BIX_ADAPTER),
+    "limix-2m": ModelSpec(
+        LIMIX_ADAPTER,
+        default_params={"size": "2M"},
+        search_spaces=CLASSIFICATION_SEARCH_SPACES["limix"],
+    ),
+    "limix-16m": ModelSpec(
+        LIMIX_ADAPTER,
+        default_params={"size": "16M"},
+        search_spaces=CLASSIFICATION_SEARCH_SPACES["limix"],
+    ),
+    "mitra": ModelSpec(
+        MITRA_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["mitra"]
+    ),
+    "orion-msp": ModelSpec(
+        ORION_MSP_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["orion"]
+    ),
+    "orion-bix": ModelSpec(
+        ORION_BIX_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["orion"]
+    ),
 }
 
 

@@ -32,7 +32,7 @@ class DatasetTask:
         labels = df[self.target]
         if self.target == "hours_to_readmit":
             return labels.notna().astype(int)
-        return labels
+        return labels.astype(int)
 
     def features_from(self, df: pd.DataFrame) -> pd.DataFrame:
         return df.drop(columns=list(TARGET_LIKE_COLUMNS), errors="ignore")
