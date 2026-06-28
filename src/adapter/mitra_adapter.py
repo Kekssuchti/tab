@@ -19,22 +19,18 @@ class MitraAdapter(ModelAdapter):
     ) -> None:
         super().__init__()
         self.task_type = task_type
-        seed = kwargs.pop("random_state", config.seed)
         default_params = {
-            "seed": seed,
+            "seed": config.seed,
             "fine_tune": False,
         }
         self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):
-        defaults = {"verbose": False, "fine_tune": False}
-        params = {**defaults, **self.kwargs}
-
         if self.task_type == "regression":
-            return MitraRegressor(**params)
+            return MitraRegressor(**self.kwargs)
         else:
-            return MitraClassifier(**params)
+            return MitraClassifier(**self.kwargs)
 
     def fit(self, X_train, y_train):
         start_time = timer()
@@ -42,9 +38,7 @@ class MitraAdapter(ModelAdapter):
         return timer() - start_time
 
     def predict(self, X_test):
-        logger.info("Predicting with Mitra")
         start_time = timer()
         result = self.predict_from_estimator(X_test)
 
-        logger.info("Mitra Prediction done")
         return result, timer() - start_time

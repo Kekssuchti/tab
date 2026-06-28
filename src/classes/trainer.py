@@ -175,7 +175,6 @@ class Trainer:
         if tuning is None:
             raise ValueError("Tuning requested without tuning parameters")
 
-        logger.info(f"Start tuning: {model_params.name}")
         candidates = spec.tuning_candidates(tuning.search_space, tuning.grid)
         cv = self._build_cv(model_params, tuning)
         logger.info(
@@ -244,6 +243,9 @@ class Trainer:
             fold_scores_by_candidate.append(candidate_scores)
             fold_metrics_by_candidate.append(candidate_metrics)
             fold_times_by_candidate.append(candidate_times)
+            logger.info(
+                f"Candidate {candidate_index + 1}/{len(candidates)} completed in {candidate_times[-1]:.2f}s"
+            )
 
         mean_scores = [float(np.mean(scores)) for scores in fold_scores_by_candidate]
         std_scores = [float(np.std(scores)) for scores in fold_scores_by_candidate]
@@ -264,12 +266,6 @@ class Trainer:
                 X_train,
                 y_train,
             )
-            training_metrics, predict_time = self._training_metrics(
-                model_params, trained_model, X_train, y_train
-            )
-
-            logger.info(f"Model {model_params.name} fit in {fit_time:.3f}s")
-            logger.info(f"Training predictions took {predict_time:.3f}s")
 
             tuning_result = TuningResult(
                 best_params=best_params,
@@ -286,6 +282,7 @@ class Trainer:
                 fold_results=fold_results,
             )
 
+            logger.info(f"Model Fit on full training data took: {fit_time:.3f}s")
             logger.info(
                 f"Model tuning complete in {tuning_result.total_time:.3f}s. "
                 f"Best {tuning.scoring}: {tuning_result.best_score:.4f}"
@@ -297,7 +294,6 @@ class Trainer:
                 trained_model=trained_model,
                 tuned=True,
                 fit_time=fit_time,
-                training_metrics=training_metrics,
                 tuning_result=tuning_result,
             )
         except Exception:

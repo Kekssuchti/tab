@@ -19,6 +19,7 @@ class Config(BaseSettings):
     dir_run_results: Path = dir_root / "run_results"
     dir_plots: Path = dir_root / "plots"
     dir_log: Path = dir_root / "logs"
+    dir_mlflow_artifacts: Path = dir_root / "mlartifacts"
 
     dir_configs: Path = dir_root / "configs"
     dir_pipelines: Path = dir_configs / "pipeline"

@@ -1,0 +1,7 @@
+name: training-size
+base_config: ../pipeline/mimic.yaml
+matrix:
+  - path: dataset.scaler_encoder.type
+    values: ["standardization", "none"]
+  - path: dataset.imputer.imputation_method
+    values: ["mean", "none"]

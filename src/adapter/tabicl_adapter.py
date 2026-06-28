@@ -34,7 +34,6 @@ class TabICLAdapter(ModelAdapter):
             model = TabICLClassifier(**self.kwargs)
         else:
             model = TabICLRegressor(**self.kwargs)
-        logger.info(f"Loaded TabICL model with params: {model.get_params()}")
         return model
 
     def fit(self, X_train, y_train):
@@ -43,18 +42,15 @@ class TabICLAdapter(ModelAdapter):
         return timer() - start_time
 
     def predict(self, X_test):
-        logger.info("Predicting with TabICL")
         start_time = timer()
         if (
             self.predict_batch_size is not None
             and len(X_test) > self.predict_batch_size
         ):
             result = self._predict_batched(X_test)
-            logger.info("TabICL Prediction done")
             return np.asarray(result), timer() - start_time
 
         result = self._predict_single_batch(X_test)
-        logger.info("TabICL Prediction done")
         return np.asarray(result), timer() - start_time
 
     def _predict_batched(self, X_test):

@@ -35,9 +35,7 @@ class OrionMSPAdapter(ModelAdapter):
         return timer() - start_time
 
     def predict(self, X_test):
-        logger.info("Predicting with OrionMSP")
         start_time = timer()
         result = self.model.predict_proba(X_test)
 
-        logger.info("OrionMSP Prediction done")
         return result, timer() - start_time

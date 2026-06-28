@@ -108,19 +108,16 @@ class LimixAdapter(ModelAdapter):
         return 0.0
 
     def predict(self, X_test):
-        logger.info(f"Predicting with: {self.model.inference_config}")
         start_time = timer()
         if (
             self.predict_batch_size is not None
             and len(X_test) > self.predict_batch_size
         ):
             result = self._predict_batched(X_test)
-            logger.info(f"LimiX-{self.size} Prediction done")
             return result, timer() - start_time
 
         result = self._predict_single_batch(X_test)
 
-        logger.info(f"LimiX-{self.size} Prediction done")
         return result, timer() - start_time
 
     def _predict_batched(self, X_test):

@@ -81,7 +81,8 @@ def run_suite(config_path: str | Path, *, dry_run: bool = False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "config_name",
+        "--config_name",
+        "-c",
         type=str,
         help="Name of the pipeline or suite config file without .yaml",
     )

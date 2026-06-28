@@ -21,18 +21,16 @@ class LinearModelAdapter(ModelAdapter):
         **kwargs,
     ) -> None:
         self.task_type = task_type
-        default_params = (
-            {"random_state": config.seed}
-            if self.task_type == "classification"
-            else {}
-        )
+        default_params = {
+            "random_state": config.seed,
+            "penalty": "l2",
+        }
         self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):
         if self.task_type == "classification":
-            params = {"max_iter": 1000, **self.kwargs}
-            return LogisticRegression(**params)
+            return LogisticRegression(**self.kwargs)
         return LinearRegression(**self.kwargs)
 
     def fit(self, X_train, y_train) -> float:

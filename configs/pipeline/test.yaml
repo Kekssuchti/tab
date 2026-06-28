@@ -5,8 +5,6 @@ dataset:
   train_on:
     - dataset: tudd
       fraction: 1.0
-    - dataset: mimic
-      fraction: 500
   classification: true
   data_cleaner:
     outlier_limits_path: configs/data_limits.json

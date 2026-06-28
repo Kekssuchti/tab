@@ -21,7 +21,7 @@ class TabPFNAdapter(ModelAdapter):
         self.task_type = task_type
         self.version = version
         self.predict_batch_size = kwargs.pop(
-            "predict_batch_size", 99999999
+            "predict_batch_size", 2048
         )  # default no batching
         default_kwargs = {
             "fit_mode": "fit_with_cache",
@@ -40,7 +40,6 @@ class TabPFNAdapter(ModelAdapter):
             model = TabPFNRegressor.create_default_for_version(
                 self.version, **self.kwargs
             )
-        logger.info(f"Loaded TabPFN model with params: {model.get_params()}")
         return model
 
     def fit(self, X_train, y_train):
@@ -49,15 +48,12 @@ class TabPFNAdapter(ModelAdapter):
         return timer() - start_time
 
     def predict(self, X_test):
-        logger.info("Predicting with TabPFN")
         start_time = timer()
         if len(X_test) > self.predict_batch_size:
             result = self._predict_batched(X_test)
-            logger.info("TabPFN Prediction done")
             return np.asarray(result), timer() - start_time
 
         result = self._predict_single_batch(X_test)
-        logger.info("TabPFN Prediction done")
         return np.asarray(result), timer() - start_time
 
     def _predict_batched(self, X_test):

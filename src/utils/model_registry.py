@@ -118,39 +118,38 @@ CLASSIFICATION_SEARCH_SPACES = {
     "logistic-regression": {
         "default": {
             "C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0],
-            "penalty": ["l2", "l1", "elasticnet"],
-            "solver": ["lbfgs", "liblinear", "saga"],
-            "l1_ratio": [0.25, 0.5, 0.75],
-            "max_iter": [100, 300],
+            "solver": ["lbfgs", "newton-cg", "saga"],
+            "max_iter": [300, 500, 1000],
+            # "l1_ratio": [0.0, 0.25, 0.5, 0.75, 1.0],
         }
     },
     "xgboost": {
         "default": {
             "max_depth": [3, 6, 9, 12, None],
-            "learning_rate": [0.01, 0.1, 0.3],
+            "learning_rate": [0.01, 0.05, 0.1, 0.3],
             "n_estimators": [50, 100, 200, 500, 1000, 2000],
         }
     },
     "ebm": {
         "default": {
-            "learning_rate": [0.005, 0.015, 0.1],
+            "learning_rate": [0.005, 0.015, 0.03],
             "max_bins": [256, 512, 1024],
             "outer_bags": [8, 14],
             "inner_bags": [0, 4],
-            "min_sample_leaf": [4, 10],
+            "min_samples_leaf": [4, 10],
         }
     },
     "tabpfn": {
         "default": {
-            "n_estimators": [4, 8, 16],
+            "n_estimators": [4, 8, 16, 32],
             "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
             "balance_probabilities": [True, False],
-            "eval_metric": [ClassifierEvalMetrics.ROC_AUC, ClassifierEvalMetrics.F1],
+            "eval_metric": [ClassifierEvalMetrics.ROC_AUC],
         },
     },
     "tabicl-2": {
         "default": {
-            "n_estimators": [4, 8, 16],
+            "n_estimators": [4, 8, 16, 32],
             "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
             "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
             "average_logits": [True, False],
@@ -170,7 +169,7 @@ CLASSIFICATION_SEARCH_SPACES = {
     },
     "mitra": {
         "default": {
-            "n_estimators": [4, 8, 16],
+            "n_estimators": [4, 8, 16, 32],
             "shuffle_classes": [True, False],
             "shuffle_features": [True, False],
             "use_random_transforms": [True, False],

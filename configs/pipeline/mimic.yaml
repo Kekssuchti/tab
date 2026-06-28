@@ -3,27 +3,36 @@ dataset:
   random_state: 1337
   train_size: 0.8
   train_on:
-    - dataset: tudd
-      fraction: 1.0
     - dataset: mimic
-      fraction: 500
+      fraction: 1.0
   classification: true
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
   scaler_encoder:
-    type: none
+    type: standardization
   imputer:
-    imputation_method: none
+    imputation_method: mean
 
 training:
-  - name: tabpfn-3
+  - name: logistic-regression
     task_type: classification
     params:
       random_state: 1337
-      predict_batch_size: 512
-      fit_mode: "fit_with_cache"
-      inference_config: { "SUBSAMPLE_SAMPLES": 15_000 }
+    tuning:
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: xgboost
+    task_type: classification
+    params:
+      random_state: 1337
+    preprocessing:
+      imputer:
+        imputation_method: none
     tuning:
       scoring: roc_auc
       cv:
