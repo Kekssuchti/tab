@@ -264,6 +264,38 @@ def test_observation_assembly_marks_failed_model_without_evaluations():
     assert model_run.children == ()
 
 
+def test_observation_assembly_keeps_cv_runs_for_failed_tuned_model():
+    result = _result(tuned=True)
+    training_result = result.model_runs[0].training_result
+    training_result.error = "RuntimeError: evaluation failed"
+    training_result.failure_stage = "evaluation"
+    failed_after_tuning = PipelineResult(
+        run_id=result.run_id,
+        dataset_summary=result.dataset_summary,
+        model_runs=(
+            ModelRunRecord(
+                model_instance_id="logistic-regression",
+                training_result=training_result,
+                model_result=None,
+            ),
+        ),
+        total_time=0.4,
+    )
+
+    observation = assemble_pipeline_observation(
+        _params("sqlite:///unused", run_name="failed-tuned-run"),
+        failed_after_tuning,
+    )
+    model_run = observation.children[0]
+
+    assert model_run.tags["status"] == "failed"
+    assert _metric_value(model_run.metrics, "cv.total_time") == 0.1
+    assert [child.run_name for child in model_run.children] == [
+        "logistic-regression/cv00",
+        "logistic-regression/cv01",
+    ]
+
+
 def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
     tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
     artifact_location = str(tmp_path / "mlartifacts")
@@ -323,6 +355,50 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
         "evaluation_metrics.json",
         "cv_results",
     } <= artifact_names
+    evaluation_metrics = mlflow.load_table(
+        "evaluation_metrics.json", run_ids=[parent.info.run_id]
+    )
+    assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(
+        evaluation_metrics["dataset"]
+    )
+
+
+def test_mlflow_logger_appends_model_runs_incrementally(tmp_path):
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
+    artifact_location = str(tmp_path / "mlartifacts")
+    params = _params(tracking_uri, artifact_location, run_name="incremental-run")
+    result = _result(tuned=True)
+    logger = MLflowPipelineLogger()
+
+    logger.log_model_run(params, result, result.model_runs[0])
+    logger.log_pipeline_summary(params, result)
+
+    mlflow.set_tracking_uri(tracking_uri)
+    runs = mlflow.search_runs(
+        experiment_names=["test-tab"],
+        output_format="list",
+    )
+    runs_by_name = {run.data.tags["mlflow.runName"]: run for run in runs}
+
+    assert set(runs_by_name) == {
+        "incremental-run",
+        "logistic-regression",
+        "logistic-regression/cv00",
+        "logistic-regression/cv01",
+    }
+    parent = runs_by_name["incremental-run"]
+    model = runs_by_name["logistic-regression"]
+
+    assert parent.data.tags["pipeline_id"] == "test-pipeline-id"
+    assert parent.data.metrics["pipeline.total_time"] == 0.5
+    assert model.data.tags["mlflow.parentRunId"] == parent.info.run_id
+    assert model.data.metrics["test.mimic.accuracy"] == 1.0
+
+    client = mlflow.MlflowClient(tracking_uri=tracking_uri)
+    artifact_names = {
+        artifact.path for artifact in client.list_artifacts(parent.info.run_id)
+    }
+    assert "pipeline_result.json" in artifact_names
     evaluation_metrics = mlflow.load_table(
         "evaluation_metrics.json", run_ids=[parent.info.run_id]
     )

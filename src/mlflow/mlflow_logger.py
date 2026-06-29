@@ -3,15 +3,18 @@ from __future__ import annotations
 import json
 import sys
 import warnings
+from contextlib import contextmanager
+from dataclasses import replace
 from importlib import metadata
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
 import mlflow
+from mlflow.entities import Run
 from mlflow.evaluation import Evaluation, log_evaluations
 
-from src.classes.pipeline import PipelineResult
+from src.classes.pipeline import ModelRunRecord, PipelineResult
 from src.config import config
 from src.mlflow.observation import (
     EvaluationLog,
@@ -51,6 +54,89 @@ class MLflowPipelineLogger:
                     artifact_paths["cv_dir"],
                     pipeline_mlflow_run_id=pipeline_run.info.run_id,
                 )
+
+    def log_model_run(
+        self,
+        params: PipelineParams,
+        result: PipelineResult,
+        model_run: ModelRunRecord,
+        *,
+        config_path: Path | None = None,
+    ) -> None:
+        mlflow.set_tracking_uri(params.mlflow.tracking_uri)
+        _set_experiment(params)
+
+        observation = assemble_pipeline_observation(params, result)
+        model_observation = _find_child_observation(
+            observation,
+            model_run.model_instance_id,
+        )
+
+        with TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            artifact_paths = self._write_artifacts(params, result, temp_dir)
+
+            with self._start_or_resume_pipeline_run(
+                params,
+                observation,
+                artifact_paths,
+                config_path,
+            ) as pipeline_run:
+                self._log_model_runs(
+                    (model_observation,),
+                    artifact_paths["cv_dir"],
+                    pipeline_mlflow_run_id=pipeline_run.info.run_id,
+                )
+
+    def log_pipeline_summary(
+        self,
+        params: PipelineParams,
+        result: PipelineResult,
+        *,
+        config_path: Path | None = None,
+    ) -> None:
+        mlflow.set_tracking_uri(params.mlflow.tracking_uri)
+        _set_experiment(params)
+
+        observation = assemble_pipeline_observation(params, result)
+        with TemporaryDirectory() as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            artifact_paths = self._write_artifacts(params, result, temp_dir)
+            with self._start_or_resume_pipeline_run(
+                params,
+                observation,
+                artifact_paths,
+                config_path,
+                include_evaluations=True,
+            ):
+                pass
+
+    @contextmanager
+    def _start_or_resume_pipeline_run(
+        self,
+        params: PipelineParams,
+        observation: RunObservation,
+        artifact_paths: dict[str, Path],
+        config_path: Path | None,
+        *,
+        include_evaluations: bool = False,
+    ):
+        existing_run = _find_pipeline_run(params)
+        if existing_run is None:
+            run_context = mlflow.start_run(run_name=observation.run_name)
+        else:
+            run_context = mlflow.start_run(run_id=existing_run.info.run_id)
+
+        with run_context as pipeline_run:
+            parent_observation = replace(
+                observation,
+                children=(),
+                evaluations=observation.evaluations if include_evaluations else (),
+                table_rows=observation.table_rows if include_evaluations else (),
+            )
+            self._log_observation(parent_observation)
+            self._log_artifacts(artifact_paths, config_path)
+            yield pipeline_run
 
     def _log_model_runs(
         self,
@@ -215,6 +301,38 @@ def _make_mlflow_evaluation(evaluation: EvaluationLog) -> Evaluation:
             metrics=evaluation.metrics,
             tags=evaluation.tags,
         )
+
+
+def _find_child_observation(
+    observation: RunObservation,
+    run_name: str,
+) -> RunObservation:
+    for child in observation.children:
+        if child.run_name == run_name:
+            return child
+    raise ValueError(f"No MLflow observation found for model run {run_name!r}")
+
+
+def _find_pipeline_run(params: PipelineParams) -> Run | None:
+    client = mlflow.MlflowClient()
+    experiment = client.get_experiment_by_name(params.mlflow.experiment_name)
+    if experiment is None:
+        return None
+
+    runs = client.search_runs(
+        [experiment.experiment_id],
+        filter_string=(
+            f"tags.pipeline_id = '{_mlflow_filter_value(params.run_id)}' "
+            "and tags.run_type = 'pipeline'"
+        ),
+        max_results=1,
+        order_by=["attributes.start_time ASC"],
+    )
+    return runs[0] if runs else None
+
+
+def _mlflow_filter_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
 def _set_experiment(params: PipelineParams) -> None:

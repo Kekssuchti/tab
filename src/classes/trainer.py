@@ -193,6 +193,7 @@ class Trainer:
             candidate_scores: list[float] = []
             candidate_metrics: list[ClassificationMetrics] = []
             candidate_times: list[float] = []
+            start_time_candidate = timer()
 
             for fold_index, (train_index, validation_index) in enumerate(
                 cv.split(X_train, y_train)
@@ -244,7 +245,7 @@ class Trainer:
             fold_metrics_by_candidate.append(candidate_metrics)
             fold_times_by_candidate.append(candidate_times)
             logger.info(
-                f"Candidate {candidate_index + 1}/{len(candidates)} completed in {candidate_times[-1]:.2f}s"
+                f"Candidate {candidate_index + 1}/{len(candidates)} completed in {candidate_times[-1]:.2f}s, real: {timer() - start_time_candidate:.2f}s"
             )
 
         mean_scores = [float(np.mean(scores)) for scores in fold_scores_by_candidate]

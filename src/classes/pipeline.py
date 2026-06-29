@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from time import perf_counter
+from typing import Callable
 
 from src.classes.dataset import Dataset
 from src.classes.plotter import Plotter
@@ -83,7 +84,11 @@ class Pipeline:
         self.dataset = Dataset(params.dataset)
         self.plotter = Plotter(params.plotting)
 
-    def run(self) -> PipelineResult:
+    def run(
+        self,
+        on_model_complete: Callable[[PipelineResult, ModelRunRecord], None]
+        | None = None,
+    ) -> PipelineResult:
         start_time = perf_counter()
         target = getattr(self.params.dataset, "target", "unknown")
         logger.info(
@@ -137,13 +142,22 @@ class Pipeline:
             finally:
                 if tr is not None:
                     release_training_result_model(tr)
-                    model_runs.append(
-                        ModelRunRecord(
-                            model_instance_id=model_instance_id,
-                            training_result=tr,
-                            model_result=mr,
-                        )
+                    model_run = ModelRunRecord(
+                        model_instance_id=model_instance_id,
+                        training_result=tr,
+                        model_result=mr,
                     )
+                    model_runs.append(model_run)
+                    if on_model_complete is not None:
+                        on_model_complete(
+                            PipelineResult(
+                                run_id=self.params.run_id,
+                                dataset_summary=dataset_summary,
+                                model_runs=tuple(model_runs),
+                                total_time=perf_counter() - start_time,
+                            ),
+                            model_run,
+                        )
 
         total_time = perf_counter() - start_time
         logger.info(

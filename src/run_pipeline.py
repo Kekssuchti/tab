@@ -30,13 +30,26 @@ def run_pipeline_params(
     params: PipelineParams,
     config_path: str | Path | None = None,
 ):
-    result = Pipeline(params).run()
+    resolved_config_path = Path(config_path) if config_path is not None else None
+    mlflow_logger = MLflowPipelineLogger() if params.mlflow.enabled else None
 
-    if params.mlflow.enabled:
-        MLflowPipelineLogger().log_pipeline_run(
+    def log_completed_model(partial_result, model_run):
+        if mlflow_logger is None:
+            return
+        mlflow_logger.log_model_run(
+            params,
+            partial_result,
+            model_run,
+            config_path=resolved_config_path,
+        )
+
+    result = Pipeline(params).run(on_model_complete=log_completed_model)
+
+    if mlflow_logger is not None:
+        mlflow_logger.log_pipeline_summary(
             params,
             result,
-            config_path=Path(config_path) if config_path is not None else None,
+            config_path=resolved_config_path,
         )
 
     return result

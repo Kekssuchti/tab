@@ -117,10 +117,20 @@ def _model_run_observation(
         **_model_metric_params(training_result, model_result),
     }
     if model_result is None:
-        metrics = _metric_logs_from_values(
-            (("train.fit_time", training_result.fit_time),)
+        metrics = list(
+            _metric_logs_from_values(
+                (("train.fit_time", training_result.fit_time),)
+            )
         )
-        children: tuple[RunObservation, ...] = ()
+        if training_result.tuning_result is not None:
+            metrics.extend(
+                _metric_logs_from_values(
+                    (("cv.total_time", training_result.tuning_result.total_time),)
+                )
+            )
+            children = _cv_candidate_observations(params, run_record, model_params)
+        else:
+            children = ()
     else:
         metrics = _model_metric_logs(training_result, model_result)
         children = _cv_candidate_observations(params, run_record, model_params)
@@ -129,7 +139,7 @@ def _model_run_observation(
         run_name=run_record.model_instance_id,
         tags=_model_tags(params, run_record, model_params),
         params=run_params,
-        metrics=metrics,
+        metrics=tuple(metrics),
         evaluations=evaluation_bundle.evaluations,
         table_rows=evaluation_bundle.table_rows,
         children=children,

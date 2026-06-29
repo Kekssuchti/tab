@@ -17,34 +17,6 @@ dataset:
     knn_neighbors: 5
 
 training:
-  - name: logistic-regression
-    task_type: classification
-    params: {}
-    preprocessing:
-      imputer:
-        imputation_method: mean
-      scaler_encoder:
-        type: standardization
-    tuning:
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: xgboost
-    task_type: classification
-    params: {}
-    preprocessing:
-      imputer:
-        imputation_method: none
-    tuning:
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
   - name: tabpfn-3
     task_type: classification
     params: {}

@@ -144,7 +144,6 @@ CLASSIFICATION_SEARCH_SPACES = {
             "n_estimators": [4, 8, 16, 32],
             "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
             "balance_probabilities": [True, False],
-            "eval_metric": [ClassifierEvalMetrics.ROC_AUC],
         },
     },
     "tabicl-2": {
