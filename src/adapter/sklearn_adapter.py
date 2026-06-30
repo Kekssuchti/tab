@@ -31,7 +31,7 @@ class LinearModelAdapter(ModelAdapter):
     def _load_model(self):
         if self.task_type == "classification":
             return LogisticRegression(**self.kwargs)
-        return LinearRegression(**self.kwargs)
+        raise NotImplementedError
 
     def fit(self, X_train, y_train) -> float:
         start = timer()

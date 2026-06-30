@@ -19,7 +19,7 @@ ADAPTER_MODULES = {
     "src.adapter.orion_bix_adapter",
 }
 CLASSIFICATION_MODELS = [name for name in model_registry.MODEL_REGISTRY_CLS]
-LIGHTWEIGHT_REGRESSION_MODELS = ("linear-regression", "xgboost")
+LIGHTWEIGHT_REGRESSION_MODELS = ["xgboost"]
 
 
 def _make_model(model_name, task_type):

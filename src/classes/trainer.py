@@ -328,9 +328,5 @@ class Trainer:
         if model_params.task_type != "classification":
             return None, 0.0
 
-        if not model_params.compute_training_metrics:
-            logger.info(f"Skipping training metrics for {model_params.name}")
-            return None, 0.0
-
         predictions, predict_time = model.predict(X_train)
         return evaluate_classification_predictions(predictions, y_train), predict_time

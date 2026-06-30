@@ -33,6 +33,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "ipykernel>=7.3.0",
     "mlflow>=3.14.0",
+    "memray>=1.19.3",
 ]
 
 [tool.uv.sources]

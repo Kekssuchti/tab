@@ -40,6 +40,7 @@ class TabPFNAdapter(ModelAdapter):
             model = TabPFNRegressor.create_default_for_version(
                 self.version, **self.kwargs
             )
+        logger.info(f"Loaded model: {model}")
         return model
 
     def fit(self, X_train, y_train):

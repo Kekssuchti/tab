@@ -141,14 +141,14 @@ CLASSIFICATION_SEARCH_SPACES = {
     },
     "tabpfn": {
         "default": {
-            "n_estimators": [4, 8, 16, 32],
+            "n_estimators": [1, 4, 8, 16, 32],
             "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
             "balance_probabilities": [True, False],
         },
     },
     "tabicl-2": {
         "default": {
-            "n_estimators": [4, 8, 16, 32],
+            "n_estimators": [1, 4, 8, 16, 32],
             "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
             "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
             "average_logits": [True, False],
@@ -168,7 +168,7 @@ CLASSIFICATION_SEARCH_SPACES = {
     },
     "mitra": {
         "default": {
-            "n_estimators": [4, 8, 16, 32],
+            "n_estimators": [1, 2, 4, 8],
             "shuffle_classes": [True, False],
             "shuffle_features": [True, False],
             "use_random_transforms": [True, False],
@@ -246,7 +246,7 @@ MODEL_REGISTRY_CLS = {
 
 
 MODEL_REGISTRY_REG = {
-    "linear-regression": ModelSpec(f"{SKLEARN_ADAPTER}:LinearModelAdapter"),
+    # "linear-regression": ModelSpec(f"{SKLEARN_ADAPTER}:LinearModelAdapter"),
     "xgboost": ModelSpec(
         f"{SKLEARN_ADAPTER}:XGBoostAdapter",
         search_spaces=REGRESSION_SEARCH_SPACES["xgboost"],
@@ -257,9 +257,9 @@ MODEL_REGISTRY_REG = {
     ),
     "tabpfn-3": ModelSpec(TABPFN_ADAPTER),
     "tabicl-2": ModelSpec(TABICL_ADAPTER),
-    "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
-    "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
-    "mitra": ModelSpec(MITRA_ADAPTER),
+    # "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
+    # "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
+    # "mitra": ModelSpec(MITRA_ADAPTER),
 }
 
 MODEL_CATALOG = ModelCatalog(

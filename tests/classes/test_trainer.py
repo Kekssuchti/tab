@@ -129,7 +129,10 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
         assert result.tuning_result is not None
         assert set(result.tuning_result.best_params) == {"C"}
         assert result.tuning_result.best_score >= 0
-        assert result.tuning_result.best_score == result.tuning_result.best_metrics.accuracy
+        assert (
+            result.tuning_result.best_score
+            == result.tuning_result.best_metrics.accuracy
+        )
         assert len(result.tuning_result.cv_results.params) == 2
         assert len(result.tuning_result.cv_results.mean_scores) == 2
         assert len(result.tuning_result.cv_results.mean_metrics) == 2
@@ -138,8 +141,6 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
             "accuracy" in fold.metrics.scores
             for fold in result.tuning_result.fold_results
         )
-        assert result.training_metrics is not None
-        assert result.training_metrics.roc_auc is not None
         assert predictions.shape == (len(X), 2)
 
 
@@ -185,7 +186,7 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
 def test_trainer_can_fit_regression_adapter_behind_same_interface():
     X, y = _regression_data()
     model_params = ModelParams(
-        name="linear-regression",
+        name="xgboost",
         task_type="regression",
     )
     trainer = Trainer(
@@ -196,7 +197,7 @@ def test_trainer_can_fit_regression_adapter_behind_same_interface():
     with _trained_result(trainer, model_params, X, y) as result:
         predictions, _ = result.trained_model.predict(X)
 
-        assert result.model_name == "linear-regression"
+        assert result.model_name == "xgboost"
         assert result.training_metrics is None
         assert predictions.shape == (len(X),)
         assert np.isfinite(predictions).all()

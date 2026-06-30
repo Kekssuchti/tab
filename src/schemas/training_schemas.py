@@ -39,7 +39,6 @@ class ModelParams(StrictParams):
     params: dict[str, Any] = Field(default_factory=dict)
     preprocessing: ModelPreprocessingParams | None = None
     tuning: TuningParams | None = None
-    compute_training_metrics: bool = True
 
 
 @dataclass

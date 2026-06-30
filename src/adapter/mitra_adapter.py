@@ -20,8 +20,10 @@ class MitraAdapter(ModelAdapter):
         super().__init__()
         self.task_type = task_type
         default_params = {
-            "seed": config.seed,
+            "device": "cuda",
             "fine_tune": False,
+            "fine_tune_steps": 0,
+            "seed": config.seed,
         }
         self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
@@ -33,11 +35,13 @@ class MitraAdapter(ModelAdapter):
             return MitraClassifier(**self.kwargs)
 
     def fit(self, X_train, y_train):
+        logger.info("Fitting Mitra")
         start_time = timer()
         self.model.fit(X_train, y_train)
         return timer() - start_time
 
     def predict(self, X_test):
+        logger.info("Predicting with Mitra")
         start_time = timer()
         result = self.predict_from_estimator(X_test)
 

@@ -6,10 +6,10 @@ app = marimo.App()
 
 @app.cell
 def _():
-    from dataclasses import asdict
     import os
-    from pathlib import Path
     import sys
+    from dataclasses import asdict
+    from pathlib import Path
 
     os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
 
@@ -24,7 +24,7 @@ def _():
     from src.classes.dataset import Dataset
     from src.classes.trainer import Trainer
     from src.config import config
-    from src.schemas.dataset_schemas import DataSplitParams, DatasetParams
+    from src.schemas.dataset_schemas import DatasetParams, DataSplitParams
     from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
     from src.schemas.training_schemas import ModelParams
     from src.utils.evaluation_utils import evaluate_classification_predictions
@@ -73,12 +73,12 @@ def _():
     DATASET_SCALER = {"type": "none"}
 
     # Single model to train. Edit these params to profile foundation-model speed.
-    MODEL_NAME = "orion-bix"
+    MODEL_NAME = "tabpfn-2.5"
     MODEL_PARAMS = {
-        "random_state": RANDOM_STATE,
         "n_estimators": 8,
+        "predict_batch_size": 2048,
+        "inference_config": {"SUBSAMPLE_SAMPLES": 15_000},
     }
-
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None
     TASK_TYPE = "classification"
@@ -147,7 +147,6 @@ def _(
         params=MODEL_PARAMS,
         preprocessing=MODEL_PREPROCESSING,
         tuning=None,
-        compute_training_metrics=False
     )
     return dataset_params, model_params
 
@@ -185,7 +184,9 @@ def _(Dataset, asdict, dataset_params, mo, pd):
         [
             mo.md("## Dataset"),
             dataset_table,
-            pd.DataFrame(asdict(file_summary) for file_summary in dataset_summary.data_files),
+            pd.DataFrame(
+                asdict(file_summary) for file_summary in dataset_summary.data_files
+            ),
         ]
     )
     return (data,)
@@ -236,7 +237,9 @@ def _(
     training_result,
 ):
     if model_params.task_type != "classification":
-        raise NotImplementedError("This notebook currently evaluates classification models only")
+        raise NotImplementedError(
+            "This notebook currently evaluates classification models only"
+        )
     if PREDICTION_REPEATS < 1:
         raise ValueError("PREDICTION_REPEATS must be at least 1")
     if training_result.trained_model is None:
@@ -254,7 +257,9 @@ def _(
             timings = []
             predictions = None
             for _ in range(PREDICTION_REPEATS):
-                predictions, predict_time = training_result.trained_model.predict(test_set.X)
+                predictions, predict_time = training_result.trained_model.predict(
+                    test_set.X
+                )
                 timings.append(predict_time)
 
             metrics = evaluate_classification_predictions(
@@ -289,7 +294,10 @@ def _(asdict, mo, pd, training_result):
     }
     if training_result.training_metrics is not None:
         training_row.update(
-            {f"train_{key}": value for key, value in asdict(training_result.training_metrics).items()}
+            {
+                f"train_{key}": value
+                for key, value in asdict(training_result.training_metrics).items()
+            }
         )
 
     mo.vstack(
@@ -308,6 +316,14 @@ def _(evaluation_table, mo):
             mo.md("## Test Timing And Metrics"),
             evaluation_table,
         ]
+    )
+    return
+
+
+@app.cell
+def _(MODEL_PARAMS, evaluation_table):
+    print(
+        f"& {MODEL_PARAMS.get('n_estimators', '')} & {round(evaluation_table['rows_per_second_mean'][0]):,} / {round(evaluation_table['rows_per_second_mean'][1]):,} \\\\"
     )
     return
 

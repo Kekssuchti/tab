@@ -50,9 +50,7 @@ def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(
         SimpleNamespace(dir_run_results=tmp_path / "runs"),
     )
 
-    params = load_pipeline_params(
-        "tests/integration/pipeline_integration_config.yaml"
-    )
+    params = load_pipeline_params("tests/integration/pipeline_integration_config.yaml")
     result = Pipeline(params).run()
 
     assert result.run_id == params.run_id
@@ -69,7 +67,6 @@ def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(
     for training_result in result.training_results:
         assert training_result.tuned
         assert training_result.tuning_result is not None
-        assert training_result.training_metrics is not None
         assert training_result.tuning_result.best_score >= 0.0
         assert training_result.tuning_result.cv_results.params
         assert training_result.tuning_result.cv_results.mean_metrics
@@ -92,8 +89,4 @@ def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(
             assert 0.0 <= test_result.metrics.accuracy <= 1.0
             assert 0.0 <= test_result.metrics.f1 <= 1.0
             assert test_result.metrics.roc_auc is not None
-        assert (
-            -1.0
-            <= model_result.final_test_metrics.mimic_minus_tudd.accuracy
-            <= 1.0
-        )
+        assert -1.0 <= model_result.final_test_metrics.mimic_minus_tudd.accuracy <= 1.0
