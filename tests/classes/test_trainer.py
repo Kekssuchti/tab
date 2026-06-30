@@ -9,6 +9,7 @@ from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 from src.schemas.training_schemas import (
     CVParams,
     ModelParams,
+    OptunaParams,
     TuningParams,
 )
 from src.utils.model_lifecycle import release_model
@@ -142,6 +143,45 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
             for fold in result.tuning_result.fold_results
         )
         assert predictions.shape == (len(X), 2)
+
+
+def test_trainer_can_tune_with_optuna_categorical_grid():
+    X, y = _classification_data()
+    model_params = ModelParams(
+        name="logistic-regression",
+        task_type="classification",
+        params={"max_iter": 200},
+        tuning=TuningParams(
+            method="optuna",
+            grid={"C": [0.1, 1.0]},
+            scoring="accuracy",
+            cv=CVParams(n_splits=2, random_state=1),
+            optuna=OptunaParams(n_trials=2, sampler="random"),
+        ),
+    )
+    trainer = Trainer(
+        params=(model_params,),
+        **_preprocess_pipeline(),
+    )
+
+    with _trained_result(trainer, model_params, X, y) as result:
+        predictions, _ = result.trained_model.predict(X)
+
+        assert result.tuned
+        assert result.tuning_result is not None
+        assert result.tuning_result.method == "optuna"
+        assert len(result.tuning_result.cv_results.params) == 2
+        assert result.tuning_result.cv_results.trial_numbers == [0, 1]
+        assert len(result.tuning_result.fold_results) == 4
+        assert set(result.tuning_result.best_params) == {"C"}
+        assert predictions.shape == (len(X), 2)
+
+
+def test_trainer_merges_nested_tuning_params():
+    assert Trainer._merge_params(
+        {"inference_config": {"SUBSAMPLE_SAMPLES": 128, "OTHER": True}},
+        {"inference_config": {"SUBSAMPLE_SAMPLES": 256}},
+    ) == {"inference_config": {"SUBSAMPLE_SAMPLES": 256, "OTHER": True}}
 
 
 def test_trainer_releases_models_between_tuning_folds(monkeypatch):

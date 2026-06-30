@@ -100,6 +100,43 @@ def test_model_spec_uses_explicit_tuning_grid_as_the_search_space():
         spec.tuning_candidates(None, {"C": []})
 
 
+def test_model_spec_expands_nested_tuning_grid_keys():
+    spec = model_registry.get_model_spec(
+        ModelParams(name="tabpfn-3", task_type="classification")
+    )
+
+    assert spec.tuning_candidates(
+        None,
+        {
+            "inference_config.SUBSAMPLE_SAMPLES": [128, 256],
+            "inference_config.FINGERPRINT_FEATURE": [True],
+            "inference_config.PREPROCESS_TRANSFORMS.name": ["power"],
+            "inference_config.PREPROCESS_TRANSFORMS.categorical_name": ["none"],
+        },
+    ) == [
+        {
+            "inference_config": {
+                "SUBSAMPLE_SAMPLES": 128,
+                "FINGERPRINT_FEATURE": True,
+                "PREPROCESS_TRANSFORMS": {
+                    "name": "power",
+                    "categorical_name": "none",
+                },
+            }
+        },
+        {
+            "inference_config": {
+                "SUBSAMPLE_SAMPLES": 256,
+                "FINGERPRINT_FEATURE": True,
+                "PREPROCESS_TRANSFORMS": {
+                    "name": "power",
+                    "categorical_name": "none",
+                },
+            }
+        },
+    ]
+
+
 @pytest.mark.parametrize("model_name", CLASSIFICATION_MODELS)
 def test_registered_classification_models_fit_and_predict(model_name):
     X, y = load_toy_data_cls()

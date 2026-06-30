@@ -1,3 +1,4 @@
+from copy import deepcopy
 from timeit import default_timer as timer
 
 import numpy as np
@@ -28,8 +29,22 @@ class TabPFNAdapter(ModelAdapter):
             "random_state": config.seed,
         }
         # override default kwargs with user-provided kwargs
-        self.kwargs = {**default_kwargs, **kwargs}
+        self.kwargs = self._normalize_kwargs({**default_kwargs, **kwargs})
         self.model = self._load_model()
+
+    @staticmethod
+    def _normalize_kwargs(kwargs):
+        kwargs = dict(kwargs)
+        inference_config = kwargs.get("inference_config")
+        if not isinstance(inference_config, dict):
+            return kwargs
+
+        inference_config = deepcopy(inference_config)
+        transforms = inference_config.get("PREPROCESS_TRANSFORMS")
+        if isinstance(transforms, dict):
+            inference_config["PREPROCESS_TRANSFORMS"] = [transforms]
+        kwargs["inference_config"] = inference_config
+        return kwargs
 
     def _load_model(self):
         if self.task_type == "classification":
@@ -40,7 +55,6 @@ class TabPFNAdapter(ModelAdapter):
             model = TabPFNRegressor.create_default_for_version(
                 self.version, **self.kwargs
             )
-        logger.info(f"Loaded model: {model}")
         return model
 
     def fit(self, X_train, y_train):

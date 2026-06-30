@@ -208,10 +208,13 @@ def _cv_candidate_observations(
                     candidate_label,
                     candidate_index,
                     ranks[candidate_index],
+                    tuning_result.method,
                 ),
                 params={
+                    "cv.method": _param_value(tuning_result.method),
                     "cv.candidate": candidate_label,
                     "cv.candidate_index": _param_value(candidate_index),
+                    **_cv_trial_params(tuning_result, candidate_index),
                     **{
                         f"cv.params.{key}": _param_value(value)
                         for key, value in candidate_params.items()
@@ -226,6 +229,13 @@ def _cv_candidate_observations(
         )
 
     return tuple(observations)
+
+
+def _cv_trial_params(tuning_result: Any, candidate_index: int) -> dict[str, str]:
+    trial_numbers = tuning_result.cv_results.trial_numbers
+    if trial_numbers is None:
+        return {}
+    return {"cv.trial_number": _param_value(trial_numbers[candidate_index])}
 
 
 def _pipeline_tags(params: PipelineParams) -> dict[str, str]:
@@ -267,6 +277,8 @@ def _model_tags(
         tags["failure_stage"] = training_result.failure_stage
     if training_result.error is not None:
         tags["error"] = training_result.error
+    if training_result.tuning_result is not None:
+        tags["tuning_method"] = training_result.tuning_result.method
     return tags
 
 
@@ -277,6 +289,7 @@ def _cv_candidate_tags(
     candidate_label: str,
     candidate_index: int,
     candidate_rank: int,
+    tuning_method: str,
 ) -> dict[str, str]:
     return {
         "pipeline_id": params.run_id,
@@ -286,6 +299,7 @@ def _cv_candidate_tags(
         "candidate": candidate_label,
         "candidate_index": str(candidate_index),
         "candidate_rank": str(candidate_rank),
+        "tuning_method": tuning_method,
         "task_type": model_params.task_type,
         "trained_on": _trained_on(params),
         "train_sources": _train_sources(params),
@@ -358,6 +372,7 @@ def _model_run_params(
 
     run_params.update(
         {
+            "model.tuning.method": _param_value(tuning_result.method),
             "model.tuning.scoring": _param_value(tuning_result.scoring),
             "model.tuning.best_params": _param_value(tuning_result.best_params),
         }
@@ -394,6 +409,7 @@ def _model_config_params(model_id: str, model_params: ModelParams) -> dict[str, 
         return _string_params(run_params)
 
     run_params[f"{prefix}.tuning.enabled"] = True
+    run_params[f"{prefix}.tuning.method"] = model_params.tuning.method
     run_params[f"{prefix}.tuning.scoring"] = model_params.tuning.scoring
     run_params[f"{prefix}.tuning.search_space"] = model_params.tuning.search_space
     run_params[f"{prefix}.tuning.cv.n_splits"] = model_params.tuning.cv.n_splits
@@ -401,6 +417,19 @@ def _model_config_params(model_id: str, model_params: ModelParams) -> dict[str, 
     run_params[f"{prefix}.tuning.cv.random_state"] = model_params.tuning.cv.random_state
     if model_params.tuning.grid is not None:
         run_params[f"{prefix}.tuning.grid"] = model_params.tuning.grid
+    if model_params.tuning.method == "optuna":
+        run_params[f"{prefix}.tuning.optuna.n_trials"] = (
+            model_params.tuning.optuna.n_trials
+        )
+        run_params[f"{prefix}.tuning.optuna.sampler"] = (
+            model_params.tuning.optuna.sampler
+        )
+        run_params[f"{prefix}.tuning.optuna.n_startup_trials"] = (
+            model_params.tuning.optuna.n_startup_trials
+        )
+        run_params[f"{prefix}.tuning.optuna.timeout"] = (
+            model_params.tuning.optuna.timeout
+        )
 
     return _string_params(run_params)
 

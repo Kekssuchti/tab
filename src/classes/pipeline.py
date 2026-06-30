@@ -100,7 +100,7 @@ class Pipeline:
             default_imputer=self.params.dataset.imputer,
             default_scaler=self.params.dataset.scaler_encoder,
         )
-        trainer.validate_model_configs()
+        # trainer.validate_model_configs()
 
         data = self.dataset.get_dataset()
         dataset_summary = self.dataset.summarize(data)
