@@ -10,7 +10,7 @@ from src.schemas.dataset_schemas import DatasetPartSummary, XYDataset
 from src.utils.logger import logger
 
 
-def _remove_impossible_values(df, json_file_path):
+def remove_impossible_values(df, json_file_path):
     """
     Remove entries from a DataFrame based on limits specified in a JSON file.
     Mostly measurement errors or very unrealistic values
@@ -124,7 +124,7 @@ def standard_preprocessing(
 
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-    df, rm_count = _remove_impossible_values(df, data_limit_config_path)
+    df, rm_count = remove_impossible_values(df, data_limit_config_path)
     logger.info(f"removed {rm_count} unreasonable values:")
     df = _filter_reasonable_los(df, min_los_filter, max_los_filter)
     df = _filter_childs(df, min_age=min_age_filter)

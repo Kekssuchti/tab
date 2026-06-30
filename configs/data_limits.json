@@ -15,6 +15,10 @@
     "upper_bound": 240,
     "lower_bound": 20
   },
+  "Bmi+100%mean": {
+    "upper_bound": 120,
+    "lower_bound": 10
+  },
   "Ph+100%mean": {
     "upper_bound": 7.75,
     "lower_bound": 7.15

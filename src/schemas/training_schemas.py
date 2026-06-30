@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -21,11 +21,20 @@ class CVParams(StrictParams):
     random_state: int = Field(default_factory=lambda: config.seed)
 
 
+class OptunaParams(StrictParams):
+    n_trials: int = Field(default=30, ge=1)
+    sampler: Literal["tpe", "random"] = "tpe"
+    n_startup_trials: int = Field(default=5, ge=0)
+    timeout: float | None = Field(default=None, gt=0)
+
+
 class TuningParams(StrictParams):
+    method: Literal["grid", "optuna"] = "grid"
     search_space: str | None = "default"
     grid: dict[str, list[Any]] | None = None
     scoring: ScoringMethodCLS = "roc_auc"
     cv: CVParams = Field(default_factory=CVParams)
+    optuna: OptunaParams = Field(default_factory=OptunaParams)
 
 
 class ModelPreprocessingParams(StrictParams):
@@ -60,6 +69,7 @@ class TuningCVResults:
     fold_scores: list[list[float]]
     fold_times: list[list[float]]
     mean_metrics: list[ClassificationMetrics] | list[RegressionMetrics]
+    trial_numbers: list[int] | None = None
 
 
 @dataclass
@@ -69,6 +79,7 @@ class TuningResult:
     best_metrics: ClassificationMetrics | RegressionMetrics
     cv_results: TuningCVResults
     fold_results: list[FoldResult] = field(default_factory=list)
+    method: Literal["grid", "optuna"] = "grid"
 
     @property
     def best_score(self) -> float:

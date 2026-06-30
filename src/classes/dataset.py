@@ -19,7 +19,11 @@ from src.schemas.dataset_schemas import (
     DatasetSummary,
     XYDataset,
 )
-from src.utils.dataset_utils import hash_file_sha256, summarize_data_part
+from src.utils.dataset_utils import (
+    hash_file_sha256,
+    remove_impossible_values,
+    summarize_data_part,
+)
 from src.utils.logger import logger
 
 
@@ -98,6 +102,22 @@ class Dataset:
         return dfs
 
     def _runtime_preprocessing(self, df):
+        index_columns = [
+            column for column in df.columns if column.startswith("Unnamed:")
+        ]
+        if index_columns:
+            df = df.drop(columns=index_columns)
+            logger.info(f"Dropped CSV index columns: {index_columns}")
+
+        df, removed_counts = remove_impossible_values(
+            df, self.params.data_cleaner.outlier_limits_path
+        )
+        removed_counts = {
+            column: count for column, count in removed_counts.items() if count
+        }
+        if removed_counts:
+            logger.info(f"Runtime removed unreasonable values: {removed_counts}")
+
         # here we set age to max = 90 (only really needed for tudd data)
         df["Age"] = df["Age"].clip(upper=90)
         return df

@@ -19,11 +19,8 @@ class TabICLAdapter(ModelAdapter):
         self.task_type = task_type
         default_kwargs = {
             "random_state": config.seed,
-            "feat_shuffle_method": "latin",
-            "class_shuffle_method": "shift",
-            "support_many_classes": False,
         }
-        self.predict_batch_size = kwargs.pop("predict_batch_size", 99999999)
+        self.predict_batch_size = kwargs.pop("predict_batch_size", 9999999)
         if self.predict_batch_size is not None and self.predict_batch_size < 1:
             raise ValueError("predict_batch_size must be at least 1")
         self.kwargs = {**default_kwargs, **kwargs}

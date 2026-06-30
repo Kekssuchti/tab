@@ -18,6 +18,7 @@ APPEND_LOG_BACKUP_COUNT = 10
 def configure_logger():
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
+    logging.captureWarnings(True)
 
     config.dir_log.mkdir(parents=True, exist_ok=True)
 
@@ -53,6 +54,7 @@ def configure_logger():
     ]
     for lib in _noisy_libs:
         logging.getLogger(lib).setLevel(logging.WARNING)
+    logging.getLogger("py.warnings").setLevel(logging.WARNING)
 
     logger.info("logger is configured")
     return logger
