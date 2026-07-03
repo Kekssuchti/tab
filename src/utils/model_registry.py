@@ -11,7 +11,6 @@ from src.utils.logger import logger
 
 if TYPE_CHECKING:
     from src.interfaces.model_interface import ModelAdapter
-from tabpfn.classifier import ClassifierEvalMetrics
 
 SKLEARN_ADAPTER = "src.adapter.sklearn_adapter"
 TABPFN_ADAPTER = "src.adapter.tabpfn_adapter:TabPFNAdapter"
@@ -20,6 +19,7 @@ LIMIX_ADAPTER = "src.adapter.limix_adapter:LimixAdapter"
 MITRA_ADAPTER = "src.adapter.mitra_adapter:MitraAdapter"
 ORION_MSP_ADAPTER = "src.adapter.orion_msp_adapter:OrionMSPAdapter"
 ORION_BIX_ADAPTER = "src.adapter.orion_bix_adapter:OrionBixAdapter"
+TABFM_ADAPTER = "src.adapter.tabfm_adapter:TabfmAdapter"
 
 
 @dataclass(frozen=True)
@@ -268,6 +268,12 @@ CLASSIFICATION_SEARCH_SPACES = {
             "use_random_transforms": [True, False],
         }
     },
+    "tabfm": {
+        "default": {
+            "n_estimators": [1, 2, 4, 8],
+            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+        }
+    },
 }
 
 REGRESSION_SEARCH_SPACES = {
@@ -335,6 +341,9 @@ MODEL_REGISTRY_CLS = {
     ),
     "orion-bix": ModelSpec(
         ORION_BIX_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["orion"]
+    ),
+    "tabfm": ModelSpec(
+        TABFM_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["tabfm"]
     ),
 }
 

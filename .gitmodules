@@ -1,3 +1,6 @@
 [submodule "external/limix"]
 	path = external/limix
 	url = https://github.com/limix-ldm-ai/LimiX.git
+[submodule "external/tabfm"]
+	path = external/tabfm
+	url = git@github.com:google-research/tabfm.git
