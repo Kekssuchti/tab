@@ -75,9 +75,9 @@ def _():
     }
     DATASET_SCALER = {"type": "none"}
 
-    MODEL_NAME = "tabfm"
+    MODEL_NAME = "tabpfn-2.5"
     MODEL_PARAMS = {
-        "n_estimators": [1],
+        "n_estimators": [4],
         "predict_batch_size": 2048,
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
