@@ -75,9 +75,10 @@ def _():
     }
     DATASET_SCALER = {"type": "none"}
 
-    MODEL_NAME = "orion-msp"
+    MODEL_NAME = "tabfm"
     MODEL_PARAMS = {
-        "n_estimators": [32],
+        "n_estimators": [1],
+        "predict_batch_size": 2048,
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None
