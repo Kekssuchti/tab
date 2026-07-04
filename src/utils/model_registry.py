@@ -214,22 +214,9 @@ CLASSIFICATION_SEARCH_SPACES = {
             "n_estimators": [1, 4, 8, 16, 32],
             "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
             "balance_probabilities": [True, False],
-            "inference_config.SUBSAMPLE_SAMPLES": [None, 0.1, 0.3, 0.5],
-            "inference_config.FEATURE_SHIFT_METHOD": ["shuffle", "rotate"],
-            "inference_config.CLASS_SHIFT_METHOD": ["shuffle", "rotate"],
+            "inference_config.SUBSAMPLE_SAMPLES": [None, 0.1, 0.3, 0.5, 0.8],
             "inference_config.POLYNOMIAL_FEATURES": ["no", 5, 10, 15],
             "inference_config.ENABLE_GPU_PREPROCESSING": [True],
-            # technically this would allow for arbitrary long lists
-            # but for reasonable comparisions 1 at a time is enough and doesnt explode complexity
-            "inference_config.PREPROCESS_TRANSFORMS.name": [
-                "power",
-                "power_box",
-                "quantile_uni_coarse",
-                "quantile_norm_coarse",
-                "kdi",
-                "none",
-            ],
-            "inference_config.PREPROCESS_TRANSFORMS.categorical_name": ["none"],
         },
     },
     "tabicl-2": {
@@ -244,8 +231,6 @@ CLASSIFICATION_SEARCH_SPACES = {
             "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
             "average_logits": [True, False],
             "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
-            "feature_shuffle_method": ["none", "latin", "shift", "random"],
-            "class_shuffle_method": ["none", "latin", "shift", "random"],
         },
     },
     "limix": {
@@ -255,9 +240,11 @@ CLASSIFICATION_SEARCH_SPACES = {
     },
     "orion": {
         "default": {
-            "n_estimators": [4, 8, 16],
-            "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
+            "n_estimators": [1, 2, 4, 8, 16, 32],
             "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
+            "average_logits": [True, False],
+
         }
     },
     "mitra": {
