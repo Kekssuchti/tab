@@ -6,7 +6,12 @@ import pandas as pd
 from src.classes import pipeline as pipeline_module
 from src.classes.pipeline import Pipeline
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
-from src.schemas.training_schemas import ModelTrainingResult
+from src.schemas.training_schemas import FoldResult, ModelTrainingResult, TuningResult
+from src.utils.evaluation_utils import (
+    CVClassificationMetrics,
+    CVFinalTestMetrics,
+    ClassificationMetrics,
+)
 
 
 class _PredictsFromFirstColumn:
@@ -48,26 +53,49 @@ def _test_set(labels, signal=None):
     return XYDataset(X=pd.DataFrame({"signal": signal}), y=y)
 
 
-def test_pipeline_evaluates_mimic_and_tudd_test_sets_separately():
-    bundle = DatasetBundle(
-        train_data=_test_set([0, 1]),
-        test_mimic=_test_set([0, 1, 0, 1]),
-        test_tudd=_test_set([1, 0, 1, 0], signal=[0, 1, 0, 1]),
-    )
-    training_result = ModelTrainingResult(
-        model_name="fake-classifier",
-        task_type="classification",
-        trained_model=_PredictsFromFirstColumn(),
-        tuned=False,
-        fit_time=0.2,
+def _metrics(value: float) -> ClassificationMetrics:
+    return ClassificationMetrics(
+        roc_auc=value,
+        prc_auc=value,
+        f1=value,
+        accuracy=value,
+        sensitivity=value,
+        precision=value,
+        confusion_matrix=np.array([[value, 0.0], [0.0, value]]),
+        n_classes=2,
     )
 
-    result = Pipeline._evaluate_trained_model(
-        object.__new__(Pipeline), training_result, bundle
+
+def _tuned_training_result(model_name: str) -> ModelTrainingResult:
+    mimic = CVClassificationMetrics([_metrics(1.0), _metrics(1.0)])
+    tudd = CVClassificationMetrics([_metrics(0.0), _metrics(0.0)])
+    mean_metrics = _metrics(1.0)
+    return ModelTrainingResult(
+        model_name=model_name,
+        task_type="classification",
+        tuned=True,
+        fit_time=0.2,
+        tuning_result=TuningResult(
+            best_params={},
+            scoring="accuracy",
+            test_metrics=CVFinalTestMetrics(
+                mimic_test=mimic,
+                mimic_prediction_time=0.1,
+                tudd_test=tudd,
+                tudd_prediction_time=0.2,
+            ),
+            fold_results=[FoldResult(0, 0, mean_metrics, 0.0, {})],
+        ),
+    )
+
+
+def test_pipeline_exposes_tuned_test_metrics_as_model_result():
+    result = Pipeline._model_result_from_training_result(
+        _tuned_training_result("fake-classifier")
     )
 
     assert result.model_name == "fake-classifier"
-    assert np.isclose(result.total_time, 0.4)
+    assert np.isclose(result.total_time, 0.5)
     assert set(result.metrics_by_test_set) == {"mimic", "tudd"}
     assert result.metrics_by_test_set["mimic"].accuracy == 1.0
     assert result.metrics_by_test_set["tudd"].accuracy == 0.0
@@ -105,7 +133,7 @@ def test_pipeline_releases_each_model_before_training_next(monkeypatch):
         def validate_training_data(self, X_train, y_train):
             pass
 
-        def train_model(self, model_params, X_train, y_train):
+        def train_evaluate_model(self, model_params, data):
             assert _ReleasablePredictor.active == 0
             return ModelTrainingResult(
                 model_name=model_params.name,
@@ -130,10 +158,7 @@ def test_pipeline_releases_each_model_before_training_next(monkeypatch):
 
     result = pipeline.run()
 
-    assert [model.model_name for model in result.model_results] == [
-        "model-a",
-        "model-b",
-    ]
+    assert result.model_results == ()
     assert _ReleasablePredictor.peak == 1
     assert _ReleasablePredictor.active == 0
     assert [tr.trained_model for tr in result.training_results] == [None, None]
@@ -163,16 +188,10 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
         def validate_training_data(self, X_train, y_train):
             pass
 
-        def train_model(self, model_params, X_train, y_train):
+        def train_evaluate_model(self, model_params, data):
             if model_params.name == "model-a":
                 raise ValueError("bad params")
-            return ModelTrainingResult(
-                model_name=model_params.name,
-                task_type="classification",
-                trained_model=_PredictsFromFirstColumn(),
-                tuned=False,
-                fit_time=0.2,
-            )
+            return _tuned_training_result(model_params.name)
 
     monkeypatch.setattr(pipeline_module, "Trainer", _FakeTrainer)
 
@@ -221,19 +240,10 @@ def test_pipeline_releases_model_after_evaluation_failure_and_continues(monkeypa
         def validate_model_configs(self):
             pass
 
-        def train_model(self, model_params, X_train, y_train):
-            model = (
-                _FailingReleasablePredictor()
-                if model_params.name == "model-a"
-                else _ReleasablePredictor()
-            )
-            return ModelTrainingResult(
-                model_name=model_params.name,
-                task_type="classification",
-                trained_model=model,
-                tuned=False,
-                fit_time=0.2,
-            )
+        def train_evaluate_model(self, model_params, data):
+            if model_params.name == "model-a":
+                raise RuntimeError("bad evaluation")
+            return _tuned_training_result(model_params.name)
 
     monkeypatch.setattr(pipeline_module, "Trainer", _FakeTrainer)
 
@@ -250,7 +260,7 @@ def test_pipeline_releases_model_after_evaluation_failure_and_continues(monkeypa
 
     result = pipeline.run()
 
-    assert result.training_results[0].failure_stage == "evaluation"
+    assert result.training_results[0].failure_stage == "training"
     assert result.training_results[0].error == "RuntimeError: bad evaluation"
     assert result.training_results[0].trained_model is None
     assert result.training_results[1].succeeded

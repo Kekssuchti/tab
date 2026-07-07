@@ -5,16 +5,15 @@ from typing import Callable
 from src.classes.dataset import Dataset
 from src.classes.plotter import Plotter
 from src.classes.trainer import Trainer
-from src.schemas.dataset_schemas import DatasetBundle, DatasetSummary, XYDataset
+from src.schemas.dataset_schemas import DatasetSummary
 from src.schemas.pipeline_schemas import PipelineParams
 from src.schemas.training_schemas import (
     ClassificationMetrics,
     ModelTrainingResult,
 )
 from src.utils.evaluation_utils import (
+    CVClassificationMetrics,
     FinalTestMetrics,
-    evaluate_classification_predictions,
-    final_test_metrics,
 )
 from src.utils.logger import logger
 from src.utils.model_identity import model_instance_ids
@@ -106,7 +105,6 @@ class Pipeline:
         dataset_summary = self.dataset.summarize(data)
 
         model_runs = []
-        y_train = data.train_data.y.to_numpy()
         for model_instance_id, model_params in zip(
             model_instance_ids(self.params.training),
             self.params.training,
@@ -117,14 +115,11 @@ class Pipeline:
             mr = None
             failure_stage = "training"
             try:
-                tr = trainer.train_model(
-                    model_params=model_params,
-                    X_train=data.train_data.X,
-                    y_train=y_train,
+                tr = trainer.train_evaluate_model(model_params=model_params, data=data)
+                mr = self._model_result_from_training_result(tr)
+                logger.info(
+                    f"Model {model_instance_id} trained and evaluated successfully"
                 )
-                failure_stage = "evaluation"
-                mr = self._evaluate_trained_model(tr, data)
-                logger.info(f"Model {model_instance_id} evaluated successfully")
             except Exception as exc:
                 logger.exception(
                     f"Model {model_params.name} failed during {failure_stage}; continuing"
@@ -172,46 +167,6 @@ class Pipeline:
             total_time=total_time,
         )
 
-    def _evaluate_trained_model(
-        self,
-        training_result: ModelTrainingResult,
-        data: DatasetBundle,
-    ) -> ModelRunResult:
-        test_results = (
-            self._evaluate_test_set("mimic", training_result, data.test_mimic),
-            self._evaluate_test_set("tudd", training_result, data.test_tudd),
-        )
-
-        return ModelRunResult(
-            model_name=training_result.model_name,
-            test_results=test_results,
-            final_test_metrics=final_test_metrics(
-                test_results[0].metrics,
-                test_results[1].metrics,
-            ),
-            fit_time=training_result.fit_time,
-        )
-
-    @staticmethod
-    def _evaluate_test_set(
-        dataset_name: str,
-        training_result: ModelTrainingResult,
-        test_set: XYDataset,
-    ) -> TestSetEvaluationResult:
-        if training_result.task_type != "classification":
-            raise NotImplementedError("Regression evaluation is not implemented yet")
-
-        predictions, predict_time = training_result.trained_model.predict(test_set.X)
-        metrics = evaluate_classification_predictions(
-            predictions, test_set.y.to_numpy()
-        )
-
-        return TestSetEvaluationResult(
-            dataset_name=dataset_name,
-            metrics=metrics,
-            predict_time=predict_time,
-        )
-
     @staticmethod
     def _failed_training_result(
         model_params,
@@ -221,7 +176,7 @@ class Pipeline:
     ) -> ModelTrainingResult:
         return ModelTrainingResult(
             model_name=model_params.name,
-            task_type=model_params.task_type,
+            task_type=getattr(model_params, "task_type", "classification"),
             trained_model=None,
             tuned=False,
             fit_time=fit_time,
@@ -229,6 +184,56 @@ class Pipeline:
             failure_stage=failure_stage,
         )
 
+    @staticmethod
+    def _model_result_from_training_result(
+        training_result: ModelTrainingResult,
+    ) -> ModelRunResult | None:
+        tuning_result = training_result.tuning_result
+        if tuning_result is None:
+            return None
+
+        test_metrics = tuning_result.test_metrics
+        mimic_metrics = _cv_metrics_to_classification_metrics(test_metrics.mimic_test)
+        tudd_metrics = _cv_metrics_to_classification_metrics(test_metrics.tudd_test)
+        test_results = (
+            TestSetEvaluationResult(
+                "mimic",
+                mimic_metrics,
+                test_metrics.mimic_prediction_time,
+            ),
+            TestSetEvaluationResult(
+                "tudd",
+                tudd_metrics,
+                test_metrics.tudd_prediction_time,
+            ),
+        )
+        return ModelRunResult(
+            model_name=training_result.model_name,
+            test_results=test_results,
+            final_test_metrics=FinalTestMetrics(
+                mimic_test=mimic_metrics,
+                mimic_prediction_time=test_metrics.mimic_prediction_time,
+                tudd_test=tudd_metrics,
+                tudd_prediction_time=test_metrics.tudd_prediction_time,
+            ),
+            fit_time=training_result.fit_time,
+        )
+
 
 def _format_exception(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
+
+
+def _cv_metrics_to_classification_metrics(
+    metrics: CVClassificationMetrics,
+) -> ClassificationMetrics:
+    return ClassificationMetrics(
+        roc_auc=metrics.mean_roc_auc,
+        prc_auc=metrics.mean_prc_auc,
+        f1=metrics.mean_f1,
+        accuracy=metrics.mean_accuracy,
+        sensitivity=metrics.mean_sensitivity,
+        precision=metrics.mean_precision,
+        confusion_matrix=metrics.mean_confusion_matrix,
+        n_classes=metrics.n_classes,
+    )

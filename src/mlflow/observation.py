@@ -13,7 +13,11 @@ from src.schemas.training_schemas import FoldResult, ModelParams, ModelTrainingR
 from src.utils.evaluation_utils import (
     ClassificationMetricDeltas,
     ClassificationMetrics,
+    CVClassificationMetrics,
+    CVFinalTestMetrics,
     RegressionMetrics,
+    classification_score,
+    mean_classification_metrics,
 )
 from src.utils.model_identity import model_instance_ids
 
@@ -52,6 +56,16 @@ class _EvaluationBundle:
     table_rows: tuple[dict[str, str | float], ...]
 
 
+@dataclass(frozen=True)
+class _CandidateSummary:
+    candidate_index: int
+    params: dict[str, Any]
+    folds: tuple[FoldResult, ...]
+    mean_score: float
+    std_score: float
+    mean_metrics: ClassificationMetrics | RegressionMetrics
+
+
 def assemble_pipeline_observation(
     params: PipelineParams,
     result: PipelineResult,
@@ -67,9 +81,7 @@ def assemble_pipeline_observation(
             **_dataset_summary_params(result),
             **_pipeline_model_config_params(params),
         },
-        metrics=_metric_logs_from_values(
-            (("pipeline.total_time", result.total_time),)
-        ),
+        metrics=_metric_logs_from_values((("pipeline.total_time", result.total_time),)),
         evaluations=evaluation_bundle.evaluations,
         table_rows=evaluation_bundle.table_rows,
         children=tuple(
@@ -118,9 +130,7 @@ def _model_run_observation(
     }
     if model_result is None:
         metrics = list(
-            _metric_logs_from_values(
-                (("train.fit_time", training_result.fit_time),)
-            )
+            _metric_logs_from_values((("train.fit_time", training_result.fit_time),))
         )
         if training_result.tuning_result is not None:
             metrics.extend(
@@ -158,41 +168,28 @@ def _cv_candidate_observations(
     if tuning_result is None:
         return ()
 
-    ranks = _candidate_ranks(tuning_result.cv_results.mean_scores)
+    candidate_summaries = _candidate_summaries(tuning_result)
+    ranks = _candidate_ranks(
+        [candidate.mean_score for candidate in candidate_summaries]
+    )
     observations = []
-    for candidate_index, candidate_params in enumerate(
-        tuning_result.cv_results.params
-    ):
-        candidate_label = f"cv{candidate_index:02d}"
-        candidate_folds = [
-            fold
-            for fold in tuning_result.fold_results
-            if fold.candidate_index == candidate_index
-        ]
+    for position, candidate in enumerate(candidate_summaries):
+        candidate_label = f"cv{candidate.candidate_index:02d}"
         metrics = [
             *_metric_logs_from_values(
                 (
-                    ("cv.rank", ranks[candidate_index]),
-                    (
-                        "cv.mean_score",
-                        tuning_result.cv_results.mean_scores[candidate_index],
-                    ),
-                    (
-                        "cv.std_score",
-                        tuning_result.cv_results.std_scores[candidate_index],
-                    ),
+                    ("cv.rank", ranks[position]),
+                    ("cv.mean_score", candidate.mean_score),
+                    ("cv.std_score", candidate.std_score),
                 )
             ),
-            *_metric_logs(
-                "cv.mean",
-                tuning_result.cv_results.mean_metrics[candidate_index],
-            ),
+            *_metric_logs("cv.mean", candidate.mean_metrics),
         ]
-        for name, value in _metric_stds(candidate_folds).items():
+        for name, value in _metric_stds(list(candidate.folds)).items():
             metric = _metric_log(f"cv.std.{name}", value)
             if metric is not None:
                 metrics.append(metric)
-        for fold in candidate_folds:
+        for fold in candidate.folds:
             metrics.extend(_metric_logs("cv", fold.metrics, step=fold.fold_index))
             metric = _metric_log("cv.time", fold.time, step=fold.fold_index)
             if metric is not None:
@@ -206,36 +203,25 @@ def _cv_candidate_observations(
                     run_record.model_instance_id,
                     model_params,
                     candidate_label,
-                    candidate_index,
-                    ranks[candidate_index],
+                    candidate.candidate_index,
+                    ranks[position],
                     tuning_result.method,
                 ),
                 params={
                     "cv.method": _param_value(tuning_result.method),
                     "cv.candidate": candidate_label,
-                    "cv.candidate_index": _param_value(candidate_index),
-                    **_cv_trial_params(tuning_result, candidate_index),
+                    "cv.candidate_index": _param_value(candidate.candidate_index),
                     **{
                         f"cv.params.{key}": _param_value(value)
-                        for key, value in candidate_params.items()
+                        for key, value in candidate.params.items()
                     },
-                    **_classification_metric_params(
-                        "cv.mean",
-                        tuning_result.cv_results.mean_metrics[candidate_index],
-                    ),
+                    **_classification_metric_params("cv.mean", candidate.mean_metrics),
                 },
                 metrics=tuple(metrics),
             )
         )
 
     return tuple(observations)
-
-
-def _cv_trial_params(tuning_result: Any, candidate_index: int) -> dict[str, str]:
-    trial_numbers = tuning_result.cv_results.trial_numbers
-    if trial_numbers is None:
-        return {}
-    return {"cv.trial_number": _param_value(trial_numbers[candidate_index])}
 
 
 def _pipeline_tags(params: PipelineParams) -> dict[str, str]:
@@ -310,7 +296,6 @@ def _pipeline_params(params: PipelineParams) -> dict[str, str]:
     run_params: dict[str, Any] = {
         "run_id": params.run_id,
         "mlflow.experiment_name": params.mlflow.experiment_name,
-        "mlflow.run_name": params.mlflow.run_name,
         "dataset.target": params.dataset.target,
         "dataset.random_state": params.dataset.random_state,
         "dataset.train_size": params.dataset.train_size,
@@ -446,14 +431,12 @@ def _model_metric_logs(
             )
         )
     ]
-    if training_result.training_metrics is not None:
-        metrics.extend(_metric_logs("train", training_result.training_metrics))
-
     tuning_result = training_result.tuning_result
     if tuning_result is not None:
         metrics.extend(
             _metric_logs_from_values((("cv.total_time", tuning_result.total_time),))
         )
+        metrics.extend(_cv_final_test_metric_logs("test", tuning_result.test_metrics))
 
     for test_result in model_result.test_results:
         dataset_name = test_result.dataset_name
@@ -462,7 +445,8 @@ def _model_metric_logs(
                 ((f"test.{dataset_name}.predict_time", test_result.predict_time),)
             )
         )
-        metrics.extend(_metric_logs(f"test.{dataset_name}", test_result.metrics))
+        if tuning_result is None:
+            metrics.extend(_metric_logs(f"test.{dataset_name}", test_result.metrics))
 
     metrics.extend(
         _metric_delta_logs(
@@ -481,10 +465,6 @@ def _model_metric_params(
         return {}
 
     params = {}
-    if training_result.training_metrics is not None:
-        params.update(
-            _classification_metric_params("train", training_result.training_metrics)
-        )
     for test_result in model_result.test_results:
         params.update(
             _classification_metric_params(
@@ -504,6 +484,45 @@ def _metric_logs(
     return _metric_logs_from_values(
         ((f"{prefix}.{name}", value) for name, value in metrics.scores.items()),
         step=step,
+    )
+
+
+def _cv_final_test_metric_logs(
+    prefix: str,
+    metrics: CVFinalTestMetrics,
+) -> tuple[MetricLog, ...]:
+    return (
+        *_cv_classification_metric_logs(f"{prefix}.mimic", metrics.mimic_test),
+        *_cv_classification_metric_logs(f"{prefix}.tudd", metrics.tudd_test),
+    )
+
+
+def _cv_classification_metric_logs(
+    prefix: str,
+    metrics: CVClassificationMetrics,
+) -> tuple[MetricLog, ...]:
+    metric_names = (
+        "mean_roc_auc",
+        "mean_prc_auc",
+        "mean_f1",
+        "mean_accuracy",
+        "mean_sensitivity",
+        "mean_precision",
+        "ci_95_roc_auc_lower",
+        "ci_95_roc_auc_upper",
+        "ci_95_prc_auc_lower",
+        "ci_95_prc_auc_upper",
+        "ci_95_f1_lower",
+        "ci_95_f1_upper",
+        "ci_95_accuracy_lower",
+        "ci_95_accuracy_upper",
+        "ci_95_sensitivity_lower",
+        "ci_95_sensitivity_upper",
+        "ci_95_precision_lower",
+        "ci_95_precision_upper",
+    )
+    return _metric_logs_from_values(
+        (f"{prefix}.{name}", getattr(metrics, name)) for name in metric_names
     )
 
 
@@ -709,6 +728,43 @@ def _candidate_ranks(scores: list[float]) -> list[int]:
     for rank, index in enumerate(ranked_indices, start=1):
         ranks[index] = rank
     return ranks
+
+
+def _candidate_summaries(tuning_result: Any) -> tuple[_CandidateSummary, ...]:
+    folds_by_candidate: defaultdict[int, list[FoldResult]] = defaultdict(list)
+    for fold in tuning_result.fold_results:
+        folds_by_candidate[fold.candidate_index].append(fold)
+
+    summaries = []
+    for candidate_index in sorted(folds_by_candidate):
+        folds = tuple(
+            sorted(
+                folds_by_candidate[candidate_index],
+                key=lambda fold: fold.fold_index,
+            )
+        )
+        if not isinstance(folds[0].metrics, ClassificationMetrics):
+            raise NotImplementedError(
+                "Regression tuning metrics are not implemented yet"
+            )
+
+        scores = [
+            classification_score(fold.metrics, tuning_result.scoring) for fold in folds
+        ]
+        summaries.append(
+            _CandidateSummary(
+                candidate_index=candidate_index,
+                params=folds[0].params,
+                folds=folds,
+                mean_score=float(sum(scores) / len(scores)),
+                std_score=float(pstdev(scores)),
+                mean_metrics=mean_classification_metrics(
+                    [fold.metrics for fold in folds]
+                ),
+            )
+        )
+
+    return tuple(summaries)
 
 
 def _metric_stds(folds: list[FoldResult]) -> dict[str, float]:

@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from src.classes.trainer import Trainer
+from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 from src.schemas.training_schemas import (
     CVParams,
@@ -44,9 +45,14 @@ def _preprocess_pipeline():
     }
 
 
+def _bundle(X, y):
+    xy = XYDataset(X=X, y=pd.Series(y))
+    return DatasetBundle(train_data=xy, test_mimic=xy, test_tudd=xy)
+
+
 @contextmanager
 def _trained_result(trainer: Trainer, model_params: ModelParams, X, y):
-    result = trainer.train_model(model_params, X, y)
+    result = trainer.train_evaluate_model(model_params, _bundle(X, y))
     try:
         yield result
     finally:
@@ -97,9 +103,6 @@ def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
 
         assert result.model_name == "logistic-regression"
         assert not result.tuned
-        assert result.training_metrics is not None
-        assert result.training_metrics.roc_auc is not None
-        assert "accuracy" in result.training_metrics.scores
         assert result.fit_time >= 0
         assert predict_time >= 0
         assert predictions.shape == (len(X), 2)
@@ -124,25 +127,23 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
     )
 
     with _trained_result(trainer, model_params, X, y) as result:
-        predictions, _ = result.trained_model.predict(X)
-
         assert result.tuned
         assert result.tuning_result is not None
         assert set(result.tuning_result.best_params) == {"C"}
-        assert result.tuning_result.best_score >= 0
-        assert (
-            result.tuning_result.best_score
-            == result.tuning_result.best_metrics.accuracy
-        )
-        assert len(result.tuning_result.cv_results.params) == 2
-        assert len(result.tuning_result.cv_results.mean_scores) == 2
-        assert len(result.tuning_result.cv_results.mean_metrics) == 2
+        assert not hasattr(result.tuning_result, "cv_results")
+        assert not hasattr(result.tuning_result, "best_score")
+        assert not hasattr(result.tuning_result, "best_metrics")
+        assert {fold.candidate_index for fold in result.tuning_result.fold_results} == {
+            0,
+            1,
+        }
         assert len(result.tuning_result.fold_results) == 4
         assert all(
             "accuracy" in fold.metrics.scores
             for fold in result.tuning_result.fold_results
         )
-        assert predictions.shape == (len(X), 2)
+        assert result.tuning_result.test_metrics.mimic_test.mean_accuracy >= 0.0
+        assert result.trained_model is None
 
 
 def test_trainer_can_tune_with_optuna_categorical_grid():
@@ -165,16 +166,17 @@ def test_trainer_can_tune_with_optuna_categorical_grid():
     )
 
     with _trained_result(trainer, model_params, X, y) as result:
-        predictions, _ = result.trained_model.predict(X)
-
         assert result.tuned
         assert result.tuning_result is not None
         assert result.tuning_result.method == "optuna"
-        assert len(result.tuning_result.cv_results.params) == 2
-        assert result.tuning_result.cv_results.trial_numbers == [0, 1]
+        assert {fold.candidate_index for fold in result.tuning_result.fold_results} == {
+            0,
+            1,
+        }
         assert len(result.tuning_result.fold_results) == 4
         assert set(result.tuning_result.best_params) == {"C"}
-        assert predictions.shape == (len(X), 2)
+        assert result.tuning_result.test_metrics.tudd_test.mean_accuracy >= 0.0
+        assert result.trained_model is None
 
 
 def test_trainer_merges_nested_tuning_params():
@@ -212,14 +214,11 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
 
     monkeypatch.setattr(trainer, "_fit_model", _fit_model)
 
-    result = trainer._tune_model(model_params, _Spec(), X, y)
+    result = trainer._tune_model(model_params, _Spec(), _bundle(X, y))
 
     assert result.tuned
     assert _ReleasableFoldModel.peak == 1
-    assert _ReleasableFoldModel.releases == 4
-    assert _ReleasableFoldModel.active == 1
-
-    release_model(result.trained_model)
+    assert _ReleasableFoldModel.releases == 6
     assert _ReleasableFoldModel.active == 0
 
 
@@ -238,7 +237,6 @@ def test_trainer_can_fit_regression_adapter_behind_same_interface():
         predictions, _ = result.trained_model.predict(X)
 
         assert result.model_name == "xgboost"
-        assert result.training_metrics is None
         assert predictions.shape == (len(X),)
         assert np.isfinite(predictions).all()
 
@@ -314,7 +312,7 @@ def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
     monkeypatch.setattr(trainer, "_fit_model", _fit_model)
 
     with pytest.raises(RuntimeError, match="training metric prediction failed"):
-        trainer._train_without_tuning(model_params, _Spec(), X, y)
+        trainer._train_without_tuning(model_params, _Spec(), _bundle(X, y))
 
     assert _ReleasablePredictFailureModel.peak == 1
     assert _ReleasablePredictFailureModel.releases == 1
