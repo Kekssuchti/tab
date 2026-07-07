@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import pytest
 
-from src.schemas.training_schemas import ModelParams
+from src.schemas.training_schemas import ModelConfig
 from src.utils import model_registry
 from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
 from src.utils.model_lifecycle import release_model
@@ -24,7 +24,7 @@ LIGHTWEIGHT_REGRESSION_MODELS = ["xgboost"]
 
 def _make_model(model_name, task_type):
     spec = model_registry.get_model_spec(
-        ModelParams(name=model_name, task_type=task_type)
+        ModelConfig(name=model_name, task_type=task_type)
     )
     return spec.create(task_type=task_type, params={})
 
@@ -65,7 +65,7 @@ def test_model_catalog_lookup_and_search_spaces_are_lazy():
     importlib.reload(model_registry)
 
     spec = model_registry.get_model_spec(
-        ModelParams(name="logistic-regression", task_type="classification")
+        ModelConfig(name="logistic-regression", task_type="classification")
     )
     candidates = spec.tuning_candidates(search_space=None, overrides=None)
 
@@ -81,13 +81,13 @@ def test_model_catalog_reports_task_specific_unknown_models():
         match="Unknown classification model 'linear-regression'.*logistic-regression",
     ):
         model_registry.get_model_spec(
-            ModelParams(name="linear-regression", task_type="classification")
+            ModelConfig(name="linear-regression", task_type="classification")
         )
 
 
 def test_model_spec_uses_explicit_tuning_grid_as_the_search_space():
     spec = model_registry.get_model_spec(
-        ModelParams(name="logistic-regression", task_type="classification")
+        ModelConfig(name="logistic-regression", task_type="classification")
     )
 
     assert spec.tuning_candidates(None, {"C": [0.1, 1.0]}) == [
@@ -102,7 +102,7 @@ def test_model_spec_uses_explicit_tuning_grid_as_the_search_space():
 
 def test_model_spec_expands_nested_tuning_grid_keys():
     spec = model_registry.get_model_spec(
-        ModelParams(name="tabpfn-3", task_type="classification")
+        ModelConfig(name="tabpfn-3", task_type="classification")
     )
 
     assert spec.tuning_candidates(

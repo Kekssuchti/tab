@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
+from src.schemas.dataset import DatasetBundle, XYDataset
 
 from src.classes.preprocessor import Preprocessor
-from src.schemas.dataset_schemas import DatasetBundle, XYDataset
-from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
+from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 
 
 def _bundle(X_train: pd.DataFrame, X_test: pd.DataFrame | None = None) -> DatasetBundle:
@@ -26,12 +26,12 @@ def _preprocessor(
     knn_neighbors: int = 2,
 ) -> Preprocessor:
     return Preprocessor(
-        params_imputer=ImputerParams(
+        imputer_config=ImputerConfig(
             imputation_method=imputation_method,
             flag_missing=flag_missing,
             knn_neighbors=knn_neighbors,
         ),
-        params_scaler=ScalerEncoderParams(type=scaler_type),
+        scaler_config=ScalerEncoderConfig(type=scaler_type),
     )
 
 

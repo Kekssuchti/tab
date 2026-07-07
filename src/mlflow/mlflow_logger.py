@@ -23,17 +23,17 @@ from src.mlflow.observation import (
     table_rows_to_columns,
 )
 from src.mlflow.serialization import (
-    pipeline_params_to_dict,
+    pipeline_config_to_dict,
     pipeline_result_to_dict,
     training_result_to_dict,
 )
-from src.schemas.pipeline_schemas import PipelineParams
+from src.schemas.pipeline_schemas import PipelineConfig
 
 
 class MLflowPipelineLogger:
     def log_pipeline_run(
         self,
-        params: PipelineParams,
+        params: PipelineConfig,
         result: PipelineResult,
         *,
         config_path: Path | None = None,
@@ -57,7 +57,7 @@ class MLflowPipelineLogger:
 
     def log_model_run(
         self,
-        params: PipelineParams,
+        params: PipelineConfig,
         result: PipelineResult,
         model_run: ModelRunRecord,
         *,
@@ -90,7 +90,7 @@ class MLflowPipelineLogger:
 
     def log_pipeline_summary(
         self,
-        params: PipelineParams,
+        params: PipelineConfig,
         result: PipelineResult,
         *,
         config_path: Path | None = None,
@@ -114,7 +114,7 @@ class MLflowPipelineLogger:
     @contextmanager
     def _start_or_resume_pipeline_run(
         self,
-        params: PipelineParams,
+        params: PipelineConfig,
         observation: RunObservation,
         artifact_paths: dict[str, Path],
         config_path: Path | None,
@@ -217,7 +217,7 @@ class MLflowPipelineLogger:
 
     def _write_artifacts(
         self,
-        params: PipelineParams,
+        params: PipelineConfig,
         result: PipelineResult,
         temp_dir: Path,
     ) -> dict[str, Path]:
@@ -228,7 +228,7 @@ class MLflowPipelineLogger:
         cv_dir.mkdir()
 
         config_path.write_text(
-            json.dumps(pipeline_params_to_dict(params), indent=2), encoding="utf-8"
+            json.dumps(pipeline_config_to_dict(params), indent=2), encoding="utf-8"
         )
         result_path.write_text(
             json.dumps(pipeline_result_to_dict(result), indent=2), encoding="utf-8"
@@ -313,7 +313,7 @@ def _find_child_observation(
     raise ValueError(f"No MLflow observation found for model run {run_name!r}")
 
 
-def _find_pipeline_run(params: PipelineParams) -> Run | None:
+def _find_pipeline_run(params: PipelineConfig) -> Run | None:
     client = mlflow.MlflowClient()
     experiment = client.get_experiment_by_name(params.mlflow.experiment_name)
     if experiment is None:
@@ -335,7 +335,7 @@ def _mlflow_filter_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
-def _set_experiment(params: PipelineParams) -> None:
+def _set_experiment(params: PipelineConfig) -> None:
     client = mlflow.MlflowClient()
     experiment = client.get_experiment_by_name(params.mlflow.experiment_name)
     if experiment is None:

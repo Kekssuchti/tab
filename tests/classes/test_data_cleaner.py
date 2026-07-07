@@ -5,7 +5,7 @@ import pandas as pd
 
 from src.classes import data_cleaner as data_cleaner_module
 from src.classes.data_cleaner import DataCleaner
-from src.schemas.dataset_schemas import DataCleanerParams
+from src.schemas.dataset_schemas import DataCleanerConfig
 
 
 def _normal_raw_data() -> pd.DataFrame:
@@ -63,7 +63,7 @@ def test_data_cleaner_writes_filtered_files_with_preprocessed_content(
     monkeypatch.setattr(data_cleaner_module, "config", SimpleNamespace(dir_data=tmp_path))
 
     cleaner = DataCleaner(
-        DataCleanerParams(outlier_limits_path=limits_path, missing_threshold_row=1.0)
+        DataCleanerConfig(outlier_limits_path=limits_path, missing_threshold_row=1.0)
     )
 
     cleaner.preprocess_extracted_to_filtered()

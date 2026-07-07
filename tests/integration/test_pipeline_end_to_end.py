@@ -6,7 +6,7 @@ import pandas as pd
 from src.classes import dataset as dataset_module
 from src.classes.pipeline import Pipeline
 from src.schemas import pipeline_schemas
-from src.utils.config_io import load_pipeline_params
+from src.utils.config_io import load_pipeline_config
 
 
 def _make_dataset(start_id: int, n_rows: int) -> pd.DataFrame:
@@ -50,7 +50,7 @@ def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(
         SimpleNamespace(dir_run_results=tmp_path / "runs"),
     )
 
-    params = load_pipeline_params("tests/integration/pipeline_integration_config.yaml")
+    params = load_pipeline_config("tests/integration/pipeline_integration_config.yaml")
     result = Pipeline(params).run()
 
     assert result.run_id == params.run_id

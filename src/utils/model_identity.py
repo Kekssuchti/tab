@@ -1,9 +1,9 @@
 from collections import Counter, defaultdict
 
-from src.schemas.training_schemas import ModelParams
+from src.schemas.training_schemas import ModelConfig
 
 
-def model_instance_ids(models: tuple[ModelParams, ...]) -> list[str]:
+def model_instance_ids(models: tuple[ModelConfig, ...]) -> list[str]:
     counts = Counter(model.name for model in models)
     seen: defaultdict[str, int] = defaultdict(int)
     model_ids = []

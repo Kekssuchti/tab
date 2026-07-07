@@ -1,8 +1,8 @@
 from typing import Literal
 
-from src.schemas.base_schemas import StrictParams
+from src.schemas.base_schemas import StrictConfig
 
 
-class PlottingParams(StrictParams):
+class PlottingConfig(StrictConfig):
     enabled: bool = True
     formats: tuple[Literal["png", "pdf", "svg"], ...] = ("png",)

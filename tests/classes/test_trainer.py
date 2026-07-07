@@ -3,15 +3,15 @@ from contextlib import contextmanager
 import numpy as np
 import pandas as pd
 import pytest
+from src.schemas.dataset import DatasetBundle, XYDataset
 
 from src.classes.trainer import Trainer
-from src.schemas.dataset_schemas import DatasetBundle, XYDataset
-from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
+from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.training_schemas import (
-    CVParams,
-    ModelParams,
-    OptunaParams,
-    TuningParams,
+    CrossValidationConfig,
+    ModelConfig,
+    OptunaConfig,
+    TuningConfig,
 )
 from src.utils.model_lifecycle import release_model
 
@@ -40,8 +40,8 @@ def _regression_data():
 
 def _preprocess_pipeline():
     return {
-        "default_imputer": ImputerParams(imputation_method="none"),
-        "default_scaler": ScalerEncoderParams(type="none"),
+        "default_imputer": ImputerConfig(imputation_method="none"),
+        "default_scaler": ScalerEncoderConfig(type="none"),
     }
 
 
@@ -51,7 +51,7 @@ def _bundle(X, y):
 
 
 @contextmanager
-def _trained_result(trainer: Trainer, model_params: ModelParams, X, y):
+def _trained_result(trainer: Trainer, model_params: ModelConfig, X, y):
     result = trainer.train_evaluate_model(model_params, _bundle(X, y))
     try:
         yield result
@@ -88,13 +88,13 @@ class _ReleasablePredictFailureModel(_ReleasableFoldModel):
 
 def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
     X, y = _classification_data()
-    model_params = ModelParams(
+    model_params = ModelConfig(
         name="logistic-regression",
         task_type="classification",
         params={"max_iter": 200},
     )
     trainer = Trainer(
-        params=(model_params,),
+        configs=(model_params,),
         **_preprocess_pipeline(),
     )
 
@@ -111,18 +111,18 @@ def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
 
 def test_trainer_uses_tuning_grid_and_returns_best_params():
     X, y = _classification_data()
-    model_params = ModelParams(
+    model_params = ModelConfig(
         name="logistic-regression",
         task_type="classification",
         params={"max_iter": 200},
-        tuning=TuningParams(
+        tuning=TuningConfig(
             grid={"C": [0.1, 1.0]},
             scoring="accuracy",
-            cv=CVParams(n_splits=2, random_state=1),
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
         ),
     )
     trainer = Trainer(
-        params=(model_params,),
+        configs=(model_params,),
         **_preprocess_pipeline(),
     )
 
@@ -148,20 +148,20 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
 
 def test_trainer_can_tune_with_optuna_categorical_grid():
     X, y = _classification_data()
-    model_params = ModelParams(
+    model_params = ModelConfig(
         name="logistic-regression",
         task_type="classification",
         params={"max_iter": 200},
-        tuning=TuningParams(
+        tuning=TuningConfig(
             method="optuna",
             grid={"C": [0.1, 1.0]},
             scoring="accuracy",
-            cv=CVParams(n_splits=2, random_state=1),
-            optuna=OptunaParams(n_trials=2, sampler="random"),
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
+            optuna=OptunaConfig(n_trials=2, sampler="random"),
         ),
     )
     trainer = Trainer(
-        params=(model_params,),
+        configs=(model_params,),
         **_preprocess_pipeline(),
     )
 
@@ -192,16 +192,16 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
     _ReleasableFoldModel.releases = 0
     X, y = _classification_data()
     trainer = Trainer(
-        params=(),
+        configs=(),
         **_preprocess_pipeline(),
     )
-    model_params = ModelParams(
+    model_params = ModelConfig(
         name="logistic-regression",
         task_type="classification",
-        tuning=TuningParams(
+        tuning=TuningConfig(
             grid={"C": [0.1, 1.0]},
             scoring="accuracy",
-            cv=CVParams(n_splits=2, random_state=1),
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
         ),
     )
 
@@ -224,12 +224,12 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
 
 def test_trainer_can_fit_regression_adapter_behind_same_interface():
     X, y = _regression_data()
-    model_params = ModelParams(
+    model_params = ModelConfig(
         name="xgboost",
         task_type="regression",
     )
     trainer = Trainer(
-        params=(model_params,),
+        configs=(model_params,),
         **_preprocess_pipeline(),
     )
 
@@ -244,7 +244,7 @@ def test_trainer_can_fit_regression_adapter_behind_same_interface():
 def test_trainer_uses_model_specific_preprocessing_override():
     X, y = _classification_data()
     X.loc[0, "lab"] = np.nan
-    model_params = ModelParams(
+    model_params = ModelConfig(
         name="logistic-regression",
         task_type="classification",
         params={"max_iter": 200},
@@ -254,9 +254,9 @@ def test_trainer_uses_model_specific_preprocessing_override():
         },
     )
     trainer = Trainer(
-        params=(model_params,),
-        default_imputer=ImputerParams(imputation_method="none"),
-        default_scaler=ScalerEncoderParams(type="none"),
+        configs=(model_params,),
+        default_imputer=ImputerConfig(imputation_method="none"),
+        default_scaler=ScalerEncoderConfig(type="none"),
     )
 
     with _trained_result(trainer, model_params, X, y) as result:
@@ -270,15 +270,15 @@ def test_trainer_uses_model_specific_preprocessing_override():
 def test_trainer_encodes_categorical_columns_before_xgboost():
     X, y = _classification_data()
     X["Sex"] = ["F", "M", "F", "M", "F", "M", "F", "M"]
-    model_params = ModelParams(
+    model_params = ModelConfig(
         name="xgboost",
         task_type="classification",
         params={"n_estimators": 2, "max_depth": 1, "n_jobs": 1},
     )
     trainer = Trainer(
-        params=(model_params,),
-        default_imputer=ImputerParams(imputation_method="none"),
-        default_scaler=ScalerEncoderParams(type="none"),
+        configs=(model_params,),
+        default_imputer=ImputerConfig(imputation_method="none"),
+        default_scaler=ScalerEncoderConfig(type="none"),
     )
 
     with _trained_result(trainer, model_params, X, y) as result:
@@ -295,10 +295,10 @@ def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
     _ReleasablePredictFailureModel.releases = 0
     X, y = _classification_data()
     trainer = Trainer(
-        params=(),
+        configs=(),
         **_preprocess_pipeline(),
     )
-    model_params = ModelParams(
+    model_params = ModelConfig(
         name="logistic-regression",
         task_type="classification",
     )
@@ -321,8 +321,8 @@ def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
 
 def test_trainer_preflight_rejects_bad_model_params():
     trainer = Trainer(
-        params=(
-            ModelParams(
+        configs=(
+            ModelConfig(
                 name="logistic-regression",
                 task_type="classification",
                 params={"bad_param": 1},

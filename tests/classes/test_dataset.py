@@ -5,7 +5,7 @@ import pandas as pd
 from src.classes import dataset as dataset_module
 from src.classes.data_registry import TARGET_LIKE_COLUMNS
 from src.classes.dataset import Dataset
-from src.schemas.dataset_schemas import DatasetParams, DataSplitParams
+from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig
 
 
 def _make_rows(source: str, start_id: int, n_rows: int) -> pd.DataFrame:
@@ -35,11 +35,11 @@ def _write_filtered_files(tmp_path, files: dict[str, pd.DataFrame]) -> None:
 
 def _dataset_params(
     target: str,
-    train_on: tuple[DataSplitParams, ...],
+    train_on: tuple[DataSplitConfig, ...],
     train_size: float = 0.5,
     random_state: int = 7,
-) -> DatasetParams:
-    return DatasetParams(
+) -> DatasetConfig:
+    return DatasetConfig(
         target=target,
         train_on=train_on,
         train_size=train_size,
@@ -89,8 +89,8 @@ def test_mortality_dataset_uses_only_normal_task_files_and_assembles_splits(
         _dataset_params(
             target="mortality",
             train_on=(
-                DataSplitParams(dataset="mimic", fraction=1.0),
-                DataSplitParams(dataset="tudd", fraction=2),
+                DataSplitConfig(dataset="mimic", fraction=1.0),
+                DataSplitConfig(dataset="tudd", fraction=2),
             ),
         )
     )
@@ -152,8 +152,8 @@ def test_readmission_dataset_uses_readmission_task_policy_without_normal_files(
         _dataset_params(
             target="hours_to_readmit",
             train_on=(
-                DataSplitParams(dataset="mimic_readmission", fraction=1.0),
-                DataSplitParams(dataset="tudd_readmission", fraction=1.0),
+                DataSplitConfig(dataset="mimic_readmission", fraction=1.0),
+                DataSplitConfig(dataset="tudd_readmission", fraction=1.0),
             ),
         )
     )

@@ -4,14 +4,14 @@ import pandas as pd
 
 from src.classes.data_registry import DATA_FILES_ALL
 from src.config import config
-from src.schemas.dataset_schemas import DataCleanerParams
+from src.schemas.dataset_schemas import DataCleanerConfig
 from src.utils.dataset_utils import standard_preprocessing
 from src.utils.logger import logger
 
 
 class DataCleaner:
-    def __init__(self, params: DataCleanerParams) -> None:
-        self.params = params
+    def __init__(self, data_cleaner_config: DataCleanerConfig) -> None:
+        self.config = data_cleaner_config
 
     def preprocess_extracted_to_filtered(self) -> None:
         """load and return both extracted dataframes"""
@@ -27,11 +27,9 @@ class DataCleaner:
             df_filtered = standard_preprocessing(
                 df,
                 dataset.is_readmission,
-                self.params.missing_threshold_row,
-                self.params.outlier_limits_path,
+                self.config.missing_threshold_row,
+                self.config.outlier_limits_path,
             )
 
             df_filtered.to_csv(Path(filtered_path / file_name), index=False)
-            logger.info(
-                f"Filtered {file_name}: rows {len(df)} -> {len(df_filtered)}"
-            )
+            logger.info(f"Filtered {file_name}: rows {len(df)} -> {len(df_filtered)}")
