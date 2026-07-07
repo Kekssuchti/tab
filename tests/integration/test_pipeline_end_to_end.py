@@ -67,9 +67,8 @@ def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(
     for training_result in result.training_results:
         assert training_result.tuned
         assert training_result.tuning_result is not None
-        assert training_result.tuning_result.best_score >= 0.0
-        assert training_result.tuning_result.cv_results.params
-        assert training_result.tuning_result.cv_results.mean_metrics
+        assert not hasattr(training_result.tuning_result, "best_score")
+        assert not hasattr(training_result.tuning_result, "cv_results")
         assert len(training_result.tuning_result.fold_results) <= 4
 
     for model_result in result.model_results:

@@ -8,10 +8,10 @@ from src.schemas.base_schemas import StrictParams, TaskType
 from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
 from src.utils.evaluation_utils import (
     ClassificationMetrics,
+    CVFinalTestMetrics,
     RegressionMetrics,
     ScoringMethodCLS,
     ScoringMethodREG,
-    classification_score,
 )
 
 
@@ -62,30 +62,13 @@ class FoldResult:
 
 
 @dataclass
-class TuningCVResults:
-    params: list[dict[str, Any]]
-    mean_scores: list[float]
-    std_scores: list[float]
-    fold_scores: list[list[float]]
-    fold_times: list[list[float]]
-    mean_metrics: list[ClassificationMetrics] | list[RegressionMetrics]
-    trial_numbers: list[int] | None = None
-
-
-@dataclass
 class TuningResult:
     best_params: dict[str, Any]
-    scoring: ScoringMethodCLS
-    best_metrics: ClassificationMetrics | RegressionMetrics
-    cv_results: TuningCVResults
+    scoring: ScoringMethodCLS | ScoringMethodREG
+    test_metrics: CVFinalTestMetrics
     fold_results: list[FoldResult] = field(default_factory=list)
-    method: Literal["grid", "optuna"] = "grid"
-
-    @property
-    def best_score(self) -> float:
-        if isinstance(self.best_metrics, ClassificationMetrics):
-            return classification_score(self.best_metrics, self.scoring)
-        raise NotImplementedError("Regression tuning metrics are not implemented yet")
+    method: Literal["grid", "optuna"] = "optuna"
+    # TODO: if reg ever needed adjust metrics like cls
 
     @property
     def total_time(self) -> float:
@@ -98,10 +81,9 @@ class ModelTrainingResult:
 
     model_name: str
     task_type: TaskType
-    trained_model: Any | None
     tuned: bool
     fit_time: float
-    training_metrics: ClassificationMetrics | RegressionMetrics | None = None
+    trained_model: Any | None = field(default=None, repr=False, compare=False)
     tuning_result: TuningResult | None = None
     error: str | None = None
     failure_stage: str | None = None

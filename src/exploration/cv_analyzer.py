@@ -1,6 +1,7 @@
 import argparse
 import json
 from pathlib import Path
+from statistics import pstdev
 
 import numpy as np
 import pandas as pd
@@ -8,20 +9,18 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from src.config import config
-from src.schemas.training_schemas import FoldResult, TuningCVResults, TuningResult
-from src.utils.evaluation_utils import ClassificationMetrics
+from src.schemas.training_schemas import FoldResult, TuningResult
+from src.utils.evaluation_utils import (
+    ClassificationMetrics,
+    classification_score,
+    mean_classification_metrics,
+)
 
 
 def load_tuning_result(path: Path) -> TuningResult:
     """Load a TuningResult from JSON, explicitly converting nested dicts
     to their dataclass instances."""
     raw = json.loads(path.read_text())
-
-    raw["best_metrics"] = ClassificationMetrics(**raw["best_metrics"])
-
-    cv = raw["cv_results"]
-    cv["mean_metrics"] = [ClassificationMetrics(**m) for m in cv["mean_metrics"]]
-    raw["cv_results"] = TuningCVResults(**cv)
 
     raw["fold_results"] = [
         FoldResult(
@@ -43,12 +42,19 @@ def load_tuning_result(path: Path) -> TuningResult:
 def _build_df(tuning: TuningResult) -> pd.DataFrame:
     """Flat DataFrame: one row per candidate with params, scores, and metrics."""
     rows = []
-    for i, params in enumerate(tuning.cv_results.params):
-        row = dict(params)
-        row["candidate_index"] = i
-        row["mean_score"] = tuning.cv_results.mean_scores[i]
-        row["std_score"] = tuning.cv_results.std_scores[i]
-        metrics = tuning.cv_results.mean_metrics[i]
+    candidate_indices = sorted({fold.candidate_index for fold in tuning.fold_results})
+    for candidate_index in candidate_indices:
+        folds = [
+            fold
+            for fold in tuning.fold_results
+            if fold.candidate_index == candidate_index
+        ]
+        row = dict(folds[0].params)
+        row["candidate_index"] = candidate_index
+        scores = [classification_score(fold.metrics, tuning.scoring) for fold in folds]
+        row["mean_score"] = float(np.mean(scores))
+        row["std_score"] = float(pstdev(scores))
+        metrics = mean_classification_metrics([fold.metrics for fold in folds])
         for name in [
             "roc_auc",
             "prc_auc",
@@ -315,7 +321,7 @@ def _analyze_model(
         raise ValueError(f"Metric '{metric_col}' not found. Available: {available}")
 
     n_folds = (
-        len(tuning.cv_results.fold_scores[0]) if tuning.cv_results.fold_scores else "?"
+        max((fold.fold_index for fold in tuning.fold_results), default=-1) + 1
     )
     lines = [
         f"\n{'=' * 80}",
@@ -325,7 +331,7 @@ def _analyze_model(
         f"Parameters: {param_cols}",
         f"Scoring: {tuning.scoring}  |  Target metric: {metric_col}",
         f"Best params: {tuning.best_params}",
-        f"Best {tuning.scoring}: {tuning.best_score:.4f}",
+        f"Best {tuning.scoring}: {df['mean_score'].max():.4f}",
     ]
     print("\n".join(lines))
 

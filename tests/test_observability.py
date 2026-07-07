@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import mlflow
-
+import numpy as np
 from src.classes.pipeline import (
     ModelRunRecord,
     ModelRunResult,
@@ -25,11 +25,14 @@ from src.schemas.training_schemas import (
     FoldResult,
     ModelParams,
     ModelTrainingResult,
-    TuningCVResults,
     TuningResult,
 )
-from src.utils.evaluation_utils import ClassificationMetrics
-from src.utils.evaluation_utils import final_test_metrics
+from src.utils.evaluation_utils import (
+    CVClassificationMetrics,
+    CVFinalTestMetrics,
+    ClassificationMetrics,
+    final_test_metrics,
+)
 
 
 class _FakeModel:
@@ -44,6 +47,7 @@ def _metrics(value: float = 1.0) -> ClassificationMetrics:
         accuracy=value,
         sensitivity=value,
         precision=value,
+        confusion_matrix=np.array([[value, 0.0], [0.0, value]]),
         n_classes=2,
     )
 
@@ -56,14 +60,11 @@ def _tuning_result() -> TuningResult:
     return TuningResult(
         best_params={"C": 1.0},
         scoring="accuracy",
-        best_metrics=_metrics(0.95),
-        cv_results=TuningCVResults(
-            params=[{"C": 0.1}, {"C": 1.0}],
-            mean_scores=[0.75, 0.95],
-            std_scores=[0.05, 0.05],
-            fold_scores=[[0.7, 0.8], [0.9, 1.0]],
-            fold_times=[[0.01, 0.02], [0.03, 0.04]],
-            mean_metrics=[_metrics(0.75), _metrics(0.95)],
+        test_metrics=CVFinalTestMetrics(
+            mimic_test=CVClassificationMetrics([_metrics(0.9), _metrics(1.0)]),
+            mimic_prediction_time=0.03,
+            tudd_test=CVClassificationMetrics([_metrics(0.9), _metrics(1.0)]),
+            tudd_prediction_time=0.04,
         ),
         fold_results=[
             FoldResult(0, 0, cv0_fold0, 0.01, {"C": 0.1}),
@@ -118,7 +119,6 @@ def _result(*, tuned: bool = False) -> PipelineResult:
         trained_model=_FakeModel(),
         tuned=tuned,
         fit_time=0.2,
-        training_metrics=metrics,
         tuning_result=tuning_result,
     )
     model_result = ModelRunResult(
@@ -204,9 +204,12 @@ def test_pipeline_result_serialization_omits_trained_model():
     assert serialized["model_runs"][0]["status"] == "success"
     assert "trained_model" not in serialized["model_runs"][0]["training_result"]
     assert "trained_model" not in serialized["training_results"][0]
-    assert serialized["training_results"][0]["training_metrics"]["accuracy"] == 1.0
+    assert "training_metrics" not in serialized["training_results"][0]
     assert serialized["training_results"][0]["error"] is None
     assert serialized["training_results"][0]["failure_stage"] is None
+
+    tuned_serialized = pipeline_result_to_dict(_result(tuned=True))
+    assert "cv_results" not in tuned_serialized["training_results"][0]["tuning_result"]
 
 
 def test_observation_assembly_describes_parent_model_and_cv_runs():
@@ -220,8 +223,7 @@ def test_observation_assembly_describes_parent_model_and_cv_runs():
     assert observation.tags["trained_on"] == "mimic"
     assert observation.params["dataset.train.row_count"] == "8"
     assert (
-        observation.params["model.logistic-regression.preprocessing.override"]
-        == "True"
+        observation.params["model.logistic-regression.preprocessing.override"] == "True"
     )
     assert _metric_value(observation.metrics, "pipeline.total_time") == 0.5
     assert {row["dataset"] for row in observation.table_rows} == {
@@ -234,8 +236,9 @@ def test_observation_assembly_describes_parent_model_and_cv_runs():
     assert model_run.run_name == "logistic-regression"
     assert model_run.tags["status"] == "success"
     assert model_run.params["model.tuning.best_params"] == '{"C": 1.0}'
-    assert _metric_value(model_run.metrics, "train.accuracy") == 1.0
     assert _metric_value(model_run.metrics, "test.mimic_minus_tudd.accuracy") == 0.0
+    assert _metric_value(model_run.metrics, "test.mimic.mean_accuracy") == 0.95
+    assert all(metric.name != "test.mimic.accuracy" for metric in model_run.metrics)
 
     cv0, cv1 = model_run.children
     assert cv0.run_name == "logistic-regression/cv00"
@@ -331,8 +334,10 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
     assert model.data.tags["mlflow.parentRunId"] == parent.info.run_id
     assert model.data.tags["pipeline_mlflow_run_id"] == parent.info.run_id
     assert model.data.tags["model_mlflow_run_id"] == model.info.run_id
-    assert model.data.metrics["train.accuracy"] == 1.0
     assert model.data.metrics["test.mimic_minus_tudd.accuracy"] == 0.0
+    assert model.data.metrics["test.mimic.mean_accuracy"] == 0.95
+    assert "test.mimic.accuracy" not in model.data.metrics
+    assert "test.mimic.roc_auc" not in model.data.metrics
     assert cv0.data.tags["mlflow.parentRunId"] == model.info.run_id
     assert cv0.data.tags["candidate_rank"] == "2"
     assert cv0.data.metrics["cv.mean.accuracy"] == 0.75
@@ -358,9 +363,7 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
     evaluation_metrics = mlflow.load_table(
         "evaluation_metrics.json", run_ids=[parent.info.run_id]
     )
-    assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(
-        evaluation_metrics["dataset"]
-    )
+    assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(evaluation_metrics["dataset"])
 
 
 def test_mlflow_logger_appends_model_runs_incrementally(tmp_path):
@@ -392,7 +395,8 @@ def test_mlflow_logger_appends_model_runs_incrementally(tmp_path):
     assert parent.data.tags["pipeline_id"] == "test-pipeline-id"
     assert parent.data.metrics["pipeline.total_time"] == 0.5
     assert model.data.tags["mlflow.parentRunId"] == parent.info.run_id
-    assert model.data.metrics["test.mimic.accuracy"] == 1.0
+    assert model.data.metrics["test.mimic.mean_accuracy"] == 0.95
+    assert "test.mimic.accuracy" not in model.data.metrics
 
     client = mlflow.MlflowClient(tracking_uri=tracking_uri)
     artifact_names = {
@@ -402,9 +406,7 @@ def test_mlflow_logger_appends_model_runs_incrementally(tmp_path):
     evaluation_metrics = mlflow.load_table(
         "evaluation_metrics.json", run_ids=[parent.info.run_id]
     )
-    assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(
-        evaluation_metrics["dataset"]
-    )
+    assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(evaluation_metrics["dataset"])
 
 
 def test_mlflow_logger_writes_failed_nested_model_run(tmp_path):
