@@ -9,37 +9,37 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from src.config import config
-from src.schemas.training_schemas import FoldResult, TuningResult
+from src.schemas.metrics import ClassificationMetrics
+from src.schemas.run_records import FoldRecord, TuningRecord
 from src.utils.evaluation_utils import (
-    ClassificationMetrics,
     classification_score,
     mean_classification_metrics,
 )
 
 
-def load_tuning_result(path: Path) -> TuningResult:
-    """Load a TuningResult from JSON, explicitly converting nested dicts
+def load_tuning_result(path: Path) -> TuningRecord:
+    """Load a TuningRecord from JSON, explicitly converting nested dicts
     to their dataclass instances."""
     raw = json.loads(path.read_text())
 
     raw["fold_results"] = [
-        FoldResult(
+        FoldRecord(
             candidate_index=f["candidate_index"],
             fold_index=f["fold_index"],
             metrics=ClassificationMetrics(**f["metrics"]),
             time=f["time"],
-            params=f["params"],
+            model_params=f["model_params"],
         )
         for f in raw.get("fold_results", [])
     ]
 
-    return TuningResult(**raw)
+    return TuningRecord(**raw)
 
 
 # ── Data wrangling ──────────────────────────────────────────────────────────
 
 
-def _build_df(tuning: TuningResult) -> pd.DataFrame:
+def _build_df(tuning: TuningRecord) -> pd.DataFrame:
     """Flat DataFrame: one row per candidate with params, scores, and metrics."""
     rows = []
     candidate_indices = sorted({fold.candidate_index for fold in tuning.fold_results})
@@ -49,7 +49,7 @@ def _build_df(tuning: TuningResult) -> pd.DataFrame:
             for fold in tuning.fold_results
             if fold.candidate_index == candidate_index
         ]
-        row = dict(folds[0].params)
+        row = dict(folds[0].model_params)
         row["candidate_index"] = candidate_index
         scores = [classification_score(fold.metrics, tuning.scoring) for fold in folds]
         row["mean_score"] = float(np.mean(scores))

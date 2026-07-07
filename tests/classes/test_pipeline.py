@@ -2,16 +2,16 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
-from src.schemas.dataset import DatasetBundle, XYDataset
+from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 
 from src.classes import pipeline as pipeline_module
 from src.classes.pipeline import Pipeline
-from src.schemas.training_schemas import FoldResult, ModelTrainingResult, TuningResult
-from src.utils.evaluation_utils import (
+from src.schemas.metrics import (
+    AggregatedFinalTestMetrics,
     ClassificationMetrics,
-    CVClassificationMetrics,
-    CVFinalTestMetrics,
+    ClassificationMetricsAggregate,
 )
+from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 
 
 class _PredictsFromFirstColumn:
@@ -65,24 +65,24 @@ def _metrics(value: float) -> ClassificationMetrics:
 
 
 def _tuned_training_result(model_name: str) -> ModelTrainingResult:
-    mimic = CVClassificationMetrics([_metrics(1.0), _metrics(1.0)])
-    tudd = CVClassificationMetrics([_metrics(0.0), _metrics(0.0)])
+    mimic = ClassificationMetricsAggregate([_metrics(1.0), _metrics(1.0)])
+    tudd = ClassificationMetricsAggregate([_metrics(0.0), _metrics(0.0)])
     mean_metrics = _metrics(1.0)
     return ModelTrainingResult(
         model_name=model_name,
         task_type="classification",
         tuned=True,
         fit_time=0.2,
-        tuning_result=TuningResult(
+        tuning_result=TuningRecord(
             best_params={},
             scoring="accuracy",
-            test_metrics=CVFinalTestMetrics(
+            final_test_metrics=AggregatedFinalTestMetrics(
                 mimic_test=mimic,
                 mimic_prediction_time=0.1,
                 tudd_test=tudd,
                 tudd_prediction_time=0.2,
             ),
-            fold_results=[FoldResult(0, 0, mean_metrics, 0.0, {})],
+            fold_results=[FoldRecord(0, 0, mean_metrics, 0.0, {})],
         ),
     )
 

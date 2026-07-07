@@ -5,7 +5,6 @@ import pandas as pd
 
 from src.classes import dataset as dataset_module
 from src.classes.pipeline import Pipeline
-from src.schemas import pipeline_schemas
 from src.utils.config_io import load_pipeline_config
 
 
@@ -44,12 +43,6 @@ def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(
 ):
     _write_filtered_data(tmp_path)
     monkeypatch.setattr(dataset_module, "config", SimpleNamespace(dir_data=tmp_path))
-    monkeypatch.setattr(
-        pipeline_schemas,
-        "config",
-        SimpleNamespace(dir_run_results=tmp_path / "runs"),
-    )
-
     params = load_pipeline_config("tests/integration/pipeline_integration_config.yaml")
     result = Pipeline(params).run()
 

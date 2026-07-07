@@ -4,16 +4,19 @@ from typing import Any
 
 import numpy as np
 
-from src.classes.pipeline import ModelRunRecord, PipelineResult
 from src.schemas.pipeline_schemas import PipelineConfig
-from src.schemas.training_schemas import ModelTrainingResult
+from src.schemas.run_records import (
+    ModelRunRecord,
+    ModelTrainingResult,
+    PipelineRunRecord,
+)
 
 
 def pipeline_config_to_dict(params: PipelineConfig) -> dict[str, Any]:
     return _json_safe(params.model_dump(mode="json"))
 
 
-def pipeline_result_to_dict(result: PipelineResult) -> dict[str, Any]:
+def pipeline_result_to_dict(result: PipelineRunRecord) -> dict[str, Any]:
     return {
         "run_id": result.run_id,
         "total_time": _json_safe(result.total_time),
@@ -37,7 +40,7 @@ def _model_run_to_dict(model_run: ModelRunRecord) -> dict[str, Any]:
         "model_name": model_run.model_name,
         "status": "success" if model_run.succeeded else "failed",
         "training_result": training_result_to_dict(model_run.training_result),
-        "model_result": _dataclass_to_dict(model_run.model_result),
+        "evaluation": _dataclass_to_dict(model_run.evaluation),
     }
 
 

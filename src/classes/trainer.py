@@ -4,26 +4,19 @@ from typing import Any, Literal
 
 import numpy as np
 from sklearn.model_selection import KFold, StratifiedKFold
-from src.schemas.dataset import DatasetBundle
 
 from src.classes.preprocessor import Preprocessor
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
+from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics
+from src.schemas.dataset_schemas import DatasetBundle
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
+from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 from src.schemas.training_schemas import (
-    ClassificationMetrics,
-    FoldResult,
     ModelConfig,
-    ModelTrainingResult,
-    TuningResult,
 )
 from src.utils.databundle_utils import _databundle_to_xy_train
 from src.utils.evaluation import evaluate_trained_model
-from src.utils.evaluation_utils import (
-    FinalTestMetrics,
-    _format_metrics,
-    classification_score,
-    evaluate_classification_predictions,
-)
+from src.utils.evaluation_utils import _format_metrics, classification_score, evaluate_classification_predictions
 from src.utils.logger import logger
 from src.utils.model_lifecycle import release_model
 from src.utils.model_registry import ModelSpec, get_model_spec
@@ -35,7 +28,7 @@ class _CandidateEvaluation:
     fold_scores: list[float]
     fold_metrics: list[ClassificationMetrics]
     fold_times: list[float]
-    fold_results: list[FoldResult]
+    fold_results: list[FoldRecord]
 
 
 class Trainer:
@@ -327,7 +320,7 @@ class Trainer:
         candidate_scores: list[float] = []
         candidate_metrics: list[ClassificationMetrics] = []
         candidate_times: list[float] = []
-        fold_results: list[FoldResult] = []
+        fold_results: list[FoldRecord] = []
 
         for fold_index, (train_index, validation_index) in enumerate(folds):
             fold_start = timer()
@@ -359,12 +352,12 @@ class Trainer:
                 candidate_times.append(timer() - fold_start)
 
                 fold_results.append(
-                    FoldResult(
+                    FoldRecord(
                         candidate_index=candidate_index,
                         fold_index=fold_index,
                         metrics=metrics,
                         time=candidate_times[-1],
-                        params=model_params,
+                        model_params=model_params,
                     )
                 )
             finally:
@@ -459,18 +452,18 @@ class Trainer:
 
             test_metrics = _format_metrics(sub_model_results)
 
-            tuning_result = TuningResult(
+            tuning_result = TuningRecord(
                 best_params=best_params,
                 scoring=tuning_config.scoring,
-                test_metrics=test_metrics,
+                final_test_metrics=test_metrics,
                 fold_results=fold_results,
                 method=method,
             )
 
             logger.info(
                 f"Model tuning complete in {tuning_result.total_time:.3f}s. "
-                f"Best AUROC MIMIC: {tuning_result.test_metrics.mimic_test.mean_roc_auc:.4f}, "
-                f"Best AUROC TUDD: {tuning_result.test_metrics.tudd_test.mean_roc_auc:.4f}"
+                f"Best AUROC MIMIC: {tuning_result.final_test_metrics.mimic_test.mean_roc_auc:.4f}, "
+                f"Best AUROC TUDD: {tuning_result.final_test_metrics.tudd_test.mean_roc_auc:.4f}"
             )
 
             return ModelTrainingResult(

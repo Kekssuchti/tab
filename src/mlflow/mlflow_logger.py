@@ -14,7 +14,7 @@ import mlflow
 from mlflow.entities import Run
 from mlflow.evaluation import Evaluation, log_evaluations
 
-from src.classes.pipeline import ModelRunRecord, PipelineResult
+from src.schemas.run_records import ModelRunRecord, PipelineRunRecord
 from src.config import config
 from src.mlflow.observation import (
     EvaluationLog,
@@ -34,7 +34,7 @@ class MLflowPipelineLogger:
     def log_pipeline_run(
         self,
         params: PipelineConfig,
-        result: PipelineResult,
+        result: PipelineRunRecord,
         *,
         config_path: Path | None = None,
     ) -> None:
@@ -58,7 +58,7 @@ class MLflowPipelineLogger:
     def log_model_run(
         self,
         params: PipelineConfig,
-        result: PipelineResult,
+        result: PipelineRunRecord,
         model_run: ModelRunRecord,
         *,
         config_path: Path | None = None,
@@ -91,7 +91,7 @@ class MLflowPipelineLogger:
     def log_pipeline_summary(
         self,
         params: PipelineConfig,
-        result: PipelineResult,
+        result: PipelineRunRecord,
         *,
         config_path: Path | None = None,
     ) -> None:
@@ -218,7 +218,7 @@ class MLflowPipelineLogger:
     def _write_artifacts(
         self,
         params: PipelineConfig,
-        result: PipelineResult,
+        result: PipelineRunRecord,
         temp_dir: Path,
     ) -> dict[str, Path]:
         config_path = temp_dir / "config.json"

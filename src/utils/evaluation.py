@@ -1,20 +1,10 @@
-from dataclasses import dataclass
-
-from src.schemas.dataset import DatasetBundle, XYDataset
-
 from src.schemas.base_schemas import TaskType
+from src.schemas.dataset_schemas import DatasetBundle, XYDataset
+from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics
+from src.schemas.run_records import TestSetEvaluationRecord
 from src.utils.evaluation_utils import (
-    ClassificationMetrics,
-    FinalTestMetrics,
     evaluate_classification_predictions,
 )
-
-
-@dataclass(frozen=True)
-class TestSetEvaluationResult:
-    dataset_name: str
-    metrics: ClassificationMetrics
-    predict_time: float
 
 
 def evaluate_trained_model(
@@ -26,7 +16,7 @@ def evaluate_trained_model(
     Runs standard evaluation on both mimic and tudd test set with full metrics
 
     Returns:
-        ModelRunResult: metrics of tested model
+        FinalTestMetrics: metrics of tested model
     """
     test_results = (
         _evaluate_test_set("mimic", trained_model, task_type, data.test_mimic),
@@ -46,14 +36,14 @@ def _evaluate_test_set(
     trained_model,
     task_type: TaskType,
     test_set: XYDataset,
-) -> TestSetEvaluationResult:
+) -> TestSetEvaluationRecord:
     if task_type != "classification":
         raise NotImplementedError("Regression evaluation is not implemented yet")
 
     predictions, predict_time = trained_model.predict(test_set.X)
     metrics = evaluate_classification_predictions(predictions, test_set.y.to_numpy())
 
-    return TestSetEvaluationResult(
+    return TestSetEvaluationRecord(
         dataset_name=dataset_name,
         metrics=metrics,
         predict_time=predict_time,
