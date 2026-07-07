@@ -2,14 +2,6 @@ from pathlib import Path
 
 import mlflow
 import numpy as np
-from src.classes.pipeline import (
-    ModelRunRecord,
-    ModelRunResult,
-    PipelineResult,
-)
-from src.classes.pipeline import (
-    TestSetEvaluationResult as EvaluationResult,
-)
 from src.mlflow.mlflow_logger import MLflowPipelineLogger
 from src.mlflow.observation import MetricLog, assemble_pipeline_observation
 from src.mlflow.serialization import pipeline_result_to_dict
@@ -21,18 +13,22 @@ from src.schemas.dataset_schemas import (
 )
 from src.schemas.pipeline_schemas import MLflowConfig, PipelineConfig
 from src.schemas.plotting_schemas import PlottingConfig
-from src.schemas.training_schemas import (
-    FoldResult,
-    ModelConfig,
-    ModelTrainingResult,
-    TuningResult,
-)
-from src.utils.evaluation_utils import (
-    CVClassificationMetrics,
-    CVFinalTestMetrics,
+from src.schemas.metrics import (
+    AggregatedFinalTestMetrics,
     ClassificationMetrics,
-    final_test_metrics,
+    ClassificationMetricsAggregate,
 )
+from src.schemas.run_records import (
+    FoldRecord,
+    ModelEvaluationRecord,
+    ModelRunRecord,
+    ModelTrainingResult,
+    PipelineRunRecord,
+    TestSetEvaluationRecord as EvaluationRecord,
+    TuningRecord,
+)
+from src.schemas.training_schemas import ModelConfig
+from src.utils.evaluation_utils import final_test_metrics
 
 
 class _FakeModel:
@@ -52,25 +48,25 @@ def _metrics(value: float = 1.0) -> ClassificationMetrics:
     )
 
 
-def _tuning_result() -> TuningResult:
+def _tuning_result() -> TuningRecord:
     cv0_fold0 = _metrics(0.7)
     cv0_fold1 = _metrics(0.8)
     cv1_fold0 = _metrics(0.9)
     cv1_fold1 = _metrics(1.0)
-    return TuningResult(
+    return TuningRecord(
         best_params={"C": 1.0},
         scoring="accuracy",
-        test_metrics=CVFinalTestMetrics(
-            mimic_test=CVClassificationMetrics([_metrics(0.9), _metrics(1.0)]),
+        final_test_metrics=AggregatedFinalTestMetrics(
+            mimic_test=ClassificationMetricsAggregate([_metrics(0.9), _metrics(1.0)]),
             mimic_prediction_time=0.03,
-            tudd_test=CVClassificationMetrics([_metrics(0.9), _metrics(1.0)]),
+            tudd_test=ClassificationMetricsAggregate([_metrics(0.9), _metrics(1.0)]),
             tudd_prediction_time=0.04,
         ),
         fold_results=[
-            FoldResult(0, 0, cv0_fold0, 0.01, {"C": 0.1}),
-            FoldResult(0, 1, cv0_fold1, 0.02, {"C": 0.1}),
-            FoldResult(1, 0, cv1_fold0, 0.03, {"C": 1.0}),
-            FoldResult(1, 1, cv1_fold1, 0.04, {"C": 1.0}),
+            FoldRecord(0, 0, cv0_fold0, 0.01, {"C": 0.1}),
+            FoldRecord(0, 1, cv0_fold1, 0.02, {"C": 0.1}),
+            FoldRecord(1, 0, cv1_fold0, 0.03, {"C": 1.0}),
+            FoldRecord(1, 1, cv1_fold1, 0.04, {"C": 1.0}),
         ],
     )
 
@@ -110,7 +106,7 @@ def _params(
     )
 
 
-def _result(*, tuned: bool = False) -> PipelineResult:
+def _result(*, tuned: bool = False) -> PipelineRunRecord:
     metrics = _metrics()
     tuning_result = _tuning_result() if tuned else None
     training_result = ModelTrainingResult(
@@ -121,12 +117,12 @@ def _result(*, tuned: bool = False) -> PipelineResult:
         fit_time=0.2,
         tuning_result=tuning_result,
     )
-    model_result = ModelRunResult(
+    model_result = ModelEvaluationRecord(
         model_name="logistic-regression",
         fit_time=0.2,
         test_results=(
-            EvaluationResult("mimic", metrics, 0.03),
-            EvaluationResult("tudd", metrics, 0.04),
+            EvaluationRecord("mimic", metrics, 0.03),
+            EvaluationRecord("tudd", metrics, 0.04),
         ),
         final_test_metrics=final_test_metrics(metrics, metrics),
     )
@@ -152,21 +148,21 @@ def _result(*, tuned: bool = False) -> PipelineResult:
             ),
         ),
     )
-    return PipelineResult(
+    return PipelineRunRecord(
         run_id="test-pipeline-id",
         dataset_summary=dataset_summary,
         model_runs=(
             ModelRunRecord(
                 model_instance_id="logistic-regression",
                 training_result=training_result,
-                model_result=model_result,
+                evaluation=model_result,
             ),
         ),
         total_time=0.5,
     )
 
 
-def _failed_result() -> PipelineResult:
+def _failed_result() -> PipelineRunRecord:
     result = _result()
     failed_training_result = ModelTrainingResult(
         model_name="logistic-regression",
@@ -177,14 +173,14 @@ def _failed_result() -> PipelineResult:
         error="ValueError: bad params",
         failure_stage="training",
     )
-    return PipelineResult(
+    return PipelineRunRecord(
         run_id=result.run_id,
         dataset_summary=result.dataset_summary,
         model_runs=(
             ModelRunRecord(
                 model_instance_id="logistic-regression",
                 training_result=failed_training_result,
-                model_result=None,
+                evaluation=None,
             ),
         ),
         total_time=0.2,
@@ -272,14 +268,14 @@ def test_observation_assembly_keeps_cv_runs_for_failed_tuned_model():
     training_result = result.model_runs[0].training_result
     training_result.error = "RuntimeError: evaluation failed"
     training_result.failure_stage = "evaluation"
-    failed_after_tuning = PipelineResult(
+    failed_after_tuning = PipelineRunRecord(
         run_id=result.run_id,
         dataset_summary=result.dataset_summary,
         model_runs=(
             ModelRunRecord(
                 model_instance_id="logistic-regression",
                 training_result=training_result,
-                model_result=None,
+                evaluation=None,
             ),
         ),
         total_time=0.4,

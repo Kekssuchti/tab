@@ -7,15 +7,23 @@ from dataclasses import dataclass
 from statistics import pstdev
 from typing import Any
 
-from src.classes.pipeline import ModelRunRecord, ModelRunResult, PipelineResult
 from src.schemas.pipeline_schemas import PipelineConfig
-from src.schemas.training_schemas import FoldResult, ModelConfig, ModelTrainingResult
-from src.utils.evaluation_utils import (
+from src.schemas.run_records import (
+    FoldRecord,
+    ModelEvaluationRecord,
+    ModelRunRecord,
+    ModelTrainingResult,
+    PipelineRunRecord,
+)
+from src.schemas.training_schemas import ModelConfig
+from src.schemas.metrics import (
+    AggregatedFinalTestMetrics,
     ClassificationMetricDeltas,
     ClassificationMetrics,
-    CVClassificationMetrics,
-    CVFinalTestMetrics,
+    ClassificationMetricsAggregate,
     RegressionMetrics,
+)
+from src.utils.evaluation_utils import (
     classification_score,
     mean_classification_metrics,
 )
@@ -59,8 +67,8 @@ class _EvaluationBundle:
 @dataclass(frozen=True)
 class _CandidateSummary:
     candidate_index: int
-    params: dict[str, Any]
-    folds: tuple[FoldResult, ...]
+    model_params: dict[str, Any]
+    folds: tuple[FoldRecord, ...]
     mean_score: float
     std_score: float
     mean_metrics: ClassificationMetrics | RegressionMetrics
@@ -68,7 +76,7 @@ class _CandidateSummary:
 
 def assemble_pipeline_observation(
     pipeline_config: PipelineConfig,
-    pipeline_result: PipelineResult,
+    pipeline_result: PipelineRunRecord,
 ) -> RunObservation:
     model_params_by_id = _model_params_by_instance_id(pipeline_config.training)
     evaluation_bundle = _evaluation_bundle(pipeline_config, pipeline_result.model_runs)
@@ -123,7 +131,7 @@ def _model_run_observation(
     model_config: ModelConfig,
 ) -> RunObservation:
     training_result = run_record.training_result
-    model_result = run_record.model_result
+    model_result = run_record.evaluation
     evaluation_bundle = _evaluation_bundle(pipeline_config, (run_record,))
 
     run_params = {
@@ -217,7 +225,7 @@ def _cv_candidate_observations(
                     "cv.candidate_index": _param_value(candidate.candidate_index),
                     **{
                         f"cv.params.{key}": _param_value(value)
-                        for key, value in candidate.params.items()
+                        for key, value in candidate.model_params.items()
                     },
                     **_classification_metric_params("cv.mean", candidate.mean_metrics),
                 },
@@ -319,7 +327,7 @@ def _pipeline_params(pipeline_config: PipelineConfig) -> dict[str, str]:
     return _string_params(run_params)
 
 
-def _dataset_summary_params(pipeline_result: PipelineResult) -> dict[str, str]:
+def _dataset_summary_params(pipeline_result: PipelineRunRecord) -> dict[str, str]:
     dataset_summary = pipeline_result.dataset_summary
     run_params: dict[str, Any] = {}
     parts = {
@@ -429,7 +437,7 @@ def _model_config_params(model_id: str, model_config: ModelConfig) -> dict[str, 
 
 def _model_metric_logs(
     training_result: ModelTrainingResult,
-    model_result: ModelRunResult,
+    model_result: ModelEvaluationRecord,
 ) -> tuple[MetricLog, ...]:
     metrics = [
         *_metric_logs_from_values(
@@ -444,7 +452,9 @@ def _model_metric_logs(
         metrics.extend(
             _metric_logs_from_values((("cv.total_time", tuning_result.total_time),))
         )
-        metrics.extend(_cv_final_test_metric_logs("test", tuning_result.test_metrics))
+        metrics.extend(
+            _cv_final_test_metric_logs("test", tuning_result.final_test_metrics)
+        )
 
     for test_result in model_result.test_results:
         dataset_name = test_result.dataset_name
@@ -467,7 +477,7 @@ def _model_metric_logs(
 
 def _model_metric_params(
     training_result: ModelTrainingResult,
-    model_result: ModelRunResult | None,
+    model_result: ModelEvaluationRecord | None,
 ) -> dict[str, str]:
     if model_result is None:
         return {}
@@ -497,7 +507,7 @@ def _metric_logs(
 
 def _cv_final_test_metric_logs(
     prefix: str,
-    metrics: CVFinalTestMetrics,
+    metrics: AggregatedFinalTestMetrics,
 ) -> tuple[MetricLog, ...]:
     return (
         *_cv_classification_metric_logs(f"{prefix}.mimic", metrics.mimic_test),
@@ -507,7 +517,7 @@ def _cv_final_test_metric_logs(
 
 def _cv_classification_metric_logs(
     prefix: str,
-    metrics: CVClassificationMetrics,
+    metrics: ClassificationMetricsAggregate,
 ) -> tuple[MetricLog, ...]:
     metric_names = (
         "mean_roc_auc",
@@ -587,7 +597,7 @@ def _evaluation_bundle(
     table_rows = []
     for model_run in model_rows:
         model_id = model_run.model_instance_id
-        model_result = model_run.model_result
+        model_result = model_run.evaluation
         if model_result is None:
             continue
         for test_result in model_result.test_results:
@@ -741,7 +751,7 @@ def _candidate_ranks(scores: list[float]) -> list[int]:
 
 
 def _candidate_summaries(tuning_result: Any) -> tuple[_CandidateSummary, ...]:
-    folds_by_candidate: defaultdict[int, list[FoldResult]] = defaultdict(list)
+    folds_by_candidate: defaultdict[int, list[FoldRecord]] = defaultdict(list)
     for fold in tuning_result.fold_results:
         folds_by_candidate[fold.candidate_index].append(fold)
 
@@ -764,7 +774,7 @@ def _candidate_summaries(tuning_result: Any) -> tuple[_CandidateSummary, ...]:
         summaries.append(
             _CandidateSummary(
                 candidate_index=candidate_index,
-                params=folds[0].params,
+                model_params=folds[0].model_params,
                 folds=folds,
                 mean_score=float(sum(scores) / len(scores)),
                 std_score=float(pstdev(scores)),
@@ -777,7 +787,7 @@ def _candidate_summaries(tuning_result: Any) -> tuple[_CandidateSummary, ...]:
     return tuple(summaries)
 
 
-def _metric_stds(folds: list[FoldResult]) -> dict[str, float]:
+def _metric_stds(folds: list[FoldRecord]) -> dict[str, float]:
     values_by_metric: defaultdict[str, list[float]] = defaultdict(list)
     for fold in folds:
         for name, value in fold.metrics.scores.items():

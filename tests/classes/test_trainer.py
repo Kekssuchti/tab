@@ -3,9 +3,9 @@ from contextlib import contextmanager
 import numpy as np
 import pandas as pd
 import pytest
-from src.schemas.dataset import DatasetBundle, XYDataset
 
 from src.classes.trainer import Trainer
+from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.training_schemas import (
     CrossValidationConfig,
@@ -142,7 +142,7 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
             "accuracy" in fold.metrics.scores
             for fold in result.tuning_result.fold_results
         )
-        assert result.tuning_result.test_metrics.mimic_test.mean_accuracy >= 0.0
+        assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
         assert result.trained_model is None
 
 
@@ -175,7 +175,7 @@ def test_trainer_can_tune_with_optuna_categorical_grid():
         }
         assert len(result.tuning_result.fold_results) == 4
         assert set(result.tuning_result.best_params) == {"C"}
-        assert result.tuning_result.test_metrics.tudd_test.mean_accuracy >= 0.0
+        assert result.tuning_result.final_test_metrics.tudd_test.mean_accuracy >= 0.0
         assert result.trained_model is None
 
 

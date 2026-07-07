@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from src.schemas.dataset import DatasetBundle, XYDataset
+from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 
 from src.classes.preprocessor import Preprocessor
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig

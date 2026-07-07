@@ -4,7 +4,6 @@ from typing import TypedDict
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from src.schemas.dataset import DatasetBundle, XYDataset
 
 from src.classes.data_cleaner import DataCleaner
 from src.classes.data_registry import (
@@ -14,9 +13,11 @@ from src.classes.data_registry import (
 )
 from src.config import config
 from src.schemas.dataset_schemas import (
+    DatasetBundle,
     DatasetConfig,
     DatasetFileSummary,
     DatasetSummary,
+    XYDataset,
 )
 from src.utils.dataset_utils import (
     hash_file_sha256,

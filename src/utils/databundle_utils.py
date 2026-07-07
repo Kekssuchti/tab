@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from src.schemas.dataset import DatasetBundle
+from src.schemas.dataset_schemas import DatasetBundle
 
 
 def _databundle_to_xy_train(data: DatasetBundle) -> tuple[pd.DataFrame, np.ndarray]:

@@ -1,4 +1,3 @@
-from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from pydantic import Field
@@ -6,13 +5,7 @@ from pydantic import Field
 from src.config import config
 from src.schemas.base_schemas import StrictConfig, TaskType
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
-from src.utils.evaluation_utils import (
-    ClassificationMetrics,
-    CVFinalTestMetrics,
-    RegressionMetrics,
-    ScoringMethodCLS,
-    ScoringMethodREG,
-)
+from src.utils.evaluation_utils import ScoringMethodCLS
 
 
 class CrossValidationConfig(StrictConfig):
@@ -48,46 +41,3 @@ class ModelConfig(StrictConfig):
     params: dict[str, Any] = Field(default_factory=dict)
     preprocessing: ModelPreprocessingConfig | None = None
     tuning: TuningConfig | None = None
-
-
-@dataclass
-class FoldResult:
-    """Validation metrics for one candidate on one CV fold."""
-
-    candidate_index: int
-    fold_index: int
-    metrics: ClassificationMetrics | RegressionMetrics
-    time: float
-    params: dict[str, Any]
-
-
-@dataclass
-class TuningResult:
-    best_params: dict[str, Any]
-    scoring: ScoringMethodCLS | ScoringMethodREG
-    test_metrics: CVFinalTestMetrics
-    fold_results: list[FoldResult] = field(default_factory=list)
-    method: Literal["grid", "optuna"] = "optuna"
-    # TODO: if reg ever needed adjust metrics like cls
-
-    @property
-    def total_time(self) -> float:
-        return sum(fold.time for fold in self.fold_results)
-
-
-@dataclass
-class ModelTrainingResult:
-    """Result of fitting a single model, optionally after tuning."""
-
-    model_name: str
-    task_type: TaskType
-    tuned: bool
-    fit_time: float
-    trained_model: Any | None = field(default=None, repr=False, compare=False)
-    tuning_result: TuningResult | None = None
-    error: str | None = None
-    failure_stage: str | None = None
-
-    @property
-    def succeeded(self) -> bool:
-        return self.error is None
