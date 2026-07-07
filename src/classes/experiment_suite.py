@@ -3,36 +3,43 @@ from itertools import product
 from pathlib import Path
 from typing import Any
 
-from src.schemas.pipeline_schemas import PipelineParams
+from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.suite_schemas import (
     ExpandedPipelineConfig,
-    ExperimentSuiteParams,
+    ExperimentSuiteConfig,
     SuiteDryRunSummary,
 )
-from src.utils.config_io import load_pipeline_params
+from src.utils.config_io import load_pipeline_config
 
 
 class ExperimentSuite:
-    def __init__(self, params: ExperimentSuiteParams, suite_path: str | Path):
-        self.params = params
+    def __init__(
+        self, experiment_suite_config: ExperimentSuiteConfig, suite_path: str | Path
+    ):
+        self.experiment_suite_config = experiment_suite_config
         self.suite_path = Path(suite_path)
 
     def expand(self) -> tuple[ExpandedPipelineConfig, ...]:
-        base_params = load_pipeline_params(self._base_config_path())
+        pipeline_config = load_pipeline_config(self._base_config_path())
         variants = []
-        override_paths = tuple(override.path for override in self.params.matrix)
-        value_sets = tuple(override.expanded_values() for override in self.params.matrix)
+        override_paths = tuple(
+            override.path for override in self.experiment_suite_config.matrix
+        )
+        value_sets = tuple(
+            override.expanded_values()
+            for override in self.experiment_suite_config.matrix
+        )
 
         for index, values in enumerate(product(*value_sets)):
             overrides = dict(zip(override_paths, values, strict=True))
             variant_id = self._variant_id(index, overrides)
-            params = self._apply_overrides(base_params, overrides)
-            params.run_id = f"{base_params.run_id}_{self.params.name}_{variant_id}"
-            params.mlflow.run_name = self._run_name(base_params, variant_id)
+            params = self._apply_overrides(pipeline_config, overrides)
+            params.run_id = f"{pipeline_config.run_id}_{self.experiment_suite_config.name}_{variant_id}"
+            params.mlflow.run_name = self._run_name(pipeline_config, variant_id)
             variants.append(
                 ExpandedPipelineConfig(
                     variant_id=variant_id,
-                    params=params,
+                    pipeline_config=params,
                     overrides=overrides,
                 )
             )
@@ -41,34 +48,36 @@ class ExperimentSuite:
 
     def dry_run_summary(self) -> SuiteDryRunSummary:
         variants = self.expand()
-        models_per_config = len(variants[0].params.training) if variants else 0
+        models_per_config = len(variants[0].pipeline_config.training) if variants else 0
         return SuiteDryRunSummary(
-            suite_name=self.params.name,
+            suite_name=self.experiment_suite_config.name,
             config_count=len(variants),
             models_per_config=models_per_config,
             total_model_runs=len(variants) * models_per_config,
-            changed_parameters=tuple(override.path for override in self.params.matrix),
-            variants=variants,
+            changed_parameters=tuple(
+                override.path for override in self.experiment_suite_config.matrix
+            ),
+            config_variants=variants,
         )
 
     def _base_config_path(self) -> Path:
-        base_config = Path(self.params.base_config)
+        base_config = Path(self.experiment_suite_config.base_config)
         if base_config.is_absolute():
             return base_config
         return self.suite_path.parent / base_config
 
     def _apply_overrides(
         self,
-        base_params: PipelineParams,
+        pipeline_config: PipelineConfig,
         overrides: dict[str, Any],
-    ) -> PipelineParams:
-        data = deepcopy(base_params.model_dump(mode="json"))
+    ) -> PipelineConfig:
+        data = deepcopy(pipeline_config.model_dump(mode="json"))
         for path, value in overrides.items():
             _set_path_value(data, path, value)
-        return PipelineParams.model_validate(data)
+        return PipelineConfig.model_validate(data)
 
-    def _run_name(self, base_params: PipelineParams, variant_id: str) -> str:
-        base_name = base_params.mlflow.run_name or self.params.name
+    def _run_name(self, base_params: PipelineConfig, variant_id: str) -> str:
+        base_name = base_params.mlflow.run_name or self.experiment_suite_config.name
         return f"{base_name}/{variant_id}"
 
     @staticmethod

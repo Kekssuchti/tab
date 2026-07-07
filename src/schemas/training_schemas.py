@@ -4,8 +4,8 @@ from typing import Any, Literal
 from pydantic import Field
 
 from src.config import config
-from src.schemas.base_schemas import StrictParams, TaskType
-from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
+from src.schemas.base_schemas import StrictConfig, TaskType
+from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.utils.evaluation_utils import (
     ClassificationMetrics,
     CVFinalTestMetrics,
@@ -15,39 +15,39 @@ from src.utils.evaluation_utils import (
 )
 
 
-class CVParams(StrictParams):
+class CrossValidationConfig(StrictConfig):
     n_splits: int = 5
     shuffle: bool = True
     random_state: int = Field(default_factory=lambda: config.seed)
 
 
-class OptunaParams(StrictParams):
+class OptunaConfig(StrictConfig):
     n_trials: int = Field(default=30, ge=1)
     sampler: Literal["tpe", "random"] = "tpe"
     n_startup_trials: int = Field(default=5, ge=0)
     timeout: float | None = Field(default=None, gt=0)
 
 
-class TuningParams(StrictParams):
+class TuningConfig(StrictConfig):
     method: Literal["grid", "optuna"] = "grid"
     search_space: str | None = "default"
     grid: dict[str, list[Any]] | None = None
     scoring: ScoringMethodCLS = "roc_auc"
-    cv: CVParams = Field(default_factory=CVParams)
-    optuna: OptunaParams = Field(default_factory=OptunaParams)
+    cv: CrossValidationConfig = Field(default_factory=CrossValidationConfig)
+    optuna: OptunaConfig = Field(default_factory=OptunaConfig)
 
 
-class ModelPreprocessingParams(StrictParams):
-    imputer: ImputerParams | None = None
-    scaler_encoder: ScalerEncoderParams | None = None
+class ModelPreprocessingConfig(StrictConfig):
+    imputer: ImputerConfig | None = None
+    scaler_encoder: ScalerEncoderConfig | None = None
 
 
-class ModelParams(StrictParams):
+class ModelConfig(StrictConfig):
     name: str
     task_type: TaskType = "classification"
     params: dict[str, Any] = Field(default_factory=dict)
-    preprocessing: ModelPreprocessingParams | None = None
-    tuning: TuningParams | None = None
+    preprocessing: ModelPreprocessingConfig | None = None
+    tuning: TuningConfig | None = None
 
 
 @dataclass

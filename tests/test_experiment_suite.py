@@ -4,7 +4,7 @@ import pytest
 
 from src.classes.experiment_suite import ExperimentSuite
 from src.run_pipeline import run_suite
-from src.utils.config_io import load_experiment_suite_params
+from src.utils.config_io import load_experiment_suite_config
 
 
 def _write_base_config(path):
@@ -53,7 +53,7 @@ def test_experiment_suite_expands_range_and_summarizes_dry_run(tmp_path):
     _write_base_config(base_path)
     _write_suite_config(suite_path)
 
-    suite_params = load_experiment_suite_params(suite_path)
+    suite_params = load_experiment_suite_config(suite_path)
     summary = ExperimentSuite(suite_params, suite_path).dry_run_summary()
 
     assert summary.config_count == 3
@@ -61,15 +61,22 @@ def test_experiment_suite_expands_range_and_summarizes_dry_run(tmp_path):
     assert summary.total_model_runs == 3
     assert summary.changed_parameters == ("dataset.train_on.0.fraction",)
     assert [
-        variant.params.dataset.train_on[0].fraction for variant in summary.variants
+        variant.pipeline_config.dataset.train_on[0].fraction
+        for variant in summary.config_variants
     ] == [500, 1000, 1500]
-    assert [variant.variant_id for variant in summary.variants] == [
+    assert [variant.variant_id for variant in summary.config_variants] == [
         "fraction-500",
         "fraction-1000",
         "fraction-1500",
     ]
-    assert summary.variants[0].params.run_id == "base-run_training-size_fraction-500"
-    assert summary.variants[0].params.mlflow.run_name == "training-size/fraction-500"
+    assert (
+        summary.config_variants[0].pipeline_config.run_id
+        == "base-run_training-size_fraction-500"
+    )
+    assert (
+        summary.config_variants[0].pipeline_config.mlflow.run_name
+        == "training-size/fraction-500"
+    )
     assert "Configs: 3" in summary.format()
     assert "Changed parameters: dataset.train_on.0.fraction" in summary.format()
 
@@ -80,7 +87,7 @@ def test_experiment_suite_rejects_invalid_override_path(tmp_path):
     _write_base_config(base_path)
     _write_suite_config(suite_path, override_path="dataset.train_on.3.fraction")
 
-    suite_params = load_experiment_suite_params(suite_path)
+    suite_params = load_experiment_suite_config(suite_path)
     suite = ExperimentSuite(suite_params, suite_path)
 
     with pytest.raises(ValueError, match="index out of range"):

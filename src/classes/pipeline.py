@@ -6,7 +6,7 @@ from src.classes.dataset import Dataset
 from src.classes.plotter import Plotter
 from src.classes.trainer import Trainer
 from src.schemas.dataset_schemas import DatasetSummary
-from src.schemas.pipeline_schemas import PipelineParams
+from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.training_schemas import (
     ClassificationMetrics,
     ModelTrainingResult,
@@ -77,11 +77,11 @@ class PipelineResult:
 
 
 class Pipeline:
-    def __init__(self, params: PipelineParams):
-        self.params = params
+    def __init__(self, pipeline_config: PipelineConfig):
+        self.pipeline_config = pipeline_config
 
-        self.dataset = Dataset(params.dataset)
-        self.plotter = Plotter(params.plotting)
+        self.dataset = Dataset(pipeline_config.dataset)
+        self.plotter = Plotter(pipeline_config.plotting)
 
     def run(
         self,
@@ -89,15 +89,15 @@ class Pipeline:
         | None = None,
     ) -> PipelineResult:
         start_time = perf_counter()
-        target = getattr(self.params.dataset, "target", "unknown")
+        target = getattr(self.pipeline_config.dataset, "target", "unknown")
         logger.info(
-            f"Pipeline {self.params.run_id} starting: "
-            f"target={target} models={len(self.params.training)}"
+            f"Pipeline {self.pipeline_config.run_id} starting: "
+            f"target={target} models={len(self.pipeline_config.training)}"
         )
         trainer = Trainer(
-            params=self.params.training,
-            default_imputer=self.params.dataset.imputer,
-            default_scaler=self.params.dataset.scaler_encoder,
+            configs=self.pipeline_config.training,
+            default_imputer=self.pipeline_config.dataset.imputer,
+            default_scaler=self.pipeline_config.dataset.scaler_encoder,
         )
         # trainer.validate_model_configs()
 
@@ -105,9 +105,9 @@ class Pipeline:
         dataset_summary = self.dataset.summarize(data)
 
         model_runs = []
-        for model_instance_id, model_params in zip(
-            model_instance_ids(self.params.training),
-            self.params.training,
+        for model_instance_id, model_config in zip(
+            model_instance_ids(self.pipeline_config.training),
+            self.pipeline_config.training,
             strict=True,
         ):
             model_start_time = perf_counter()
@@ -115,18 +115,18 @@ class Pipeline:
             mr = None
             failure_stage = "training"
             try:
-                tr = trainer.train_evaluate_model(model_params=model_params, data=data)
+                tr = trainer.train_evaluate_model(model_config=model_config, data=data)
                 mr = self._model_result_from_training_result(tr)
                 logger.info(
                     f"Model {model_instance_id} trained and evaluated successfully"
                 )
             except Exception as exc:
                 logger.exception(
-                    f"Model {model_params.name} failed during {failure_stage}; continuing"
+                    f"Model {model_config.name} failed during {failure_stage}; continuing"
                 )
                 if tr is None:
                     tr = self._failed_training_result(
-                        model_params=model_params,
+                        model_config=model_config,
                         fit_time=perf_counter() - model_start_time,
                         failure_stage=failure_stage,
                         exc=exc,
@@ -146,7 +146,7 @@ class Pipeline:
                     if on_model_complete is not None:
                         on_model_complete(
                             PipelineResult(
-                                run_id=self.params.run_id,
+                                run_id=self.pipeline_config.run_id,
                                 dataset_summary=dataset_summary,
                                 model_runs=tuple(model_runs),
                                 total_time=perf_counter() - start_time,
@@ -156,12 +156,12 @@ class Pipeline:
 
         total_time = perf_counter() - start_time
         logger.info(
-            f"Pipeline {self.params.run_id} completed: "
+            f"Pipeline {self.pipeline_config.run_id} completed: "
             f"successful_models={len([run for run in model_runs if run.succeeded])}/"
             f"{len(model_runs)} total_time={total_time:.3f}s"
         )
         return PipelineResult(
-            run_id=self.params.run_id,
+            run_id=self.pipeline_config.run_id,
             dataset_summary=dataset_summary,
             model_runs=tuple(model_runs),
             total_time=total_time,
@@ -169,14 +169,14 @@ class Pipeline:
 
     @staticmethod
     def _failed_training_result(
-        model_params,
+        model_config,
         fit_time: float,
         failure_stage: str,
         exc: Exception,
     ) -> ModelTrainingResult:
         return ModelTrainingResult(
-            model_name=model_params.name,
-            task_type=getattr(model_params, "task_type", "classification"),
+            model_name=model_config.name,
+            task_type=getattr(model_config, "task_type", "classification"),
             trained_model=None,
             tuned=False,
             fit_time=fit_time,

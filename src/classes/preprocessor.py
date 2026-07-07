@@ -3,18 +3,18 @@ from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
+from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.utils.logger import logger
 
 
 class Preprocessor:
     def __init__(
         self,
-        params_imputer: ImputerParams,
-        params_scaler: ScalerEncoderParams,
+        imputer_config: ImputerConfig,
+        scaler_config: ScalerEncoderConfig,
     ) -> None:
-        self.imputer = params_imputer
-        self.scaler = params_scaler
+        self.imputer_config = imputer_config
+        self.scaler_config = scaler_config
 
     def build_pipeline(self) -> Pipeline:
         return ColumnTransformer(
@@ -36,7 +36,7 @@ class Preprocessor:
     def _build_imputer(self) -> Pipeline:
         # since only sex is categorical and we do not have missing values there (we removed the ones missing)
         # we only need imputation for numerical values
-        method = self.imputer.imputation_method
+        method = self.imputer_config.imputation_method
 
         if method == "mean":
             return Pipeline(
@@ -44,7 +44,8 @@ class Preprocessor:
                     (
                         "imputer",
                         SimpleImputer(
-                            strategy="mean", add_indicator=self.imputer.flag_missing
+                            strategy="mean",
+                            add_indicator=self.imputer_config.flag_missing,
                         ),
                     ),
                 ]
@@ -55,7 +56,8 @@ class Preprocessor:
                     (
                         "imputer",
                         SimpleImputer(
-                            strategy="median", add_indicator=self.imputer.flag_missing
+                            strategy="median",
+                            add_indicator=self.imputer_config.flag_missing,
                         ),
                     ),
                 ]
@@ -66,9 +68,9 @@ class Preprocessor:
                     (
                         "imputer",
                         KNNImputer(
-                            n_neighbors=self.imputer.knn_neighbors,
+                            n_neighbors=self.imputer_config.knn_neighbors,
                             weights="distance",
-                            add_indicator=self.imputer.flag_missing,
+                            add_indicator=self.imputer_config.flag_missing,
                         ),
                     ),
                 ]
@@ -81,7 +83,7 @@ class Preprocessor:
             )
 
     def _build_scaler(self) -> Pipeline:
-        scaler_type = self.scaler.type
+        scaler_type = self.scaler_config.type
         if scaler_type == "standardization":
             return Pipeline([("scaler", StandardScaler())])
         elif scaler_type == "none":

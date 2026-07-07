@@ -3,27 +3,27 @@ from typing import Any
 
 import yaml
 
-from src.schemas.pipeline_schemas import PipelineParams
-from src.schemas.suite_schemas import ExperimentSuiteParams
+from src.schemas.pipeline_schemas import PipelineConfig
+from src.schemas.suite_schemas import ExperimentSuiteConfig
 
 
-def load_pipeline_params(path: str | Path) -> PipelineParams:
+def load_pipeline_config(path: str | Path) -> PipelineConfig:
     config_data = _load_yaml(path)
-    return PipelineParams.model_validate(config_data)
+    return PipelineConfig.model_validate(config_data)
 
 
-def load_experiment_suite_params(path: str | Path) -> ExperimentSuiteParams:
+def load_experiment_suite_config(path: str | Path) -> ExperimentSuiteConfig:
     config_data = _load_yaml(path)
-    return ExperimentSuiteParams.model_validate(config_data)
+    return ExperimentSuiteConfig.model_validate(config_data)
 
 
-def dump_pipeline_params(params: PipelineParams, path: str | Path) -> None:
+def dump_pipeline_config(pipeline_config: PipelineConfig, path: str | Path) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with path.open("w", encoding="utf-8") as file:
         yaml.safe_dump(
-            params.model_dump(mode="json"),
+            pipeline_config.model_dump(mode="json"),
             file,
             sort_keys=False,
         )

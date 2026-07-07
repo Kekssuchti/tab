@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
+from src.schemas.dataset import DatasetBundle, XYDataset
+
 from src.schemas.base_schemas import TaskType
-from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.utils.evaluation_utils import (
     ClassificationMetrics,
     FinalTestMetrics,

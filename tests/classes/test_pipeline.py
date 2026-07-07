@@ -2,24 +2,22 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+from src.schemas.dataset import DatasetBundle, XYDataset
 
 from src.classes import pipeline as pipeline_module
 from src.classes.pipeline import Pipeline
-from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.training_schemas import FoldResult, ModelTrainingResult, TuningResult
 from src.utils.evaluation_utils import (
+    ClassificationMetrics,
     CVClassificationMetrics,
     CVFinalTestMetrics,
-    ClassificationMetrics,
 )
 
 
 class _PredictsFromFirstColumn:
     def predict(self, X_test):
         positive_probability = np.asarray(X_test)[:, 0]
-        predictions = np.column_stack(
-            [1 - positive_probability, positive_probability]
-        )
+        predictions = np.column_stack([1 - positive_probability, positive_probability])
         return predictions, 0.1
 
 
@@ -147,7 +145,7 @@ def test_pipeline_releases_each_model_before_training_next(monkeypatch):
 
     pipeline = object.__new__(Pipeline)
     pipeline.dataset = _FakeDataset()
-    pipeline.params = SimpleNamespace(
+    pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
         dataset=SimpleNamespace(imputer=None, scaler_encoder=None),
         training=(
@@ -197,7 +195,7 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
 
     pipeline = object.__new__(Pipeline)
     pipeline.dataset = _FakeDataset()
-    pipeline.params = SimpleNamespace(
+    pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
         dataset=SimpleNamespace(imputer=None, scaler_encoder=None),
         training=(
@@ -249,7 +247,7 @@ def test_pipeline_releases_model_after_evaluation_failure_and_continues(monkeypa
 
     pipeline = object.__new__(Pipeline)
     pipeline.dataset = _FakeDataset()
-    pipeline.params = SimpleNamespace(
+    pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
         dataset=SimpleNamespace(imputer=None, scaler_encoder=None),
         training=(

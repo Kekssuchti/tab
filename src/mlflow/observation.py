@@ -8,8 +8,8 @@ from statistics import pstdev
 from typing import Any
 
 from src.classes.pipeline import ModelRunRecord, ModelRunResult, PipelineResult
-from src.schemas.pipeline_schemas import PipelineParams
-from src.schemas.training_schemas import FoldResult, ModelParams, ModelTrainingResult
+from src.schemas.pipeline_schemas import PipelineConfig
+from src.schemas.training_schemas import FoldResult, ModelConfig, ModelTrainingResult
 from src.utils.evaluation_utils import (
     ClassificationMetricDeltas,
     ClassificationMetrics,
@@ -67,30 +67,32 @@ class _CandidateSummary:
 
 
 def assemble_pipeline_observation(
-    params: PipelineParams,
-    result: PipelineResult,
+    pipeline_config: PipelineConfig,
+    pipeline_result: PipelineResult,
 ) -> RunObservation:
-    model_params_by_id = _model_params_by_instance_id(params.training)
-    evaluation_bundle = _evaluation_bundle(params, result.model_runs)
+    model_params_by_id = _model_params_by_instance_id(pipeline_config.training)
+    evaluation_bundle = _evaluation_bundle(pipeline_config, pipeline_result.model_runs)
 
     return RunObservation(
-        run_name=_run_name(params),
-        tags=_pipeline_tags(params),
+        run_name=_run_name(pipeline_config),
+        tags=_pipeline_tags(pipeline_config),
         params={
-            **_pipeline_params(params),
-            **_dataset_summary_params(result),
-            **_pipeline_model_config_params(params),
+            **_pipeline_params(pipeline_config),
+            **_dataset_summary_params(pipeline_result),
+            **_pipeline_model_config_params(pipeline_config),
         },
-        metrics=_metric_logs_from_values((("pipeline.total_time", result.total_time),)),
+        metrics=_metric_logs_from_values(
+            (("pipeline.total_time", pipeline_result.total_time),)
+        ),
         evaluations=evaluation_bundle.evaluations,
         table_rows=evaluation_bundle.table_rows,
         children=tuple(
             _model_run_observation(
-                params,
+                pipeline_config,
                 run_record,
                 model_params_by_id[run_record.model_instance_id],
             )
-            for run_record in result.model_runs
+            for run_record in pipeline_result.model_runs
         ),
     )
 
@@ -116,16 +118,16 @@ def table_rows_to_columns(
 
 
 def _model_run_observation(
-    params: PipelineParams,
+    pipeline_config: PipelineConfig,
     run_record: ModelRunRecord,
-    model_params: ModelParams,
+    model_config: ModelConfig,
 ) -> RunObservation:
     training_result = run_record.training_result
     model_result = run_record.model_result
-    evaluation_bundle = _evaluation_bundle(params, (run_record,))
+    evaluation_bundle = _evaluation_bundle(pipeline_config, (run_record,))
 
     run_params = {
-        **_model_run_params(model_params, training_result),
+        **_model_run_params(model_config, training_result),
         **_model_metric_params(training_result, model_result),
     }
     if model_result is None:
@@ -138,16 +140,18 @@ def _model_run_observation(
                     (("cv.total_time", training_result.tuning_result.total_time),)
                 )
             )
-            children = _cv_candidate_observations(params, run_record, model_params)
+            children = _cv_candidate_observations(
+                pipeline_config, run_record, model_config
+            )
         else:
             children = ()
     else:
         metrics = _model_metric_logs(training_result, model_result)
-        children = _cv_candidate_observations(params, run_record, model_params)
+        children = _cv_candidate_observations(pipeline_config, run_record, model_config)
 
     return RunObservation(
         run_name=run_record.model_instance_id,
-        tags=_model_tags(params, run_record, model_params),
+        tags=_model_tags(pipeline_config, run_record, model_config),
         params=run_params,
         metrics=tuple(metrics),
         evaluations=evaluation_bundle.evaluations,
@@ -160,9 +164,9 @@ def _model_run_observation(
 
 
 def _cv_candidate_observations(
-    params: PipelineParams,
+    pipeline_config: PipelineConfig,
     run_record: ModelRunRecord,
-    model_params: ModelParams,
+    model_config: ModelConfig,
 ) -> tuple[RunObservation, ...]:
     tuning_result = run_record.training_result.tuning_result
     if tuning_result is None:
@@ -199,9 +203,9 @@ def _cv_candidate_observations(
             RunObservation(
                 run_name=f"{run_record.model_instance_id}/{candidate_label}",
                 tags=_cv_candidate_tags(
-                    params,
+                    pipeline_config,
                     run_record.model_instance_id,
-                    model_params,
+                    model_config,
                     candidate_label,
                     candidate.candidate_index,
                     ranks[position],
@@ -224,40 +228,40 @@ def _cv_candidate_observations(
     return tuple(observations)
 
 
-def _pipeline_tags(params: PipelineParams) -> dict[str, str]:
+def _pipeline_tags(pipeline_config: PipelineConfig) -> dict[str, str]:
     return _drop_none(
         {
             "run_type": "pipeline",
-            "pipeline_id": params.run_id,
-            "run_id": params.run_id,
-            "target": params.dataset.target,
+            "pipeline_id": pipeline_config.run_id,
+            "run_id": pipeline_config.run_id,
+            "target": pipeline_config.dataset.target,
             "task_type": "classification"
-            if params.dataset.classification
+            if pipeline_config.dataset.classification
             else "regression",
-            "trained_on": _trained_on(params),
-            "train_sources": _train_sources(params),
+            "trained_on": _trained_on(pipeline_config),
+            "train_sources": _train_sources(pipeline_config),
             "trained_models": ",".join(
-                model_params.name for model_params in params.training
+                model_params.name for model_params in pipeline_config.training
             ),
         }
     )
 
 
 def _model_tags(
-    params: PipelineParams,
+    pipeline_config: PipelineConfig,
     run_record: ModelRunRecord,
-    model_params: ModelParams,
+    model_config: ModelConfig,
 ) -> dict[str, str]:
     training_result = run_record.training_result
     tags = {
-        "pipeline_id": params.run_id,
+        "pipeline_id": pipeline_config.run_id,
         "run_type": "model",
         "model_instance": run_record.model_instance_id,
-        "model_name": model_params.name,
-        "task_type": model_params.task_type,
+        "model_name": model_config.name,
+        "task_type": model_config.task_type,
         "status": "success" if training_result.succeeded else "failed",
-        "trained_on": _trained_on(params),
-        "train_sources": _train_sources(params),
+        "trained_on": _trained_on(pipeline_config),
+        "train_sources": _train_sources(pipeline_config),
     }
     if training_result.failure_stage is not None:
         tags["failure_stage"] = training_result.failure_stage
@@ -269,52 +273,54 @@ def _model_tags(
 
 
 def _cv_candidate_tags(
-    params: PipelineParams,
+    pipeline_config: PipelineConfig,
     model_id: str,
-    model_params: ModelParams,
+    model_config: ModelConfig,
     candidate_label: str,
     candidate_index: int,
     candidate_rank: int,
     tuning_method: str,
 ) -> dict[str, str]:
     return {
-        "pipeline_id": params.run_id,
+        "pipeline_id": pipeline_config.run_id,
         "run_type": "cv_candidate",
         "model_instance": model_id,
-        "model_name": model_params.name,
+        "model_name": model_config.name,
         "candidate": candidate_label,
         "candidate_index": str(candidate_index),
         "candidate_rank": str(candidate_rank),
         "tuning_method": tuning_method,
-        "task_type": model_params.task_type,
-        "trained_on": _trained_on(params),
-        "train_sources": _train_sources(params),
+        "task_type": model_config.task_type,
+        "trained_on": _trained_on(pipeline_config),
+        "train_sources": _train_sources(pipeline_config),
     }
 
 
-def _pipeline_params(params: PipelineParams) -> dict[str, str]:
+def _pipeline_params(pipeline_config: PipelineConfig) -> dict[str, str]:
     run_params: dict[str, Any] = {
-        "run_id": params.run_id,
-        "mlflow.experiment_name": params.mlflow.experiment_name,
-        "dataset.target": params.dataset.target,
-        "dataset.random_state": params.dataset.random_state,
-        "dataset.train_size": params.dataset.train_size,
-        "dataset.classification": params.dataset.classification,
-        "dataset.trained_on": _trained_on(params),
-        "training.model_names": ",".join(model.name for model in params.training),
-        "plotting.enabled": params.plotting.enabled,
-        "plotting.formats": ",".join(params.plotting.formats),
+        "run_id": pipeline_config.run_id,
+        "mlflow.experiment_name": pipeline_config.mlflow.experiment_name,
+        "dataset.target": pipeline_config.dataset.target,
+        "dataset.random_state": pipeline_config.dataset.random_state,
+        "dataset.train_size": pipeline_config.dataset.train_size,
+        "dataset.classification": pipeline_config.dataset.classification,
+        "dataset.trained_on": _trained_on(pipeline_config),
+        "training.model_names": ",".join(
+            model.name for model in pipeline_config.training
+        ),
+        "plotting.enabled": pipeline_config.plotting.enabled,
+        "plotting.formats": ",".join(pipeline_config.plotting.formats),
     }
 
-    for index, split in enumerate(params.dataset.train_on):
+    for index, split in enumerate(pipeline_config.dataset.train_on):
         run_params[f"dataset.train_on.{index}.dataset"] = split.dataset
         run_params[f"dataset.train_on.{index}.fraction"] = split.fraction
 
     return _string_params(run_params)
 
 
-def _dataset_summary_params(result: PipelineResult) -> dict[str, str]:
-    dataset_summary = result.dataset_summary
+def _dataset_summary_params(pipeline_result: PipelineResult) -> dict[str, str]:
+    dataset_summary = pipeline_result.dataset_summary
     run_params: dict[str, Any] = {}
     parts = {
         "train": dataset_summary.train,
@@ -334,21 +340,23 @@ def _dataset_summary_params(result: PipelineResult) -> dict[str, str]:
     return _string_params(run_params)
 
 
-def _pipeline_model_config_params(params: PipelineParams) -> dict[str, str]:
+def _pipeline_model_config_params(pipeline_config: PipelineConfig) -> dict[str, str]:
     run_params = {}
-    model_ids = model_instance_ids(params.training)
-    for model_id, model_params in zip(model_ids, params.training, strict=False):
+    model_ids = model_instance_ids(pipeline_config.training)
+    for model_id, model_params in zip(
+        model_ids, pipeline_config.training, strict=False
+    ):
         run_params.update(_model_config_params(model_id, model_params))
     return run_params
 
 
 def _model_run_params(
-    model_params: ModelParams,
+    model_config: ModelConfig,
     training_result: ModelTrainingResult,
 ) -> dict[str, str]:
     run_params = {
         "model.tuned": _param_value(training_result.tuned),
-        **_model_config_params("config", model_params),
+        **_model_config_params("config", model_config),
     }
 
     tuning_result = training_result.tuning_result
@@ -367,53 +375,53 @@ def _model_run_params(
     return run_params
 
 
-def _model_config_params(model_id: str, model_params: ModelParams) -> dict[str, str]:
+def _model_config_params(model_id: str, model_config: ModelConfig) -> dict[str, str]:
     prefix = f"model.{model_id}"
     run_params: dict[str, Any] = {
-        f"{prefix}.name": model_params.name,
-        f"{prefix}.task_type": model_params.task_type,
+        f"{prefix}.name": model_config.name,
+        f"{prefix}.task_type": model_config.task_type,
     }
-    for key, value in model_params.params.items():
+    for key, value in model_config.params.items():
         run_params[f"{prefix}.params.{key}"] = value
 
-    if model_params.preprocessing is None:
+    if model_config.preprocessing is None:
         run_params[f"{prefix}.preprocessing.override"] = False
     else:
         run_params[f"{prefix}.preprocessing.override"] = True
-        if model_params.preprocessing.imputer is not None:
+        if model_config.preprocessing.imputer is not None:
             run_params[f"{prefix}.preprocessing.imputer"] = (
-                model_params.preprocessing.imputer.model_dump(mode="json")
+                model_config.preprocessing.imputer.model_dump(mode="json")
             )
-        if model_params.preprocessing.scaler_encoder is not None:
+        if model_config.preprocessing.scaler_encoder is not None:
             run_params[f"{prefix}.preprocessing.scaler_encoder"] = (
-                model_params.preprocessing.scaler_encoder.model_dump(mode="json")
+                model_config.preprocessing.scaler_encoder.model_dump(mode="json")
             )
 
-    if model_params.tuning is None:
+    if model_config.tuning is None:
         run_params[f"{prefix}.tuning.enabled"] = False
         return _string_params(run_params)
 
     run_params[f"{prefix}.tuning.enabled"] = True
-    run_params[f"{prefix}.tuning.method"] = model_params.tuning.method
-    run_params[f"{prefix}.tuning.scoring"] = model_params.tuning.scoring
-    run_params[f"{prefix}.tuning.search_space"] = model_params.tuning.search_space
-    run_params[f"{prefix}.tuning.cv.n_splits"] = model_params.tuning.cv.n_splits
-    run_params[f"{prefix}.tuning.cv.shuffle"] = model_params.tuning.cv.shuffle
-    run_params[f"{prefix}.tuning.cv.random_state"] = model_params.tuning.cv.random_state
-    if model_params.tuning.grid is not None:
-        run_params[f"{prefix}.tuning.grid"] = model_params.tuning.grid
-    if model_params.tuning.method == "optuna":
+    run_params[f"{prefix}.tuning.method"] = model_config.tuning.method
+    run_params[f"{prefix}.tuning.scoring"] = model_config.tuning.scoring
+    run_params[f"{prefix}.tuning.search_space"] = model_config.tuning.search_space
+    run_params[f"{prefix}.tuning.cv.n_splits"] = model_config.tuning.cv.n_splits
+    run_params[f"{prefix}.tuning.cv.shuffle"] = model_config.tuning.cv.shuffle
+    run_params[f"{prefix}.tuning.cv.random_state"] = model_config.tuning.cv.random_state
+    if model_config.tuning.grid is not None:
+        run_params[f"{prefix}.tuning.grid"] = model_config.tuning.grid
+    if model_config.tuning.method == "optuna":
         run_params[f"{prefix}.tuning.optuna.n_trials"] = (
-            model_params.tuning.optuna.n_trials
+            model_config.tuning.optuna.n_trials
         )
         run_params[f"{prefix}.tuning.optuna.sampler"] = (
-            model_params.tuning.optuna.sampler
+            model_config.tuning.optuna.sampler
         )
         run_params[f"{prefix}.tuning.optuna.n_startup_trials"] = (
-            model_params.tuning.optuna.n_startup_trials
+            model_config.tuning.optuna.n_startup_trials
         )
         run_params[f"{prefix}.tuning.optuna.timeout"] = (
-            model_params.tuning.optuna.timeout
+            model_config.tuning.optuna.timeout
         )
 
     return _string_params(run_params)
@@ -572,7 +580,7 @@ def _classification_metric_params(
 
 
 def _evaluation_bundle(
-    params: PipelineParams,
+    pipeline_config: PipelineConfig,
     model_rows: tuple[ModelRunRecord, ...],
 ) -> _EvaluationBundle:
     evaluations = []
@@ -589,7 +597,7 @@ def _evaluation_bundle(
             }
             evaluations.append(
                 _make_evaluation(
-                    params,
+                    pipeline_config,
                     model_id,
                     model_result.model_name,
                     test_result.dataset_name,
@@ -599,7 +607,7 @@ def _evaluation_bundle(
             )
             table_rows.extend(
                 _evaluation_metric_rows(
-                    params,
+                    pipeline_config,
                     model_id,
                     model_result.model_name,
                     test_result.dataset_name,
@@ -611,7 +619,7 @@ def _evaluation_bundle(
         delta_metrics = model_result.final_test_metrics.mimic_minus_tudd.scores
         evaluations.append(
             _make_evaluation(
-                params,
+                pipeline_config,
                 model_id,
                 model_result.model_name,
                 "mimic_minus_tudd",
@@ -621,7 +629,7 @@ def _evaluation_bundle(
         )
         table_rows.extend(
             _evaluation_metric_rows(
-                params,
+                pipeline_config,
                 model_id,
                 model_result.model_name,
                 "mimic_minus_tudd",
@@ -634,7 +642,7 @@ def _evaluation_bundle(
 
 
 def _make_evaluation(
-    params: PipelineParams,
+    pipeline_config: PipelineConfig,
     model_id: str,
     model_name: str,
     dataset_name: str,
@@ -648,21 +656,21 @@ def _make_evaluation(
             "dataset": dataset_name,
         },
         outputs={"scope": scope},
-        targets={"target": params.dataset.target},
+        targets={"target": pipeline_config.dataset.target},
         metrics=metrics,
         tags={
-            "pipeline_id": params.run_id,
+            "pipeline_id": pipeline_config.run_id,
             "model_name": model_name,
             "model_instance": model_id,
             "dataset": dataset_name,
             "scope": scope,
-            "trained_on": _trained_on(params),
+            "trained_on": _trained_on(pipeline_config),
         },
     )
 
 
 def _evaluation_metric_rows(
-    params: PipelineParams,
+    pipeline_config: PipelineConfig,
     model_id: str,
     model_name: str,
     dataset_name: str,
@@ -676,9 +684,9 @@ def _evaluation_metric_rows(
             continue
         rows.append(
             {
-                "pipeline_run_id": params.run_id,
-                "target": params.dataset.target,
-                "trained_on": _trained_on(params),
+                "pipeline_run_id": pipeline_config.run_id,
+                "target": pipeline_config.dataset.target,
+                "trained_on": _trained_on(pipeline_config),
                 "model_name": model_name,
                 "model_instance": model_id,
                 "dataset": dataset_name,
@@ -691,21 +699,23 @@ def _evaluation_metric_rows(
 
 
 def _model_params_by_instance_id(
-    models: tuple[ModelParams, ...],
-) -> dict[str, ModelParams]:
+    models: tuple[ModelConfig, ...],
+) -> dict[str, ModelConfig]:
     return dict(zip(model_instance_ids(models), models, strict=True))
 
 
-def _run_name(params: PipelineParams) -> str:
-    return params.mlflow.run_name or params.run_id
+def _run_name(pipeline_config: PipelineConfig) -> str:
+    return pipeline_config.mlflow.run_name or pipeline_config.run_id
 
 
-def _train_sources(params: PipelineParams) -> str:
-    return ",".join(split.dataset for split in params.dataset.train_on)
+def _train_sources(pipeline_config: PipelineConfig) -> str:
+    return ",".join(split.dataset for split in pipeline_config.dataset.train_on)
 
 
-def _trained_on(params: PipelineParams) -> str:
-    origins = {_dataset_origin(split.dataset) for split in params.dataset.train_on}
+def _trained_on(pipeline_config: PipelineConfig) -> str:
+    origins = {
+        _dataset_origin(split.dataset) for split in pipeline_config.dataset.train_on
+    }
     if len(origins) == 1:
         return next(iter(origins))
 

@@ -4,9 +4,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from src.schemas.dataset import XYDataset
 
 from src.config import config
-from src.schemas.dataset_schemas import DatasetPartSummary, XYDataset
+from src.schemas.dataset_schemas import DatasetPartSummary
 from src.utils.logger import logger
 
 

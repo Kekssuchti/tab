@@ -3,11 +3,11 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
-from src.schemas.base_schemas import StrictParams
-from src.schemas.pipeline_schemas import PipelineParams
+from src.schemas.base_schemas import StrictConfig
+from src.schemas.pipeline_schemas import PipelineConfig
 
 
-class OverrideRange(StrictParams):
+class OverrideRangeConfig(StrictConfig):
     start: int | float
     stop: int | float
     step: int | float = Field(gt=0)
@@ -27,10 +27,10 @@ class OverrideRange(StrictParams):
         return tuple(values)
 
 
-class SuiteOverride(StrictParams):
+class SuiteOverrideConfig(StrictConfig):
     path: str
     values: tuple[Any, ...] | None = None
-    range: OverrideRange | None = None
+    range: OverrideRangeConfig | None = None
 
     @model_validator(mode="after")
     def validate_source(self):
@@ -48,16 +48,16 @@ class SuiteOverride(StrictParams):
         return self.range.values()
 
 
-class ExperimentSuiteParams(StrictParams):
+class ExperimentSuiteConfig(StrictConfig):
     name: str
     base_config: str
-    matrix: tuple[SuiteOverride, ...] = Field(min_length=1)
+    matrix: tuple[SuiteOverrideConfig, ...] = Field(min_length=1)
 
 
 @dataclass(frozen=True)
 class ExpandedPipelineConfig:
     variant_id: str
-    params: PipelineParams
+    pipeline_config: PipelineConfig
     overrides: dict[str, Any]
 
 
@@ -68,7 +68,7 @@ class SuiteDryRunSummary:
     models_per_config: int
     total_model_runs: int
     changed_parameters: tuple[str, ...]
-    variants: tuple[ExpandedPipelineConfig, ...]
+    config_variants: tuple[ExpandedPipelineConfig, ...]
 
     def format(self) -> str:
         changed = ", ".join(self.changed_parameters)
@@ -79,7 +79,7 @@ class SuiteDryRunSummary:
             f"Total model runs: {self.total_model_runs}",
             f"Changed parameters: {changed}",
         ]
-        for variant in self.variants:
+        for variant in self.config_variants:
             overrides = ", ".join(
                 f"{path}={value}" for path, value in variant.overrides.items()
             )

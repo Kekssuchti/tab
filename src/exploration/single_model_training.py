@@ -24,20 +24,20 @@ def _():
 
     from src.classes.dataset import Dataset
     from src.classes.trainer import Trainer
-    from src.schemas.dataset_schemas import DatasetParams, DataSplitParams
-    from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
-    from src.schemas.training_schemas import ModelParams
+    from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig
+    from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
+    from src.schemas.training_schemas import ModelConfig
     from src.utils.evaluation_utils import evaluate_classification_predictions
     from src.utils.model_lifecycle import release_model
     from src.utils.model_registry import get_model_spec
 
     return (
-        DataSplitParams,
+        DataSplitConfig,
         Dataset,
-        DatasetParams,
-        ImputerParams,
-        ModelParams,
-        ScalerEncoderParams,
+        DatasetConfig,
+        ImputerConfig,
+        ModelConfig,
+        ScalerEncoderConfig,
         Trainer,
         asdict,
         evaluate_classification_predictions,
@@ -110,16 +110,16 @@ def _():
 def _(
     DATASET_IMPUTER,
     DATASET_SCALER,
-    DataSplitParams,
-    DatasetParams,
+    DataSplitConfig,
+    DatasetConfig,
     FORCE_REPREPROCESS,
-    ImputerParams,
+    ImputerConfig,
     MODEL_NAME,
     MODEL_PARAMS,
     MODEL_PREPROCESSING,
-    ModelParams,
+    ModelConfig,
     RANDOM_STATE,
-    ScalerEncoderParams,
+    ScalerEncoderConfig,
     TARGET,
     TASK_TYPE,
     TRAIN_ON,
@@ -133,23 +133,23 @@ def _(
         ]
         return [dict(zip(keys, values)) for values in product(*value_lists)]
 
-    dataset_params = DatasetParams(
+    dataset_params = DatasetConfig(
         target=TARGET,
         random_state=RANDOM_STATE,
         train_size=TRAIN_SIZE,
         train_on=tuple(
-            DataSplitParams(dataset=dataset_name, fraction=fraction)
+            DataSplitConfig(dataset=dataset_name, fraction=fraction)
             for dataset_name, fraction in TRAIN_ON
         ),
         classification=TASK_TYPE == "classification",
         force_repreprocess=FORCE_REPREPROCESS,
-        imputer=ImputerParams(**DATASET_IMPUTER),
-        scaler_encoder=ScalerEncoderParams(**DATASET_SCALER),
+        imputer=ImputerConfig(**DATASET_IMPUTER),
+        scaler_encoder=ScalerEncoderConfig(**DATASET_SCALER),
     )
 
     model_param_sets = expand_params(MODEL_PARAMS)
     model_params_list = tuple(
-        ModelParams(
+        ModelConfig(
             name=MODEL_NAME,
             task_type=TASK_TYPE,
             params=params,

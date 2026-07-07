@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 
-class StrictParams(BaseModel):
+class StrictConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 

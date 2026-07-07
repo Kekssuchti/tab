@@ -6,7 +6,7 @@ from itertools import product
 from typing import TYPE_CHECKING, Any
 
 from src.schemas.base_schemas import TaskType
-from src.schemas.training_schemas import ModelParams
+from src.schemas.training_schemas import ModelConfig
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -63,7 +63,7 @@ class ModelSpec:
 class ModelCatalog:
     registries: Mapping[TaskType, Mapping[str, ModelSpec]]
 
-    def spec_for(self, model_params: ModelParams) -> ModelSpec:
+    def spec_for(self, model_params: ModelConfig) -> ModelSpec:
         registry = self.registries[model_params.task_type]
 
         try:
@@ -79,7 +79,7 @@ class ModelCatalog:
         return tuple(sorted(self.registries[task_type]))
 
 
-def get_model_spec(model_params: ModelParams) -> ModelSpec:
+def get_model_spec(model_params: ModelConfig) -> ModelSpec:
     return MODEL_CATALOG.spec_for(model_params)
 
 

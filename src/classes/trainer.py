@@ -4,15 +4,15 @@ from typing import Any, Literal
 
 import numpy as np
 from sklearn.model_selection import KFold, StratifiedKFold
+from src.schemas.dataset import DatasetBundle
 
 from src.classes.preprocessor import Preprocessor
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
-from src.schemas.dataset_schemas import DatasetBundle
-from src.schemas.preprocessing_schemas import ImputerParams, ScalerEncoderParams
+from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.training_schemas import (
     ClassificationMetrics,
     FoldResult,
-    ModelParams,
+    ModelConfig,
     ModelTrainingResult,
     TuningResult,
 )
@@ -41,29 +41,29 @@ class _CandidateEvaluation:
 class Trainer:
     def __init__(
         self,
-        params: tuple[ModelParams, ...],
-        default_imputer: ImputerParams,
-        default_scaler: ScalerEncoderParams,
+        configs: tuple[ModelConfig, ...],
+        default_imputer: ImputerConfig,
+        default_scaler: ScalerEncoderConfig,
     ) -> None:
-        self.params = params
+        self.configs = configs
         self.default_imputer = default_imputer
         self.default_scaler = default_scaler
 
     def validate_model_configs(self) -> None:
-        logger.info(f"Validating {len(self.params)} model config(s)")
+        logger.info(f"Validating {len(self.configs)} model config(s)")
         errors: list[str] = []
-        for model_params in self.params:
+        for model_config in self.configs:
             try:
-                spec = get_model_spec(model_params)
-                self._build_preprocess_pipeline(model_params)
-                for params in self._preflight_param_sets(model_params, spec):
+                spec = get_model_spec(model_config)
+                self._build_preprocess_pipeline(model_config)
+                for params in self._preflight_param_sets(model_config, spec):
                     model = None
                     try:
-                        model = spec.create(model_params.task_type, params)
+                        model = spec.create(model_config.task_type, params)
                     finally:
                         release_model(model)
             except Exception as exc:
-                errors.append(f"{model_params.name}: {exc}")
+                errors.append(f"{model_config.name}: {exc}")
 
         if errors:
             joined_errors = "\n- ".join(errors)
@@ -71,23 +71,23 @@ class Trainer:
         logger.info("Model config validation completed")
 
     def train_evaluate_model(
-        self, model_params: ModelParams, data: DatasetBundle
+        self, model_config: ModelConfig, data: DatasetBundle
     ) -> ModelTrainingResult:
-        logger.info(f"Training model: {model_params.name}")
+        logger.info(f"Training model: {model_config.name}")
 
-        imputer, scaler = self._resolved_preprocessing(model_params)
+        imputer, scaler = self._resolved_preprocessing(model_config)
         logger.info(f"data imputation via: {imputer.imputation_method}")
         logger.info(f"scaling data using: {scaler.type}")
 
-        spec = get_model_spec(model_params)
+        spec = get_model_spec(model_config)
 
-        if model_params.tuning is None:
-            return self._train_without_tuning(model_params, spec, data)
+        if model_config.tuning is None:
+            return self._train_without_tuning(model_config, spec, data)
 
-        return self._tune_model(model_params, spec, data)
+        return self._tune_model(model_config, spec, data)
 
     def _train_without_tuning(
-        self, model_params: ModelParams, spec: ModelSpec, data: DatasetBundle
+        self, model_params: ModelConfig, spec: ModelSpec, data: DatasetBundle
     ) -> ModelTrainingResult:
         trained_model = None
         X_train, y_train = _databundle_to_xy_train(data)
@@ -117,31 +117,31 @@ class Trainer:
 
     def _fit_model(
         self,
-        model_params: ModelParams,
-        spec: ModelSpec,
-        params: dict[str, Any],
+        model_config: ModelConfig,
+        model_spec: ModelSpec,
+        model_params: dict[str, Any],
         X_train,
         y_train,
     ) -> tuple[ModelAdapter, float]:
-        adapter = spec.create(model_params.task_type, params)
+        adapter = model_spec.create(model_config.task_type, model_params)
         model = PreprocessedModelAdapter(
             adapter,
-            self._build_preprocess_pipeline(model_params),
+            self._build_preprocess_pipeline(model_config),
         )
         fit_time = model.fit(X_train, y_train)
         return model, fit_time
 
-    def _build_preprocess_pipeline(self, model_params: ModelParams):
+    def _build_preprocess_pipeline(self, model_params: ModelConfig):
         imputer, scaler = self._resolved_preprocessing(model_params)
         return Preprocessor(
-            params_imputer=imputer,
-            params_scaler=scaler,
+            imputer_config=imputer,
+            scaler_config=scaler,
         ).build_pipeline()
 
     def _resolved_preprocessing(
-        self, model_params: ModelParams
-    ) -> tuple[ImputerParams, ScalerEncoderParams]:
-        preprocessing = model_params.preprocessing
+        self, model_config: ModelConfig
+    ) -> tuple[ImputerConfig, ScalerEncoderConfig]:
+        preprocessing = model_config.preprocessing
         imputer = (
             preprocessing.imputer
             if preprocessing is not None and preprocessing.imputer is not None
@@ -156,54 +156,54 @@ class Trainer:
 
     def _preflight_param_sets(
         self,
-        model_params: ModelParams,
+        model_config: ModelConfig,
         spec: ModelSpec,
     ) -> list[dict[str, Any]]:
-        if model_params.tuning is None:
-            return [model_params.params]
+        if model_config.tuning is None:
+            return [model_config.params]
 
         grid = spec.tuning_grid(
-            model_params.tuning.search_space,
-            model_params.tuning.grid,
+            model_config.tuning.search_space,
+            model_config.tuning.grid,
         )
         self._count_grid_candidates(grid)
 
-        param_sets = [model_params.params]
+        param_sets = [model_config.params]
         for key, values in grid.items():
             for value in values:
                 candidate_params = spec.tuning_candidate_from_values({key: value})
                 param_sets.append(
-                    self._merge_params(model_params.params, candidate_params)
+                    self._merge_params(model_config.params, candidate_params)
                 )
         return param_sets
 
     def _tune_model(
-        self, model_params: ModelParams, spec: ModelSpec, data: DatasetBundle
+        self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
     ) -> ModelTrainingResult:
-        tuning = model_params.tuning
+        tuning = model_config.tuning
         if tuning is None:
             raise ValueError("Tuning requested without tuning parameters")
 
         if tuning.method == "grid":
-            return self._tune_model_grid(model_params, spec, data)
+            return self._tune_model_grid(model_config, model_spec, data)
         if tuning.method == "optuna":
-            return self._tune_model_optuna(model_params, spec, data)
+            return self._tune_model_optuna(model_config, model_spec, data)
 
         raise ValueError(f"Unknown tuning method: {tuning.method}")
 
     def _tune_model_grid(
-        self, model_params: ModelParams, spec: ModelSpec, data: DatasetBundle
+        self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
     ) -> ModelTrainingResult:
-        tuning = model_params.tuning
+        tuning = model_config.tuning
         if tuning is None:
             raise ValueError("Tuning requested without tuning parameters")
 
         X_train, y_train = _databundle_to_xy_train(data)
 
-        candidates = spec.tuning_candidates(tuning.search_space, tuning.grid)
-        folds = list(self._build_cv(model_params, tuning).split(X_train, y_train))
+        candidates = model_spec.tuning_candidates(tuning.search_space, tuning.grid)
+        folds = list(self._build_cv(model_config, tuning).split(X_train, y_train))
         logger.info(
-            f"Tuning {model_params.name}: candidates={len(candidates)} "
+            f"Tuning {model_config.name}: candidates={len(candidates)} "
             f"folds={len(folds)} scoring={tuning.scoring} method=grid"
         )
 
@@ -212,8 +212,8 @@ class Trainer:
         for candidate_index, candidate_params in enumerate(candidates):
             start_time_candidate = timer()
             evaluation = self._evaluate_cv_candidate(
-                model_params,
-                spec,
+                model_config,
+                model_spec,
                 candidate_params,
                 candidate_index,
                 folds,
@@ -227,8 +227,8 @@ class Trainer:
             )
 
         return self._fit_best_tuned_model(
-            model_params,
-            spec,
+            model_config,
+            model_spec,
             data,
             evaluations,
             folds=folds,
@@ -236,24 +236,24 @@ class Trainer:
         )
 
     def _tune_model_optuna(
-        self, model_params: ModelParams, spec: ModelSpec, data: DatasetBundle
+        self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
     ) -> ModelTrainingResult:
         import optuna
 
         self._configure_optuna_logging(optuna)
 
-        tuning = model_params.tuning
+        tuning = model_config.tuning
         if tuning is None:
             raise ValueError("Tuning requested without tuning parameters")
 
-        grid = spec.tuning_grid(tuning.search_space, tuning.grid)
+        grid = model_spec.tuning_grid(tuning.search_space, tuning.grid)
         grid_candidate_count = self._count_grid_candidates(grid)
         X_train, y_train = _databundle_to_xy_train(data)
 
-        folds = list(self._build_cv(model_params, tuning).split(X_train, y_train))
+        folds = list(self._build_cv(model_config, tuning).split(X_train, y_train))
 
         logger.info(
-            f"Tuning {model_params.name}: trials={tuning.optuna.n_trials} "
+            f"Tuning {model_config.name}: trials={tuning.optuna.n_trials} "
             f"grid_candidates={grid_candidate_count} folds={len(folds)} "
             f"scoring={tuning.scoring} method=optuna"
         )
@@ -271,11 +271,11 @@ class Trainer:
                 key: trial.suggest_categorical(key, values)
                 for key, values in grid.items()
             }
-            candidate_params = spec.tuning_candidate_from_values(sampled_params)
+            candidate_params = model_spec.tuning_candidate_from_values(sampled_params)
             start_time_candidate = timer()
             evaluation = self._evaluate_cv_candidate(
-                model_params,
-                spec,
+                model_config,
+                model_spec,
                 candidate_params,
                 candidate_index,
                 folds,
@@ -301,8 +301,8 @@ class Trainer:
             raise ValueError("Optuna tuning did not complete any trials")
 
         return self._fit_best_tuned_model(
-            model_params,
-            spec,
+            model_config,
+            model_spec,
             data,
             evaluations,
             folds=folds,
@@ -311,19 +311,19 @@ class Trainer:
 
     def _evaluate_cv_candidate(
         self,
-        model_params: ModelParams,
-        spec: ModelSpec,
+        model_config: ModelConfig,
+        model_spec: ModelSpec,
         candidate_params: dict[str, Any],
         candidate_index: int,
         folds: list[tuple[np.ndarray, np.ndarray]],
         X_train,
         y_train,
     ) -> _CandidateEvaluation:
-        tuning = model_params.tuning
+        tuning = model_config.tuning
         if tuning is None:
             raise ValueError("Tuning requested without tuning parameters")
 
-        params = self._merge_params(model_params.params, candidate_params)
+        model_params = self._merge_params(model_config.params, candidate_params)
         candidate_scores: list[float] = []
         candidate_metrics: list[ClassificationMetrics] = []
         candidate_times: list[float] = []
@@ -335,16 +335,16 @@ class Trainer:
             predictions = None
             try:
                 fold_model, _ = self._fit_model(
+                    model_config,
+                    model_spec,
                     model_params,
-                    spec,
-                    params,
                     self._take_rows(X_train, train_index),
                     self._take_rows(y_train, train_index),
                 )
                 predictions, _ = fold_model.predict(
                     self._take_rows(X_train, validation_index)
                 )
-                if model_params.task_type != "classification":
+                if model_config.task_type != "classification":
                     raise NotImplementedError(
                         "Regression tuning metrics are not implemented yet"
                     )
@@ -364,7 +364,7 @@ class Trainer:
                         fold_index=fold_index,
                         metrics=metrics,
                         time=candidate_times[-1],
-                        params=params,
+                        params=model_params,
                     )
                 )
             finally:
@@ -381,8 +381,8 @@ class Trainer:
 
     def _fit_best_tuned_model(
         self,
-        model_params: ModelParams,
-        spec: ModelSpec,
+        model_config: ModelConfig,
+        model_spec: ModelSpec,
         data: DatasetBundle,
         evaluations: list[_CandidateEvaluation],
         folds,
@@ -407,8 +407,8 @@ class Trainer:
 
         """
 
-        tuning = model_params.tuning
-        if tuning is None:
+        tuning_config = model_config.tuning
+        if tuning_config is None:
             raise ValueError("Tuning requested without tuning parameters")
 
         candidates = [evaluation.candidate_params for evaluation in evaluations]
@@ -440,9 +440,9 @@ class Trainer:
                     fold_y_train = self._take_rows(base_y_train, train_indices)
 
                     trained_sub_model, fit_time = self._fit_model(
-                        model_params,
-                        spec,
-                        self._merge_params(model_params.params, best_params),
+                        model_config,
+                        model_spec,
+                        self._merge_params(model_config.params, best_params),
                         fold_X_train,
                         fold_y_train,
                     )
@@ -451,7 +451,7 @@ class Trainer:
                     sub_model_result = evaluate_trained_model(
                         trained_model=trained_sub_model,
                         data=data,
-                        task_type=model_params.task_type,
+                        task_type=model_config.task_type,
                     )
                     sub_model_results.append(sub_model_result)
                 finally:
@@ -461,7 +461,7 @@ class Trainer:
 
             tuning_result = TuningResult(
                 best_params=best_params,
-                scoring=tuning.scoring,
+                scoring=tuning_config.scoring,
                 test_metrics=test_metrics,
                 fold_results=fold_results,
                 method=method,
@@ -474,8 +474,8 @@ class Trainer:
             )
 
             return ModelTrainingResult(
-                model_name=model_params.name,
-                task_type=model_params.task_type,
+                model_name=model_config.name,
+                task_type=model_config.task_type,
                 tuned=True,
                 fit_time=final_fit_time,
                 tuning_result=tuning_result,
@@ -538,9 +538,9 @@ class Trainer:
         return np.asarray(data)[rows]
 
     @staticmethod
-    def _build_cv(model_params: ModelParams, tuning):
+    def _build_cv(model_config: ModelConfig, tuning):
         cv_cls = (
-            StratifiedKFold if model_params.task_type == "classification" else KFold
+            StratifiedKFold if model_config.task_type == "classification" else KFold
         )
         return cv_cls(
             n_splits=tuning.cv.n_splits,
@@ -550,12 +550,12 @@ class Trainer:
 
     def _training_metrics(
         self,
-        model_params: ModelParams,
+        model_config: ModelConfig,
         model: ModelAdapter,
         X_train,
         y_train,
     ) -> tuple[ClassificationMetrics | None, float]:
-        if model_params.task_type != "classification":
+        if model_config.task_type != "classification":
             return None, 0.0
 
         predictions, predict_time = model.predict(X_train)

@@ -17,13 +17,13 @@ from src.schemas.dataset_schemas import (
     DatasetFileSummary,
     DatasetPartSummary,
     DatasetSummary,
-    DataSplitParams,
+    DataSplitConfig,
 )
-from src.schemas.pipeline_schemas import MLflowParams, PipelineParams
-from src.schemas.plotting_schemas import PlottingParams
+from src.schemas.pipeline_schemas import MLflowConfig, PipelineConfig
+from src.schemas.plotting_schemas import PlottingConfig
 from src.schemas.training_schemas import (
     FoldResult,
-    ModelParams,
+    ModelConfig,
     ModelTrainingResult,
     TuningResult,
 )
@@ -79,17 +79,17 @@ def _params(
     tracking_uri: str,
     artifact_location: str | None = None,
     run_name: str | None = None,
-) -> PipelineParams:
-    return PipelineParams(
+) -> PipelineConfig:
+    return PipelineConfig(
         run_id="test-pipeline-id",
         dataset={
             "target": "mortality",
             "random_state": 42,
             "train_size": 0.75,
-            "train_on": (DataSplitParams(dataset="mimic", fraction=1.0),),
+            "train_on": (DataSplitConfig(dataset="mimic", fraction=1.0),),
         },
         training=(
-            ModelParams(
+            ModelConfig(
                 name="logistic-regression",
                 task_type="classification",
                 params={"max_iter": 100},
@@ -99,8 +99,8 @@ def _params(
                 },
             ),
         ),
-        plotting=PlottingParams(enabled=False),
-        mlflow=MLflowParams(
+        plotting=PlottingConfig(enabled=False),
+        mlflow=MLflowConfig(
             enabled=True,
             tracking_uri=tracking_uri,
             artifact_location=artifact_location,

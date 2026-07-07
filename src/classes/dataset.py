@@ -4,6 +4,7 @@ from typing import TypedDict
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from src.schemas.dataset import DatasetBundle, XYDataset
 
 from src.classes.data_cleaner import DataCleaner
 from src.classes.data_registry import (
@@ -13,11 +14,9 @@ from src.classes.data_registry import (
 )
 from src.config import config
 from src.schemas.dataset_schemas import (
-    DatasetBundle,
+    DatasetConfig,
     DatasetFileSummary,
-    DatasetParams,
     DatasetSummary,
-    XYDataset,
 )
 from src.utils.dataset_utils import (
     hash_file_sha256,
@@ -39,22 +38,22 @@ class Dataset:
 
     def __init__(
         self,
-        params: DatasetParams,
+        dataset_config: DatasetConfig,
     ) -> None:
-        self.params = params
-        self.seed = self.params.random_state
-        self.data_cleaner = DataCleaner(params.data_cleaner)
-        self._task = dataset_task_for_target(self.params.target)
+        self.config = dataset_config
+        self.seed = self.config.random_state
+        self.data_cleaner = DataCleaner(self.config.data_cleaner)
+        self._task = dataset_task_for_target(self.config.target)
 
     def get_dataset(self) -> DatasetBundle:
         """
         Get ALL dataset parts in DatasetBundle
 
-        Train XYDataset are the specified combination of Datasplits given the DatasetParams
+        Train XYDataset are the specified combination of data splits given the DatasetConfig
         This can include only 1 of the 2 datasets, both datasets, fractions of any of those datasets or combinations of both
         """
         logger.info(
-            f"Preparing dataset target={self.params.target} "
+            f"Preparing dataset target={self.config.target} "
             f"files={','.join(file.file_name for file in self._task.data_files.values())}"
         )
         dfs = self._load_data()
@@ -81,7 +80,7 @@ class Dataset:
                 # if any required file is missing we assume something bad happened and reprocess all!
                 data_preprocessed = False
 
-        if not data_preprocessed or self.params.force_repreprocess:
+        if not data_preprocessed or self.config.force_repreprocess:
             logger.info("Required filtered data missing or force_repreprocess=true")
             self.data_cleaner.preprocess_extracted_to_filtered()
 
@@ -110,7 +109,7 @@ class Dataset:
             logger.info(f"Dropped CSV index columns: {index_columns}")
 
         df, removed_counts = remove_impossible_values(
-            df, self.params.data_cleaner.outlier_limits_path
+            df, self.config.data_cleaner.outlier_limits_path
         )
         removed_counts = {
             column: count for column, count in removed_counts.items() if count
@@ -146,7 +145,7 @@ class Dataset:
         X_train_parts: list[pd.DataFrame] = []
         y_train_parts: list[pd.Series] = []
 
-        for training_data_split in self.params.train_on:
+        for training_data_split in self.config.train_on:
             # each datasplit we train on
             for dataset_origin, split in splits_dict.items():
                 # compared against all keys we have (aka mimic and tudd)
@@ -220,7 +219,7 @@ class Dataset:
 
     def summarize(self, bundle: DatasetBundle) -> DatasetSummary:
         return DatasetSummary(
-            target=self.params.target,
+            target=self.config.target,
             train=summarize_data_part(bundle.train_data),
             test_mimic=summarize_data_part(bundle.test_mimic),
             test_tudd=summarize_data_part(bundle.test_tudd),
@@ -250,7 +249,7 @@ class Dataset:
 
         stratify = None
         if (
-            self.params.classification
+            self.config.classification
             and y.nunique() > 1
             and y.value_counts().min() >= 2
         ):
@@ -259,7 +258,7 @@ class Dataset:
         X_train, X_test, y_train, y_test = train_test_split(
             X,
             y,
-            test_size=(1 - self.params.train_size),
+            test_size=(1 - self.config.train_size),
             random_state=self.seed,
             shuffle=True,
             stratify=stratify,

@@ -1,6 +1,6 @@
-from src.schemas.plotting_schemas import PlottingParams
+from src.schemas.plotting_schemas import PlottingConfig
 
 
 class Plotter:
-    def __init__(self, params: PlottingParams) -> None:
+    def __init__(self, params: PlottingConfig) -> None:
         self.params = params

@@ -6,12 +6,12 @@ from src.classes.experiment_suite import ExperimentSuite
 from src.classes.pipeline import Pipeline
 from src.config import config
 from src.mlflow.mlflow_logger import MLflowPipelineLogger
-from src.schemas.pipeline_schemas import PipelineParams
+from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.suite_schemas import SuiteRunResult
 from src.utils.config_io import (
-    dump_pipeline_params,
-    load_experiment_suite_params,
-    load_pipeline_params,
+    dump_pipeline_config,
+    load_experiment_suite_config,
+    load_pipeline_config,
 )
 from src.utils.logger import logger
 
@@ -19,35 +19,35 @@ from src.utils.logger import logger
 def run_pipeline(config_path: str | Path):
     logger.info("Start Pipeline run")
     config_path = Path(config_path)
-    params = load_pipeline_params(config_path)
+    pipeline_config = load_pipeline_config(config_path)
 
-    result = run_pipeline_params(params, config_path=config_path)
+    result = run_pipeline_params(pipeline_config, config_path=config_path)
     logger.info(f"Pipeline run completed. Results: {result}")
     return result
 
 
 def run_pipeline_params(
-    params: PipelineParams,
+    pipeline_config: PipelineConfig,
     config_path: str | Path | None = None,
 ):
     resolved_config_path = Path(config_path) if config_path is not None else None
-    mlflow_logger = MLflowPipelineLogger() if params.mlflow.enabled else None
+    mlflow_logger = MLflowPipelineLogger() if pipeline_config.mlflow.enabled else None
 
     def log_completed_model(partial_result, model_run):
         if mlflow_logger is None:
             return
         mlflow_logger.log_model_run(
-            params,
+            pipeline_config,
             partial_result,
             model_run,
             config_path=resolved_config_path,
         )
 
-    result = Pipeline(params).run(on_model_complete=log_completed_model)
+    result = Pipeline(pipeline_config).run(on_model_complete=log_completed_model)
 
     if mlflow_logger is not None:
         mlflow_logger.log_pipeline_summary(
-            params,
+            pipeline_config,
             result,
             config_path=resolved_config_path,
         )
@@ -58,7 +58,7 @@ def run_pipeline_params(
 def run_suite(config_path: str | Path, *, dry_run: bool = False):
     logger.info("Start experiment suite run")
     config_path = Path(config_path)
-    suite_params = load_experiment_suite_params(config_path)
+    suite_params = load_experiment_suite_config(config_path)
     suite = ExperimentSuite(suite_params, config_path)
     summary = suite.dry_run_summary()
 
@@ -71,13 +71,13 @@ def run_suite(config_path: str | Path, *, dry_run: bool = False):
     results = []
     with TemporaryDirectory() as temp_dir_name:
         temp_dir = Path(temp_dir_name)
-        for variant in summary.variants:
+        for variant in summary.config_variants:
             logger.info(f"Running variant {variant.variant_id}")
             concrete_config_path = temp_dir / f"{variant.variant_id}.yaml"
-            dump_pipeline_params(variant.params, concrete_config_path)
+            dump_pipeline_config(variant.pipeline_config, concrete_config_path)
             results.append(
                 run_pipeline_params(
-                    variant.params,
+                    variant.pipeline_config,
                     config_path=concrete_config_path,
                 )
             )
