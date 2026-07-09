@@ -18,6 +18,21 @@ TARGET_LIKE_COLUMNS = (
 
 @dataclass(frozen=True)
 class DataFile:
+    """
+    Registered filtered data file.
+
+    ---
+    Attributes:
+        data_origin: {"mimic", "tudd"}
+            Source system for the file.
+
+        file_name: str
+            File name under the filtered data directory.
+
+        is_readmission: bool, default=False
+            Whether the file belongs to a readmission task.
+    """
+
     data_origin: DatasetOrigin
     file_name: str
     is_readmission: bool = False
@@ -25,6 +40,18 @@ class DataFile:
 
 @dataclass(frozen=True)
 class DatasetTask:
+    """
+    Target-specific dataset registry entry.
+
+    ---
+    Attributes:
+        target: {"mortality", "LOS7", "hours_to_readmit"}
+            Target column or derived label for the task.
+
+        data_files: dict
+            Mapping from dataset names to registered files.
+    """
+
     target: Target
     data_files: dict[DatasetName, DataFile]
 

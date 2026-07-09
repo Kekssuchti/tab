@@ -11,6 +11,8 @@ PredictionOutput = tuple[ndarray, float]
 
 
 class ModelAdapter(ABC):
+    """Common interface for trainable tabular model adapters."""
+
     name: str
     task_type: TaskType
     kwargs: dict
@@ -72,6 +74,8 @@ class ModelAdapter(ABC):
 
 
 class PreprocessedModelAdapter(ModelAdapter):
+    """Adapter wrapper that applies sklearn preprocessing around a model."""
+
     def __init__(self, adapter: ModelAdapter, preprocess_pipeline) -> None:
         self.adapter = adapter
         self.preprocess_pipeline = preprocess_pipeline

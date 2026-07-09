@@ -10,6 +10,8 @@ from src.utils.logger import logger
 
 
 class DataCleaner:
+    """Clean extracted clinical CSVs into filtered pipeline-ready CSVs."""
+
     def __init__(self, data_cleaner_config: DataCleanerConfig) -> None:
         self.config = data_cleaner_config
 

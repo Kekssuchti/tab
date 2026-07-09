@@ -13,28 +13,20 @@ from src.schemas.training_schemas import (
     OptunaConfig,
     TuningConfig,
 )
+from src.utils import model_registry
+from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
 from src.utils.model_lifecycle import release_model
 
 
 def _classification_data():
-    X = pd.DataFrame(
-        {
-            "age": [30, 35, 40, 45, 60, 65, 70, 75],
-            "lab": [1.0, 1.2, 1.5, 1.7, 4.0, 4.2, 4.5, 4.7],
-        }
-    )
-    y = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+    X, y = load_toy_data_cls()
     return X, y
 
 
 def _regression_data():
-    X = pd.DataFrame(
-        {
-            "age": [30, 35, 40, 45, 60, 65],
-            "lab": [1.0, 1.5, 2.0, 2.5, 4.0, 4.5],
-        }
-    )
-    y = np.array([10.0, 12.0, 14.0, 16.0, 24.0, 26.0])
+    X, y = load_toy_data_reg()
+    y = ((y - y.mean()) / y.std()).astype(np.float32)
+
     return X, y
 
 
@@ -86,12 +78,18 @@ class _ReleasablePredictFailureModel(_ReleasableFoldModel):
         raise RuntimeError("training metric prediction failed")
 
 
-def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
+def test_trainer_records_final_metrics_after_training():
     X, y = _classification_data()
     model_params = ModelConfig(
         name="logistic-regression",
         task_type="classification",
         params={"max_iter": 200},
+        tuning=TuningConfig(
+            method="grid",
+            grid={"C": [1.0]},
+            scoring="accuracy",
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
+        ),
     )
     trainer = Trainer(
         configs=(model_params,),
@@ -99,14 +97,13 @@ def test_trainer_returns_adapter_that_predicts_after_pipeline_training():
     )
 
     with _trained_result(trainer, model_params, X, y) as result:
-        predictions, predict_time = result.trained_model.predict(X)
-
         assert result.model_name == "logistic-regression"
-        assert not result.tuned
+        assert result.tuned
         assert result.fit_time >= 0
-        assert predict_time >= 0
-        assert predictions.shape == (len(X), 2)
-        assert np.isfinite(predictions).all()
+        assert result.trained_model is None
+        assert result.tuning_result is not None
+        assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
+        assert result.tuning_result.final_test_metrics.tudd_test.mean_accuracy >= 0.0
 
 
 def test_trainer_uses_tuning_grid_and_returns_best_params():
@@ -116,6 +113,7 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
         task_type="classification",
         params={"max_iter": 200},
         tuning=TuningConfig(
+            method="grid",
             grid={"C": [0.1, 1.0]},
             scoring="accuracy",
             cv=CrossValidationConfig(n_splits=2, random_state=1),
@@ -199,22 +197,32 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
         name="logistic-regression",
         task_type="classification",
         tuning=TuningConfig(
+            method="grid",
             grid={"C": [0.1, 1.0]},
             scoring="accuracy",
             cv=CrossValidationConfig(n_splits=2, random_state=1),
         ),
     )
 
-    class _Spec:
-        def tuning_candidates(self, search_space, overrides):
-            return [{"C": value} for value in overrides["C"]]
+    model_spec = model_registry.get_model_spec(
+        ModelConfig(
+            name="logistic-regression",
+            task_type="classification",
+            tuning=TuningConfig(
+                method="grid",
+                grid={"C": [0.1, 1.0]},
+                scoring="accuracy",
+                cv=CrossValidationConfig(n_splits=2, random_state=1),
+            ),
+        )
+    )
 
     def _fit_model(model_params, spec, params, X_train, y_train):
         return _ReleasableFoldModel(), 0.0
 
     monkeypatch.setattr(trainer, "_fit_model", _fit_model)
 
-    result = trainer._tune_model(model_params, _Spec(), _bundle(X, y))
+    result = trainer._tune_model(model_params, model_spec, _bundle(X, y))
 
     assert result.tuned
     assert _ReleasableFoldModel.peak == 1
@@ -222,32 +230,41 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
     assert _ReleasableFoldModel.active == 0
 
 
-def test_trainer_can_fit_regression_adapter_behind_same_interface():
+def test_trainer_rejects_regression_tuning_until_metrics_are_implemented():
     X, y = _regression_data()
     model_params = ModelConfig(
         name="xgboost",
         task_type="regression",
+        params={"n_estimators": 2, "max_depth": 1, "n_jobs": 1},
+        tuning=TuningConfig(
+            method="grid",
+            grid={"n_estimators": [2]},
+            scoring="accuracy",
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
+        ),
     )
     trainer = Trainer(
         configs=(model_params,),
         **_preprocess_pipeline(),
     )
 
-    with _trained_result(trainer, model_params, X, y) as result:
-        predictions, _ = result.trained_model.predict(X)
-
-        assert result.model_name == "xgboost"
-        assert predictions.shape == (len(X),)
-        assert np.isfinite(predictions).all()
+    with pytest.raises(NotImplementedError, match="Regression tuning metrics"):
+        trainer.train_evaluate_model(model_params, _bundle(X, y))
 
 
 def test_trainer_uses_model_specific_preprocessing_override():
     X, y = _classification_data()
-    X.loc[0, "lab"] = np.nan
+    X.loc[3, "regulatory_score"] = np.nan
     model_params = ModelConfig(
         name="logistic-regression",
         task_type="classification",
         params={"max_iter": 200},
+        tuning=TuningConfig(
+            method="grid",
+            grid={"C": [1.0]},
+            scoring="accuracy",
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
+        ),
         preprocessing={
             "imputer": {"imputation_method": "mean"},
             "scaler_encoder": {"type": "none"},
@@ -260,20 +277,25 @@ def test_trainer_uses_model_specific_preprocessing_override():
     )
 
     with _trained_result(trainer, model_params, X, y) as result:
-        predictions, _ = result.trained_model.predict(X)
-
         assert result.model_name == "logistic-regression"
-        assert predictions.shape == (len(X), 2)
-        assert np.isfinite(predictions).all()
+        assert result.trained_model is None
+        assert result.tuning_result is not None
+        assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
 
 
 def test_trainer_encodes_categorical_columns_before_xgboost():
     X, y = _classification_data()
-    X["Sex"] = ["F", "M", "F", "M", "F", "M", "F", "M"]
+    X["Sex"] = np.random.choice(["F", "M"], len(X))
     model_params = ModelConfig(
         name="xgboost",
         task_type="classification",
         params={"n_estimators": 2, "max_depth": 1, "n_jobs": 1},
+        tuning=TuningConfig(
+            method="grid",
+            grid={"n_estimators": [2]},
+            scoring="accuracy",
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
+        ),
     )
     trainer = Trainer(
         configs=(model_params,),
@@ -282,14 +304,16 @@ def test_trainer_encodes_categorical_columns_before_xgboost():
     )
 
     with _trained_result(trainer, model_params, X, y) as result:
-        predictions, _ = result.trained_model.predict(X)
-
         assert result.model_name == "xgboost"
-        assert predictions.shape == (len(X), 2)
-        assert np.isfinite(predictions).all()
+        assert result.trained_model is None
+        assert result.tuning_result is not None
+        assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
 
 
 def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
+    _ReleasableFoldModel.active = 0
+    _ReleasableFoldModel.peak = 0
+    _ReleasableFoldModel.releases = 0
     _ReleasablePredictFailureModel.active = 0
     _ReleasablePredictFailureModel.peak = 0
     _ReleasablePredictFailureModel.releases = 0
@@ -301,22 +325,36 @@ def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
     model_params = ModelConfig(
         name="logistic-regression",
         task_type="classification",
+        tuning=TuningConfig(
+            method="grid",
+            grid={"C": [1.0]},
+            scoring="accuracy",
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
+        ),
     )
 
-    class _Spec:
-        pass
+    fit_calls = 0
 
     def _fit_model(model_params, spec, params, X_train, y_train):
+        nonlocal fit_calls
+        fit_calls += 1
+        if fit_calls <= 2:
+            return _ReleasableFoldModel(), 0.0
         return _ReleasablePredictFailureModel(), 0.0
 
     monkeypatch.setattr(trainer, "_fit_model", _fit_model)
 
     with pytest.raises(RuntimeError, match="training metric prediction failed"):
-        trainer._train_without_tuning(model_params, _Spec(), _bundle(X, y))
+        trainer._tune_model(
+            model_params,
+            model_registry.get_model_spec(model_params),
+            _bundle(X, y),
+        )
 
     assert _ReleasablePredictFailureModel.peak == 1
     assert _ReleasablePredictFailureModel.releases == 1
     assert _ReleasablePredictFailureModel.active == 0
+    assert _ReleasableFoldModel.releases == 2
 
 
 def test_trainer_preflight_rejects_bad_model_params():

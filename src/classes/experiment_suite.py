@@ -13,6 +13,8 @@ from src.utils.config_io import load_pipeline_config
 
 
 class ExperimentSuite:
+    """Expand an experiment suite config into concrete pipeline variants."""
+
     def __init__(
         self, experiment_suite_config: ExperimentSuiteConfig, suite_path: str | Path
     ):

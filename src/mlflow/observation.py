@@ -32,6 +32,21 @@ from src.utils.model_identity import model_instance_ids
 
 @dataclass(frozen=True)
 class MetricLog:
+    """
+    One metric value prepared for MLflow logging.
+
+    ---
+    Attributes:
+        name: str
+            Metric name.
+
+        value: float
+            Metric value.
+
+        step: int or None, default=None
+            Optional MLflow metric step.
+    """
+
     name: str
     value: float
     step: int | None = None
@@ -39,6 +54,27 @@ class MetricLog:
 
 @dataclass(frozen=True)
 class EvaluationLog:
+    """
+    One MLflow evaluation payload.
+
+    ---
+    Attributes:
+        inputs: dict
+            Evaluation input descriptors.
+
+        outputs: dict
+            Evaluation output descriptors.
+
+        targets: dict
+            Target descriptors.
+
+        metrics: dict
+            Evaluation metrics.
+
+        tags: dict
+            Tags attached to the evaluation.
+    """
+
     inputs: dict[str, str]
     outputs: dict[str, str]
     targets: dict[str, str]
@@ -48,6 +84,36 @@ class EvaluationLog:
 
 @dataclass(frozen=True)
 class RunObservation:
+    """
+    Serializable description of one MLflow run and its children.
+
+    ---
+    Attributes:
+        run_name: str
+            MLflow run name.
+
+        tags: dict
+            Run tags.
+
+        params: dict
+            Run parameters.
+
+        metrics: tuple of MetricLog, default=()
+            Metrics logged on the run.
+
+        evaluations: tuple of EvaluationLog, default=()
+            Evaluation payloads logged on the run.
+
+        table_rows: tuple of dict, default=()
+            Rows for summary metric tables.
+
+        children: tuple of RunObservation, default=()
+            Nested child runs.
+
+        cv_artifact_model_id: str or None, default=None
+            Model identifier used for CV artifact logging.
+    """
+
     run_name: str
     tags: dict[str, str]
     params: dict[str, str]
@@ -60,12 +126,16 @@ class RunObservation:
 
 @dataclass(frozen=True)
 class _EvaluationBundle:
+    """Grouped evaluation payloads and metric table rows."""
+
     evaluations: tuple[EvaluationLog, ...]
     table_rows: tuple[dict[str, str | float], ...]
 
 
 @dataclass(frozen=True)
 class _CandidateSummary:
+    """Aggregated CV summary for one tuning candidate."""
+
     candidate_index: int
     model_params: dict[str, Any]
     folds: tuple[FoldRecord, ...]

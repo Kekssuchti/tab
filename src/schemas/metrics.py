@@ -5,7 +5,35 @@ import numpy as np
 
 @dataclass
 class ClassificationMetrics:
-    """Classification metrics for one prediction set."""
+    """
+    Classification metrics for one prediction set.
+
+    ---
+    Attributes:
+        roc_auc: float or None
+            ROC AUC, or None when unavailable.
+
+        prc_auc: float or None
+            Precision-recall AUC, or None when unavailable.
+
+        f1: float
+            F1 score.
+
+        accuracy: float
+            Accuracy score.
+
+        sensitivity: float
+            True positive rate.
+
+        precision: float
+            Positive predictive value.
+
+        confusion_matrix: numpy.ndarray
+            Confusion matrix for predicted labels.
+
+        n_classes: int
+            Number of classes observed by the evaluator.
+    """
 
     roc_auc: float | None
     prc_auc: float | None
@@ -33,6 +61,15 @@ class ClassificationMetrics:
 
 @dataclass
 class ClassificationMetricsAggregate:
+    """
+    Mean classification metrics with 95% confidence intervals.
+
+    ---
+    Attributes:
+        metrics: list of ClassificationMetrics
+            Per-run metrics to aggregate.
+    """
+
     mean_roc_auc: float
     mean_prc_auc: float
     mean_f1: float
@@ -100,6 +137,21 @@ class ClassificationMetricsAggregate:
 
 @dataclass
 class RegressionMetrics:
+    """
+    Regression metrics for one prediction set.
+
+    ---
+    Attributes:
+        r2: float
+            Coefficient of determination.
+
+        mae: float
+            Mean absolute error.
+
+        mse: float
+            Mean squared error.
+    """
+
     r2: float
     mae: float
     mse: float
@@ -115,7 +167,29 @@ class RegressionMetrics:
 
 @dataclass(frozen=True)
 class ClassificationMetricDeltas:
-    """Signed final-test deltas. Positive means mimic outperformed tudd."""
+    """
+    Signed final-test deltas between MIMIC and TUDD.
+
+    ---
+    Attributes:
+        roc_auc: float or None
+            MIMIC minus TUDD ROC AUC.
+
+        prc_auc: float or None
+            MIMIC minus TUDD precision-recall AUC.
+
+        f1: float
+            MIMIC minus TUDD F1 score.
+
+        accuracy: float
+            MIMIC minus TUDD accuracy.
+
+        sensitivity: float
+            MIMIC minus TUDD sensitivity.
+
+        precision: float
+            MIMIC minus TUDD precision.
+    """
 
     roc_auc: float | None
     prc_auc: float | None
@@ -141,6 +215,24 @@ class ClassificationMetricDeltas:
 
 @dataclass(frozen=True)
 class FinalTestMetrics:
+    """
+    Final classification metrics for both held-out test sets.
+
+    ---
+    Attributes:
+        mimic_test: ClassificationMetrics
+            Metrics on the MIMIC test set.
+
+        mimic_prediction_time: float
+            Prediction time on the MIMIC test set, in seconds.
+
+        tudd_test: ClassificationMetrics
+            Metrics on the TUDD test set.
+
+        tudd_prediction_time: float
+            Prediction time on the TUDD test set, in seconds.
+    """
+
     mimic_test: ClassificationMetrics
     mimic_prediction_time: float
     tudd_test: ClassificationMetrics
@@ -164,6 +256,24 @@ class FinalTestMetrics:
 
 @dataclass(frozen=True)
 class AggregatedFinalTestMetrics:
+    """
+    Aggregated final-test metrics for tuned cross-validation runs.
+
+    ---
+    Attributes:
+        mimic_test: ClassificationMetricsAggregate
+            Aggregated metrics on MIMIC test folds.
+
+        mimic_prediction_time: float
+            Mean prediction time on MIMIC test folds, in seconds.
+
+        tudd_test: ClassificationMetricsAggregate
+            Aggregated metrics on TUDD test folds.
+
+        tudd_prediction_time: float
+            Mean prediction time on TUDD test folds, in seconds.
+    """
+
     mimic_test: ClassificationMetricsAggregate
     mimic_prediction_time: float
     tudd_test: ClassificationMetricsAggregate
@@ -184,6 +294,24 @@ class AggregatedFinalTestMetrics:
 
 @dataclass(frozen=True)
 class ClassificationPredictionBatch:
+    """
+    Classification predictions and probabilities for one batch.
+
+    ---
+    Attributes:
+        probabilities: numpy.ndarray
+            Predicted class probabilities.
+
+        y_true: numpy.ndarray
+            Ground-truth labels.
+
+        y_pred: numpy.ndarray
+            Predicted labels.
+
+        n_classes: int
+            Number of classes represented in the batch.
+    """
+
     probabilities: np.ndarray
     y_true: np.ndarray
     y_pred: np.ndarray

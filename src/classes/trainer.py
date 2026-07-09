@@ -7,8 +7,8 @@ from sklearn.model_selection import KFold, StratifiedKFold
 
 from src.classes.preprocessor import Preprocessor
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
-from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics
 from src.schemas.dataset_schemas import DatasetBundle
+from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 from src.schemas.training_schemas import (
@@ -16,7 +16,11 @@ from src.schemas.training_schemas import (
 )
 from src.utils.databundle_utils import _databundle_to_xy_train
 from src.utils.evaluation import evaluate_trained_model
-from src.utils.evaluation_utils import _format_metrics, classification_score, evaluate_classification_predictions
+from src.utils.evaluation_utils import (
+    _format_metrics,
+    classification_score,
+    evaluate_classification_predictions,
+)
 from src.utils.logger import logger
 from src.utils.model_lifecycle import release_model
 from src.utils.model_registry import ModelSpec, get_model_spec
@@ -24,6 +28,8 @@ from src.utils.model_registry import ModelSpec, get_model_spec
 
 @dataclass
 class _CandidateEvaluation:
+    """In-memory tuning results for one hyperparameter candidate."""
+
     candidate_params: dict[str, Any]
     fold_scores: list[float]
     fold_metrics: list[ClassificationMetrics]
@@ -32,6 +38,8 @@ class _CandidateEvaluation:
 
 
 class Trainer:
+    """Train, tune, evaluate, and release configured model adapters."""
+
     def __init__(
         self,
         configs: tuple[ModelConfig, ...],
@@ -75,38 +83,9 @@ class Trainer:
         spec = get_model_spec(model_config)
 
         if model_config.tuning is None:
-            return self._train_without_tuning(model_config, spec, data)
+            raise ValueError("Tuning is required")
 
         return self._tune_model(model_config, spec, data)
-
-    def _train_without_tuning(
-        self, model_params: ModelConfig, spec: ModelSpec, data: DatasetBundle
-    ) -> ModelTrainingResult:
-        trained_model = None
-        X_train, y_train = _databundle_to_xy_train(data)
-        try:
-            trained_model, fit_time = self._fit_model(
-                model_params, spec, model_params.params, X_train, y_train
-            )
-            logger.info(f"Model {model_params.name} fit in {fit_time:.3f}s")
-
-            training_metrics, predict_time = self._training_metrics(
-                model_params, trained_model, X_train, y_train
-            )
-            logger.info(f"Training predictions took {predict_time:.3f}s")
-            logger.info(f"Training metrics: {training_metrics}")
-
-            return ModelTrainingResult(
-                model_name=model_params.name,
-                task_type=model_params.task_type,
-                trained_model=trained_model,
-                tuned=False,
-                fit_time=fit_time,
-            )
-            # TODO: add evaluation!
-        except Exception:
-            release_model(trained_model)
-            raise
 
     def _fit_model(
         self,

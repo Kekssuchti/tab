@@ -24,6 +24,21 @@ ORION_BIX_ADAPTER = "src.adapter.orion_bix_adapter:OrionBixAdapter"
 
 @dataclass(frozen=True)
 class ModelSpec:
+    """
+    Registry entry for one model adapter.
+
+    ---
+    Attributes:
+        adapter_path: str
+            Import path of the adapter class.
+
+        default_params: dict, default={}
+            Parameters always applied before user parameters.
+
+        search_spaces: mapping, default={}
+            Named hyperparameter grids available for tuning.
+    """
+
     adapter_path: str
     default_params: dict[str, Any] = field(default_factory=dict)
     search_spaces: Mapping[str, Mapping[str, Sequence[Any]]] = field(
@@ -61,6 +76,15 @@ class ModelSpec:
 
 @dataclass(frozen=True)
 class ModelCatalog:
+    """
+    Registry of available models by task type.
+
+    ---
+    Attributes:
+        registries: mapping
+            Mapping from task type to model-name registry.
+    """
+
     registries: Mapping[TaskType, Mapping[str, ModelSpec]]
 
     def spec_for(self, model_params: ModelConfig) -> ModelSpec:

@@ -18,12 +18,45 @@ Target = Literal["mortality", "LOS7", "hours_to_readmit"]
 
 @dataclass(frozen=True)
 class DatasetPartSummary:
+    """
+    Row and label summary for one dataset split.
+
+    ---
+    Attributes:
+        row_count: int
+            Number of rows in the split.
+
+        class_balance: dict
+            Label counts keyed by class value.
+    """
+
     row_count: int
     class_balance: dict[str, int]
 
 
 @dataclass(frozen=True)
 class DatasetFileSummary:
+    """
+    Provenance summary for one filtered data file.
+
+    ---
+    Attributes:
+        dataset_name: str
+            Config dataset name that used the file.
+
+        data_origin: str
+            Source system, such as mimic or tudd.
+
+        file_name: str
+            File name of the filtered dataset.
+
+        path: str
+            Full path to the filtered dataset.
+
+        sha256: str or None
+            File content hash, or None when unavailable.
+    """
+
     dataset_name: str
     data_origin: str
     file_name: str
@@ -33,6 +66,27 @@ class DatasetFileSummary:
 
 @dataclass(frozen=True)
 class DatasetSummary:
+    """
+    Dataset summary attached to a completed pipeline run.
+
+    ---
+    Attributes:
+        target: {"mortality", "LOS7", "hours_to_readmit"}
+            Prediction target used by the run.
+
+        train: DatasetPartSummary
+            Summary of the combined training data.
+
+        test_mimic: DatasetPartSummary
+            Summary of the held-out MIMIC test data.
+
+        test_tudd: DatasetPartSummary
+            Summary of the held-out TUDD test data.
+
+        data_files: tuple of DatasetFileSummary
+            Source files used to build the dataset.
+    """
+
     target: Target
     train: DatasetPartSummary
     test_mimic: DatasetPartSummary
@@ -41,11 +95,35 @@ class DatasetSummary:
 
 
 class DataCleanerConfig(StrictConfig):
+    """
+    Configuration for extracted-to-filtered data cleaning.
+
+    ---
+    Attributes:
+        outlier_limits_path: Path, default=configs/data_limits.json
+            JSON file defining valid ranges for clinical variables.
+
+        missing_threshold_row: float, default=0.5
+            Maximum allowed missing-value fraction per row.
+    """
+
     outlier_limits_path: Path = Path(config.dir_configs / "data_limits.json")
     missing_threshold_row: float = Field(default=0.5, ge=0, le=1)
 
 
 class DataSplitConfig(StrictConfig):
+    """
+    Training contribution from one dataset.
+
+    ---
+    Attributes:
+        dataset: {"mimic", "tudd", "mimic_readmission", "tudd_readmission"}
+            Dataset used as a training source.
+
+        fraction: float or int, default=1.0
+            Fraction of that training split, or absolute sample count when int.
+    """
+
     dataset: DatasetName
     fraction: float | int = Field(default=1.0, gt=0)
 
@@ -58,6 +136,39 @@ class DataSplitConfig(StrictConfig):
 
 
 class DatasetConfig(StrictConfig):
+    """
+    Configuration for dataset construction.
+
+    ---
+    Attributes:
+        target: {"mortality", "LOS7", "hours_to_readmit"}
+            Prediction target.
+
+        random_state: int, default=config.seed
+            Seed used for train-test splitting and sampling.
+
+        train_size: float, default=0.8
+            Fraction reserved for each source's train split.
+
+        train_on: tuple of DataSplitConfig
+            Dataset sources combined into the training set.
+
+        classification: bool, default=True
+            Whether the task is treated as classification.
+
+        data_cleaner: DataCleanerConfig, default=DataCleanerConfig()
+            Cleaning settings for filtered data generation.
+
+        force_repreprocess: bool, default=False
+            Whether to rebuild filtered data from extracted data.
+
+        scaler_encoder: ScalerEncoderConfig, default=ScalerEncoderConfig()
+            Default scaling and encoding settings.
+
+        imputer: ImputerConfig, default=ImputerConfig()
+            Default missing-value imputation settings.
+    """
+
     target: Target
     random_state: int = Field(default=config.seed)
     train_size: float = Field(default=0.8, gt=0, lt=1)
@@ -74,12 +185,39 @@ class DatasetConfig(StrictConfig):
 
 @dataclass
 class XYDataset:
+    """
+    Feature matrix and target vector.
+
+    ---
+    Attributes:
+        X: pandas.DataFrame
+            Feature matrix.
+
+        y: pandas.Series
+            Target vector.
+    """
+
     X: pd.DataFrame
     y: pd.Series
 
 
 @dataclass
 class DatasetBundle:
+    """
+    Aligned train and test datasets for a pipeline run.
+
+    ---
+    Attributes:
+        train_data: XYDataset
+            Combined training dataset.
+
+        test_mimic: XYDataset
+            Held-out MIMIC test dataset.
+
+        test_tudd: XYDataset
+            Held-out TUDD test dataset.
+    """
+
     train_data: XYDataset
     test_mimic: XYDataset
     test_tudd: XYDataset
