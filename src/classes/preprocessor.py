@@ -8,6 +8,8 @@ from src.utils.logger import logger
 
 
 class Preprocessor:
+    """Build sklearn preprocessing pipelines from imputer and scaler configs."""
+
     def __init__(
         self,
         imputer_config: ImputerConfig,

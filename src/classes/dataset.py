@@ -28,6 +28,8 @@ from src.utils.logger import logger
 
 
 class _SplitResult(TypedDict):
+    """Train-test split for one source dataset."""
+
     X_train: pd.DataFrame
     X_test: pd.DataFrame
     y_train: pd.Series
@@ -35,7 +37,7 @@ class _SplitResult(TypedDict):
 
 
 class Dataset:
-    """Build train/test data for one clinical target across MIMIC and TUDD."""
+    """Build aligned train and test data for one clinical target."""
 
     def __init__(
         self,

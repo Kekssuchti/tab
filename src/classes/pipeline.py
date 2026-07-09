@@ -23,6 +23,8 @@ from src.utils.model_lifecycle import release_training_result_model
 
 
 class Pipeline:
+    """Orchestrate dataset loading, model training, evaluation, and cleanup."""
+
     def __init__(self, pipeline_config: PipelineConfig):
         self.pipeline_config = pipeline_config
 

@@ -14,7 +14,26 @@ from src.utils.evaluation_utils import ScoringMethodCLS, ScoringMethodREG
 
 @dataclass
 class FoldRecord:
-    """Validation metrics for one candidate on one CV fold."""
+    """
+    Validation metrics for one candidate on one CV fold.
+
+    ---
+    Attributes:
+        candidate_index: int
+            Index of the tuned candidate.
+
+        fold_index: int
+            Cross-validation fold index.
+
+        metrics: ClassificationMetrics or RegressionMetrics
+            Metrics measured on the validation fold.
+
+        time: float
+            Fit and validation time for the fold, in seconds.
+
+        model_params: dict
+            Model parameters used by the candidate.
+    """
 
     candidate_index: int
     fold_index: int
@@ -25,6 +44,27 @@ class FoldRecord:
 
 @dataclass
 class TuningRecord:
+    """
+    Result of tuning one model.
+
+    ---
+    Attributes:
+        best_params: dict
+            Parameters selected by tuning.
+
+        scoring: str
+            Metric used to rank candidates.
+
+        final_test_metrics: AggregatedFinalTestMetrics
+            Aggregated final-test metrics from tuned folds.
+
+        fold_results: list of FoldRecord, default=[]
+            Per-fold validation records.
+
+        method: {"grid", "optuna"}, default="optuna"
+            Tuning method used.
+    """
+
     best_params: dict[str, Any]
     scoring: ScoringMethodCLS | ScoringMethodREG
     final_test_metrics: AggregatedFinalTestMetrics
@@ -38,7 +78,35 @@ class TuningRecord:
 
 @dataclass
 class ModelTrainingResult:
-    """Result of fitting a single model, optionally after tuning."""
+    """
+    Result of fitting a single model, optionally after tuning.
+
+    ---
+    Attributes:
+        model_name: str
+            Registered model name.
+
+        task_type: {"classification", "regression"}
+            Prediction task type.
+
+        tuned: bool
+            Whether hyperparameter tuning was run.
+
+        fit_time: float
+            Final fit time in seconds.
+
+        trained_model: Any or None, default=None
+            Live model object, omitted from serialization and usually released.
+
+        tuning_result: TuningRecord or None, default=None
+            Tuning result when tuning was run.
+
+        error: str or None, default=None
+            Error message when training failed.
+
+        failure_stage: str or None, default=None
+            Pipeline stage where failure occurred.
+    """
 
     model_name: str
     task_type: TaskType
@@ -56,6 +124,21 @@ class ModelTrainingResult:
 
 @dataclass(frozen=True)
 class TestSetEvaluationRecord:
+    """
+    Evaluation result for one held-out test set.
+
+    ---
+    Attributes:
+        dataset_name: str
+            Name of the evaluated test dataset.
+
+        metrics: ClassificationMetrics
+            Classification metrics for the test set.
+
+        predict_time: float
+            Prediction time in seconds.
+    """
+
     dataset_name: str
     metrics: ClassificationMetrics
     predict_time: float
@@ -63,6 +146,24 @@ class TestSetEvaluationRecord:
 
 @dataclass(frozen=True)
 class ModelEvaluationRecord:
+    """
+    Evaluation result for one trained model.
+
+    ---
+    Attributes:
+        model_name: str
+            Registered model name.
+
+        test_results: tuple of TestSetEvaluationRecord
+            Per-test-set evaluation records.
+
+        final_test_metrics: FinalTestMetrics
+            Combined MIMIC and TUDD final-test metrics.
+
+        fit_time: float
+            Final model fit time in seconds.
+    """
+
     model_name: str
     test_results: tuple[TestSetEvaluationRecord, ...]
     final_test_metrics: FinalTestMetrics
@@ -79,6 +180,21 @@ class ModelEvaluationRecord:
 
 @dataclass(frozen=True)
 class ModelRunRecord:
+    """
+    Training and evaluation record for one model instance.
+
+    ---
+    Attributes:
+        model_instance_id: str
+            Unique identifier for this model within the run.
+
+        training_result: ModelTrainingResult
+            Training result for the model.
+
+        evaluation: ModelEvaluationRecord or None
+            Evaluation result, or None when training failed.
+    """
+
     model_instance_id: str
     training_result: ModelTrainingResult
     evaluation: ModelEvaluationRecord | None
@@ -94,6 +210,24 @@ class ModelRunRecord:
 
 @dataclass(frozen=True)
 class PipelineRunRecord:
+    """
+    Complete result record for one pipeline run.
+
+    ---
+    Attributes:
+        run_id: str
+            Pipeline run identifier.
+
+        dataset_summary: DatasetSummary
+            Summary of datasets used by the run.
+
+        model_runs: tuple of ModelRunRecord
+            Training and evaluation records for all model instances.
+
+        total_time: float
+            Total pipeline runtime in seconds.
+    """
+
     run_id: str
     dataset_summary: DatasetSummary
     model_runs: tuple[ModelRunRecord, ...]

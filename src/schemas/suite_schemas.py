@@ -8,6 +8,21 @@ from src.schemas.pipeline_schemas import PipelineConfig
 
 
 class OverrideRangeConfig(StrictConfig):
+    """
+    Numeric range used to expand suite overrides.
+
+    ---
+    Attributes:
+        start: int or float
+            First value in the range.
+
+        stop: int or float
+            Last allowed value in the range.
+
+        step: int or float
+            Increment between generated values.
+    """
+
     start: int | float
     stop: int | float
     step: int | float = Field(gt=0)
@@ -28,6 +43,21 @@ class OverrideRangeConfig(StrictConfig):
 
 
 class SuiteOverrideConfig(StrictConfig):
+    """
+    One parameter override in an experiment suite matrix.
+
+    ---
+    Attributes:
+        path: str
+            Dot path to the pipeline config field being changed.
+
+        values: tuple or None, default=None
+            Explicit values to test.
+
+        range: OverrideRangeConfig or None, default=None
+            Numeric range of values to test.
+    """
+
     path: str
     values: tuple[Any, ...] | None = None
     range: OverrideRangeConfig | None = None
@@ -49,6 +79,21 @@ class SuiteOverrideConfig(StrictConfig):
 
 
 class ExperimentSuiteConfig(StrictConfig):
+    """
+    Configuration for expanding a base pipeline into multiple variants.
+
+    ---
+    Attributes:
+        name: str
+            Suite name.
+
+        base_config: str
+            Path to the base pipeline configuration.
+
+        matrix: tuple of SuiteOverrideConfig
+            Overrides whose Cartesian product defines the suite variants.
+    """
+
     name: str
     base_config: str
     matrix: tuple[SuiteOverrideConfig, ...] = Field(min_length=1)
@@ -56,6 +101,21 @@ class ExperimentSuiteConfig(StrictConfig):
 
 @dataclass(frozen=True)
 class ExpandedPipelineConfig:
+    """
+    One expanded pipeline configuration from a suite.
+
+    ---
+    Attributes:
+        variant_id: str
+            Stable identifier for the expanded variant.
+
+        pipeline_config: PipelineConfig
+            Materialized pipeline configuration.
+
+        overrides: dict
+            Override values applied to the base config.
+    """
+
     variant_id: str
     pipeline_config: PipelineConfig
     overrides: dict[str, Any]
@@ -63,6 +123,30 @@ class ExpandedPipelineConfig:
 
 @dataclass(frozen=True)
 class SuiteDryRunSummary:
+    """
+    Dry-run summary for an expanded experiment suite.
+
+    ---
+    Attributes:
+        suite_name: str
+            Suite name.
+
+        config_count: int
+            Number of expanded pipeline configurations.
+
+        models_per_config: int
+            Number of model runs in each configuration.
+
+        total_model_runs: int
+            Total number of model runs across the suite.
+
+        changed_parameters: tuple of str
+            Config paths changed by the suite matrix.
+
+        config_variants: tuple of ExpandedPipelineConfig
+            Expanded pipeline variants.
+    """
+
     suite_name: str
     config_count: int
     models_per_config: int
@@ -89,6 +173,21 @@ class SuiteDryRunSummary:
 
 @dataclass(frozen=True)
 class SuiteRunResult:
+    """
+    Result of executing an experiment suite.
+
+    ---
+    Attributes:
+        suite_name: str
+            Suite name.
+
+        results: tuple
+            Pipeline results produced by suite execution.
+
+        summary: SuiteDryRunSummary
+            Expansion summary for the executed suite.
+    """
+
     suite_name: str
     results: tuple[Any, ...]
     summary: SuiteDryRunSummary

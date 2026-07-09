@@ -27,10 +27,7 @@ class TabICLAdapter(ModelAdapter):
         n_estimators = kwargs.pop("n_estimators", 8)
         cache_type = "kv" if n_estimators <= 8 else "repr"
         kv_cache = kwargs.pop("kv_cache", cache_type)
-        default_kwargs = {
-            "random_state": config.seed,
-            "kv_cache": kv_cache
-        }
+        default_kwargs = {"random_state": config.seed, "kv_cache": kv_cache}
 
         self.kwargs = {**default_kwargs, **kwargs}
         self.model = self._load_model()
