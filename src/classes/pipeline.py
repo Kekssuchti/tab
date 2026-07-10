@@ -61,7 +61,7 @@ class Pipeline:
             model_start_time = perf_counter()
             tr = None
             mr = None
-            failure_stage = "training"
+            failure_stage = "training_evaluation"
             try:
                 tr = trainer.train_evaluate_model(model_config, data)
                 mr = self._model_result_from_training_result(tr)

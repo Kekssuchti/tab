@@ -268,7 +268,6 @@ CLASSIFICATION_SEARCH_SPACES = {
             "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
             "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
             "average_logits": [True, False],
-
         }
     },
     "mitra": {
@@ -281,8 +280,8 @@ CLASSIFICATION_SEARCH_SPACES = {
     },
     "tabfm": {
         "default": {
-            "n_estimators": [1, 2, 4, 8],
-            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "n_estimators": [1, 2],  # 4, 8
+            # "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
         }
     },
 }

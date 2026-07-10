@@ -2,10 +2,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
-from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 
 from src.classes import pipeline as pipeline_module
 from src.classes.pipeline import Pipeline
+from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
     ClassificationMetrics,
@@ -207,7 +207,7 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
     result = pipeline.run()
 
     assert [tr.model_name for tr in result.training_results] == ["model-a", "model-b"]
-    assert result.training_results[0].failure_stage == "training"
+    assert result.training_results[0].failure_stage == "training_evaluation"
     assert result.training_results[0].error == "ValueError: bad params"
     assert result.training_results[1].succeeded
     assert [model.model_name for model in result.model_results] == ["model-b"]
@@ -258,7 +258,7 @@ def test_pipeline_releases_model_after_evaluation_failure_and_continues(monkeypa
 
     result = pipeline.run()
 
-    assert result.training_results[0].failure_stage == "training"
+    assert result.training_results[0].failure_stage == "training_evaluation"
     assert result.training_results[0].error == "RuntimeError: bad evaluation"
     assert result.training_results[0].trained_model is None
     assert result.training_results[1].succeeded

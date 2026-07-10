@@ -152,8 +152,8 @@ def test_readmission_dataset_uses_readmission_task_policy_without_normal_files(
         _dataset_params(
             target="hours_to_readmit",
             train_on=(
-                DataSplitConfig(dataset="mimic_readmission", fraction=1.0),
-                DataSplitConfig(dataset="tudd_readmission", fraction=1.0),
+                DataSplitConfig(dataset="mimic", fraction=1.0),
+                DataSplitConfig(dataset="tudd", fraction=1.0),
             ),
         )
     )

@@ -6,14 +6,12 @@ from src.schemas.base_schemas import TaskType
 sys.path.insert(0, str(config.dir_external_tabfm))
 
 from timeit import default_timer as timer
-from typing import Literal
 
 import numpy as np
 import torch
 
 from external.tabfm.tabfm import TabFMClassifier, tabfm_v1_0_0_pytorch
 from src.interfaces.model_interface import ModelAdapter, PredictionOutput
-from src.utils.logger import logger
 
 
 class TabfmAdapter(ModelAdapter):
