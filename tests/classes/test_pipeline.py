@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 
 from src.classes import pipeline as pipeline_module
 from src.classes.pipeline import Pipeline
