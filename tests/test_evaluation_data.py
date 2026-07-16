@@ -171,6 +171,7 @@ def test_loads_multiple_experiments_into_plotting_tables(tracking_uri):
         "xgboost",
         "ebm",
     }
+    assert set(data["training_size"]) == {100}
     scores = data.loc[data["kind"] == "score"]
     timings = data.loc[data["kind"] == "time"]
     assert set(data["kind"]) == {"score", "time"}

@@ -5,6 +5,8 @@ dataset:
   train_on:
     - dataset: tudd
       fraction: 1.0
+    - dataset: mimic
+      fraction: 0.1
   classification: true
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
@@ -15,25 +17,13 @@ dataset:
     imputation_method: mean
 
 training:
-  - name: xgboost
-    task_type: classification
-    params:
-      random_state: 1337
-    preprocessing:
-      imputer:
-        imputation_method: none
-    tuning:
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
   - name: logistic-regression
     task_type: classification
     params:
       random_state: 1337
     tuning:
+      method: optuna
+      search_space: good
       scoring: roc_auc
       cv:
         n_splits: 5

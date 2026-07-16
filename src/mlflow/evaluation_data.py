@@ -4,9 +4,10 @@ from dataclasses import astuple, dataclass, fields
 from typing import Literal, Sequence
 
 import pandas as pd
+
 from mlflow import MlflowClient
 from mlflow.entities import Experiment, Run, RunStatus
-
+from src.mlflow.serialization import training_result_to_dict
 from src.mlflow.tracking_contract import (
     METRIC_CV_TOTAL_TIME,
     METRIC_MODEL_TOTAL_TIME,
@@ -22,8 +23,8 @@ from src.mlflow.tracking_contract import (
     TAG_RUN_TYPE,
     TAG_STATUS,
     TAG_TARGET,
-    TAG_TRAINED_ON,
     TAG_TRAIN_SOURCES,
+    TAG_TRAINED_ON,
     TEST_DATASETS,
     TEST_DELTA_DATASET,
     dataset_row_count_param,
@@ -35,7 +36,6 @@ from src.mlflow.tracking_contract import (
     test_score_ci_metric,
     test_score_metric,
 )
-
 
 DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
 DEFAULT_EXPERIMENT_NAME = "tab"
@@ -71,6 +71,7 @@ class _ModelContext:
     target: str | None
     trained_on: str | None
     train_sources: tuple[str, ...]
+    training_size: int | None
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,7 @@ class _Measurement:
     target: str | None
     trained_on: str | None
     train_sources: tuple[str, ...]
+    training_size: int | None
     kind: Literal["score", "time"]
     scope: Literal["test", "test_delta", "train", "model", "cv"]
     dataset: str | None
@@ -330,6 +332,7 @@ def _model_measurements(
         or parent.data.params.get(PARAM_DATASET_TARGET),
         trained_on=model_run.data.tags.get(TAG_TRAINED_ON),
         train_sources=_csv_tag(model_run, TAG_TRAIN_SOURCES),
+        training_size=_training_size(parent),
     )
     measurements = []
     for dataset in TEST_DATASETS:
@@ -370,9 +373,7 @@ def _test_scores(
                 value=value,
                 statistic="mean" if mean_value is not None else "point",
                 unit="score",
-                ci_level=0.95
-                if lower is not None and upper is not None
-                else None,
+                ci_level=0.95 if lower is not None and upper is not None else None,
                 ci_lower=lower,
                 ci_upper=upper,
                 n_classes=_integer_param(run, test_n_classes_param(dataset)),
@@ -511,6 +512,12 @@ def _csv_tag(run: Run, name: str) -> tuple[str, ...]:
 
 def _test_row_count(run: Run, dataset: str) -> int | None:
     return _integer_param(run, dataset_row_count_param(f"test.{dataset}"))
+
+
+def _training_size(run: Run) -> int | None:
+    name = dataset_row_count_param("train")
+    value = _integer_param(run, name)
+    return value
 
 
 def _integer_param(run: Run, name: str) -> int | None:

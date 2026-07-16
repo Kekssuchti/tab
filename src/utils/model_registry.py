@@ -334,7 +334,10 @@ CLASSIFICATION_SEARCH_SPACES = {
     "limix": {
         "default": {
             "softmax_temperature": Uniform(0.7, 1.1),
-        }
+        },
+        "best": {
+            "softmax_temperature": [0.9],
+        },
     },
     "orion": {
         "default": {
@@ -354,13 +357,19 @@ CLASSIFICATION_SEARCH_SPACES = {
             "shuffle_classes": [True, False],
             "shuffle_features": [True, False],
             "use_random_transforms": [True, False],
-        }
+        },
+        "best": {
+            "n_estimators": [8],
+        },
     },
     "tabfm": {
         "default": {
             "n_estimators": [1, 2],  # 4, 8
             "softmax_temperature": Uniform(0.7, 1.1),
-        }
+        },
+        "best": {
+            "n_estimators": [4],
+        },
     },
 }
 

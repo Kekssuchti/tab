@@ -1,8 +1,8 @@
 name: training-size
-base_config: ../pipeline/test.yaml
+base_config: ../pipeline/tudd_baseline.yaml
 matrix:
-  - path: dataset.train_on.1.fraction
+  - path: dataset.train_on.0.fraction
     range:
       start: 500
-      stop: 1500
+      stop: 5000
       step: 500
