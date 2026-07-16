@@ -27,6 +27,13 @@ from src.mlflow.serialization import (
     pipeline_result_to_dict,
     training_result_to_dict,
 )
+from src.mlflow.tracking_contract import (
+    RUN_TYPE_PIPELINE,
+    TAG_MODEL_MLFLOW_RUN_ID,
+    TAG_PIPELINE_ID,
+    TAG_PIPELINE_MLFLOW_RUN_ID,
+    TAG_RUN_TYPE,
+)
 from src.schemas.pipeline_schemas import PipelineConfig
 
 
@@ -154,8 +161,8 @@ class MLflowPipelineLogger:
                 self._log_observation(
                     model_run,
                     extra_tags={
-                        "pipeline_mlflow_run_id": pipeline_mlflow_run_id,
-                        "model_mlflow_run_id": model_mlflow_run_id,
+                        TAG_PIPELINE_MLFLOW_RUN_ID: pipeline_mlflow_run_id,
+                        TAG_MODEL_MLFLOW_RUN_ID: model_mlflow_run_id,
                     },
                 )
                 self._log_cv_artifact(model_run, cv_dir)
@@ -177,8 +184,8 @@ class MLflowPipelineLogger:
                 self._log_observation(
                     cv_run,
                     extra_tags={
-                        "pipeline_mlflow_run_id": pipeline_mlflow_run_id,
-                        "model_mlflow_run_id": model_mlflow_run_id,
+                        TAG_PIPELINE_MLFLOW_RUN_ID: pipeline_mlflow_run_id,
+                        TAG_MODEL_MLFLOW_RUN_ID: model_mlflow_run_id,
                     },
                 )
 
@@ -322,8 +329,8 @@ def _find_pipeline_run(params: PipelineConfig) -> Run | None:
     runs = client.search_runs(
         [experiment.experiment_id],
         filter_string=(
-            f"tags.pipeline_id = '{_mlflow_filter_value(params.run_id)}' "
-            "and tags.run_type = 'pipeline'"
+            f"tags.{TAG_PIPELINE_ID} = '{_mlflow_filter_value(params.run_id)}' "
+            f"and tags.{TAG_RUN_TYPE} = '{RUN_TYPE_PIPELINE}'"
         ),
         max_results=1,
         order_by=["attributes.start_time ASC"],

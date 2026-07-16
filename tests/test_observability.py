@@ -3,6 +3,7 @@ from pathlib import Path
 import mlflow
 import numpy as np
 from src.mlflow.mlflow_logger import MLflowPipelineLogger
+from src.mlflow.evaluation_data import load_evaluation_data
 from src.mlflow.observation import MetricLog, assemble_pipeline_observation
 from src.mlflow.serialization import pipeline_result_to_dict
 from src.schemas.dataset_schemas import (
@@ -360,6 +361,14 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
         "evaluation_metrics.json", run_ids=[parent.info.run_id]
     )
     assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(evaluation_metrics["dataset"])
+
+    loaded = load_evaluation_data("test-tab", tracking_uri=tracking_uri)
+    accuracy = loaded.loc[
+        (loaded["dataset"] == "mimic")
+        & (loaded["metric"] == "accuracy")
+    ].iloc[0]
+    assert accuracy["value"] == 0.95
+    assert accuracy["ci_lower"] is not None
 
 
 def test_mlflow_logger_appends_model_runs_incrementally(tmp_path):
