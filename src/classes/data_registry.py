@@ -3,9 +3,7 @@ from typing import Literal
 
 import pandas as pd
 
-from src.schemas.dataset_schemas import DatasetName, Target
-
-DatasetOrigin = Literal["mimic", "tudd"]
+from src.schemas.dataset_schemas import DatasetName, DatasetOrigin, Target
 
 TARGET_LIKE_COLUMNS = (
     "mortality",

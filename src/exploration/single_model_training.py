@@ -30,6 +30,7 @@ def _():
     from src.utils.evaluation_utils import evaluate_classification_predictions
     from src.utils.model_lifecycle import release_model
     from src.utils.model_registry import get_model_spec
+    from src.schemas.training_schemas import TuningConfig
 
     return (
         DataSplitConfig,
@@ -39,6 +40,7 @@ def _():
         ModelConfig,
         ScalerEncoderConfig,
         Trainer,
+        TuningConfig,
         asdict,
         evaluate_classification_predictions,
         get_model_spec,
@@ -75,9 +77,10 @@ def _():
     }
     DATASET_SCALER = {"type": "none"}
 
-    MODEL_NAME = "orion-msp"
+    MODEL_NAME = "tabfm"
     MODEL_PARAMS = {
-        "n_estimators": [32],
+        "n_estimators": [1,2],
+        "predict_batch_size": 2048,
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None
@@ -124,6 +127,7 @@ def _(
     TASK_TYPE,
     TRAIN_ON,
     TRAIN_SIZE,
+    TuningConfig,
     product,
 ):
     def expand_params(params):
@@ -154,7 +158,9 @@ def _(
             task_type=TASK_TYPE,
             params=params,
             preprocessing=MODEL_PREPROCESSING,
-            tuning=None,
+            tuning=TuningConfig(
+                method="grid"
+            )
         )
         for params in model_param_sets
     )
@@ -205,7 +211,7 @@ def _(Dataset, asdict, dataset_params, mo, pd):
 @app.cell
 def _(RUN_PREFLIGHT_VALIDATION, Trainer, dataset_params, model_params_list):
     trainer = Trainer(
-        params=model_params_list,
+        configs=model_params_list,
         default_imputer=dataset_params.imputer,
         default_scaler=dataset_params.scaler_encoder,
     )

@@ -13,6 +13,7 @@ from src.schemas.preprocessing_schemas import (
 )
 
 DatasetName = Literal["mimic", "tudd", "mimic_readmission", "tudd_readmission"]
+DatasetOrigin = Literal["mimic", "tudd"]
 Target = Literal["mortality", "LOS7", "hours_to_readmit"]
 
 
@@ -117,14 +118,14 @@ class DataSplitConfig(StrictConfig):
 
     ---
     Attributes:
-        dataset: {"mimic", "tudd", "mimic_readmission", "tudd_readmission"}
+        dataset: {"mimic", "tudd"}
             Dataset used as a training source.
 
         fraction: float or int, default=1.0
             Fraction of that training split, or absolute sample count when int.
     """
 
-    dataset: DatasetName
+    dataset: DatasetOrigin
     fraction: float | int = Field(default=1.0, gt=0)
 
     @field_validator("fraction")
@@ -181,6 +182,18 @@ class DatasetConfig(StrictConfig):
     )
     scaler_encoder: ScalerEncoderConfig = Field(default_factory=ScalerEncoderConfig)
     imputer: ImputerConfig = Field(default_factory=ImputerConfig)
+
+    def post_init(self):
+        # training on multiple datasets is allowed and explored
+        # but we cannot allow to train on the same dataset multiple times
+        # as this could introduce data leakage
+
+        origins = []
+        for origin in self.train_on:
+            origins.append(origin.dataset)
+
+        if len(origins) != len(set(origins)):
+            raise ValueError("Duplicate dataset origins detected")
 
 
 @dataclass

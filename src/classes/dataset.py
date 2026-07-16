@@ -7,7 +7,6 @@ from sklearn.model_selection import train_test_split
 
 from src.classes.data_cleaner import DataCleaner
 from src.classes.data_registry import (
-    DatasetOrigin,
     dataset_task_for_target,
     origin_for_dataset_name,
 )
@@ -16,6 +15,7 @@ from src.schemas.dataset_schemas import (
     DatasetBundle,
     DatasetConfig,
     DatasetFileSummary,
+    DatasetOrigin,
     DatasetSummary,
     XYDataset,
 )

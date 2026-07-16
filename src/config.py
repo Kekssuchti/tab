@@ -35,6 +35,7 @@ class Config(BaseSettings):
     dir_evaluation: Path = dir_src / "evaluation"
     dir_external_dep: Path = dir_root / "external"
     dir_external_limix: Path = dir_external_dep / "limix"
+    dir_external_tabfm: Path = dir_external_dep / "tabfm"
 
     tabpfn_token: str = Field(default="", alias="TABPFN_TOKEN")
 
