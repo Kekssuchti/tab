@@ -1,0 +1,244 @@
+dataset:
+  target: mortality
+  random_state: 1337
+  train_size: 0.8
+  train_on:
+    - dataset: tudd
+      fraction: 1.0
+  classification: true
+  data_cleaner:
+    outlier_limits_path: configs/data_limits.json
+    missing_threshold_row: 0.5
+  scaler_encoder:
+    type: none
+  imputer:
+    imputation_method: none
+    flag_missing: false
+    knn_neighbors: 5
+
+training:
+  - name: logistic-regression
+    task_type: classification
+    params: {}
+    preprocessing:
+      imputer:
+        imputation_method: mean
+      scaler_encoder:
+        type: standardization
+    tuning:
+      method: optuna
+      search_space: good
+      scoring: roc_auc
+      optuna:
+        n_trials: 100
+        sampler: tpe
+        n_startup_trials: 10
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: xgboost
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: good
+      scoring: roc_auc
+      optuna:
+        n_trials: 100
+        sampler: tpe
+        n_startup_trials: 10
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: ebm
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: default
+      scoring: roc_auc
+      optuna:
+        n_trials: 50
+        sampler: tpe
+        n_startup_trials: 5
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabpfn-3
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: good
+      scoring: roc_auc
+      optuna:
+        n_trials: 20
+        sampler: tpe
+        n_startup_trials: 3
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabpfn-2.5
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: default
+      scoring: roc_auc
+      optuna:
+        n_trials: 20
+        sampler: tpe
+        n_startup_trials: 3
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabicl-2
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: good
+      scoring: roc_auc
+      optuna:
+        n_trials: 20
+        sampler: tpe
+        n_startup_trials: 5
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: limix-2m
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: default
+      scoring: roc_auc
+      optuna:
+        n_trials: 3
+        sampler: tpe
+        n_startup_trials: 1
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: limix-16m
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: default
+      scoring: roc_auc
+      optuna:
+        n_trials: 3
+        sampler: tpe
+        n_startup_trials: 1
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: mitra
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: default
+      scoring: roc_auc
+      optuna:
+        n_trials: 5
+        sampler: tpe
+        n_startup_trials: 1
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: orion-msp
+    task_type: classification
+    params: {}
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: optuna
+      search_space: default
+      scoring: roc_auc
+      optuna:
+        n_trials: 20
+        sampler: tpe
+        n_startup_trials: 3
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: orion-bix
+    task_type: classification
+    params: {}
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: optuna
+      search_space: bix
+      scoring: roc_auc
+      optuna:
+        n_trials: 5
+        sampler: tpe
+        n_startup_trials: 1
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabfm
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: default
+      scoring: roc_auc
+      optuna:
+        n_trials: 5
+        sampler: tpe
+        n_startup_trials: 1
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+plotting:
+  enabled: true
+  formats:
+    - png
+
+mlflow:
+  enabled: true
+  tracking_uri: sqlite:///mlflow.db
+  artifact_location: mlartifacts
+  experiment_name: tab

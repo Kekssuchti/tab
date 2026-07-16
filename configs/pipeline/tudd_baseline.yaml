@@ -17,57 +17,13 @@ dataset:
     knn_neighbors: 5
 
 training:
-  - name: logistic-regression
-    task_type: classification
-    params: {}
-    preprocessing:
-      imputer:
-        imputation_method: mean
-      scaler_encoder:
-        type: standardization
-    tuning:
-      method: optuna
-      search_space: big
-      scoring: roc_auc
-      optuna:
-        n_trials: 100
-        sampler: tpe
-        n_startup_trials: 10
-        timeout: null
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: xgboost
-    task_type: classification
-    params: {}
-    tuning:
-      method: optuna
-      search_space: big
-      scoring: roc_auc
-      optuna:
-        n_trials: 100
-        sampler: tpe
-        n_startup_trials: 10
-        timeout: null
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
   - name: tabpfn-3
     task_type: classification
     params: {}
     tuning:
-      method: optuna
-      search_space: big
+      method: grid
+      search_space: best
       scoring: roc_auc
-      optuna:
-        n_trials: 50
-        sampler: tpe
-        n_startup_trials: 5
-        timeout: null
       cv:
         n_splits: 5
         shuffle: true
@@ -77,13 +33,48 @@ training:
     task_type: classification
     params: {}
     tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: orion-bix
+    task_type: classification
+    params: {}
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
       method: optuna
-      search_space: big
+      search_space: bix
       scoring: roc_auc
       optuna:
-        n_trials: 50
+        n_trials: 5
         sampler: tpe
-        n_startup_trials: 5
+        n_startup_trials: 1
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabfm
+    task_type: classification
+    params: {}
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: optuna
+      search_space: default
+      scoring: roc_auc
+      optuna:
+        n_trials: 5
+        sampler: tpe
+        n_startup_trials: 1
         timeout: null
       cv:
         n_splits: 5

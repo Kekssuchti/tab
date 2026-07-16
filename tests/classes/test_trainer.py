@@ -16,6 +16,7 @@ from src.schemas.training_schemas import (
 from src.utils import model_registry
 from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
 from src.utils.model_lifecycle import release_model
+from src.utils.tuning_distributions import LogUniform
 
 
 def _classification_data():
@@ -175,6 +176,45 @@ def test_trainer_can_tune_with_optuna_categorical_grid():
         assert set(result.tuning_result.best_params) == {"C"}
         assert result.tuning_result.final_test_metrics.tudd_test.mean_accuracy >= 0.0
         assert result.trained_model is None
+
+
+def test_trainer_can_tune_with_mixed_optuna_search_space():
+    X, y = _classification_data()
+    model_params = ModelConfig(
+        name="logistic-regression",
+        task_type="classification",
+        params={"max_iter": 200},
+        tuning=TuningConfig(
+            method="optuna",
+            search_space="mixed",
+            scoring="accuracy",
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
+            optuna=OptunaConfig(n_trials=2, sampler="random"),
+        ),
+    )
+    registered_spec = model_registry.get_model_spec(model_params)
+    mixed_spec = model_registry.ModelSpec(
+        adapter_path=registered_spec.adapter_path,
+        default_params=registered_spec.default_params,
+        search_spaces={
+            "mixed": {
+                "C": LogUniform(0.1, 1.0),
+                "fit_intercept": [True, False],
+            }
+        },
+    )
+    trainer = Trainer(
+        configs=(model_params,),
+        **_preprocess_pipeline(),
+    )
+
+    result = trainer._tune_model(model_params, mixed_spec, _bundle(X, y))
+
+    assert result.tuning_result is not None
+    assert result.tuning_result.method == "optuna"
+    assert len(result.tuning_result.fold_results) == 4
+    assert 0.1 <= result.tuning_result.best_params["C"] <= 1.0
+    assert result.tuning_result.best_params["fit_intercept"] in (True, False)
 
 
 def test_trainer_merges_nested_tuning_params():
@@ -355,19 +395,3 @@ def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
     assert _ReleasablePredictFailureModel.releases == 1
     assert _ReleasablePredictFailureModel.active == 0
     assert _ReleasableFoldModel.releases == 2
-
-
-def test_trainer_preflight_rejects_bad_model_params():
-    trainer = Trainer(
-        configs=(
-            ModelConfig(
-                name="logistic-regression",
-                task_type="classification",
-                params={"bad_param": 1},
-            ),
-        ),
-        **_preprocess_pipeline(),
-    )
-
-    with pytest.raises(ValueError, match="Model preflight validation failed"):
-        trainer.validate_model_configs()

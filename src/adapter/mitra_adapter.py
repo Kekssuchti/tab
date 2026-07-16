@@ -24,6 +24,7 @@ class MitraAdapter(ModelAdapter):
             "fine_tune": False,
             "fine_tune_steps": 0,
             "seed": config.seed,
+            "n_estimators": 1,
         }
         self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()

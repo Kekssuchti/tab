@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import partial
 from timeit import default_timer as timer
 from typing import Any, Literal
 
@@ -24,6 +25,9 @@ from src.utils.evaluation_utils import (
 from src.utils.logger import logger
 from src.utils.model_lifecycle import release_model
 from src.utils.model_registry import ModelSpec, get_model_spec
+from src.utils.optuna_callbacks import (
+    stop_stale_study,
+)
 
 
 @dataclass
@@ -49,27 +53,6 @@ class Trainer:
         self.configs = configs
         self.default_imputer = default_imputer
         self.default_scaler = default_scaler
-
-    def validate_model_configs(self) -> None:
-        logger.info(f"Validating {len(self.configs)} model config(s)")
-        errors: list[str] = []
-        for model_config in self.configs:
-            try:
-                spec = get_model_spec(model_config)
-                self._build_preprocess_pipeline(model_config)
-                for params in self._preflight_param_sets(model_config, spec):
-                    model = None
-                    try:
-                        model = spec.create(model_config.task_type, params)
-                    finally:
-                        release_model(model)
-            except Exception as exc:
-                errors.append(f"{model_config.name}: {exc}")
-
-        if errors:
-            joined_errors = "\n- ".join(errors)
-            raise ValueError(f"Model preflight validation failed:\n- {joined_errors}")
-        logger.info("Model config validation completed")
 
     def train_evaluate_model(
         self, model_config: ModelConfig, data: DatasetBundle
@@ -125,29 +108,6 @@ class Trainer:
             else self.default_scaler
         )
         return imputer, scaler
-
-    def _preflight_param_sets(
-        self,
-        model_config: ModelConfig,
-        spec: ModelSpec,
-    ) -> list[dict[str, Any]]:
-        if model_config.tuning is None:
-            return [model_config.params]
-
-        grid = spec.tuning_grid(
-            model_config.tuning.search_space,
-            model_config.tuning.grid,
-        )
-        self._count_grid_candidates(grid)
-
-        param_sets = [model_config.params]
-        for key, values in grid.items():
-            for value in values:
-                candidate_params = spec.tuning_candidate_from_values({key: value})
-                param_sets.append(
-                    self._merge_params(model_config.params, candidate_params)
-                )
-        return param_sets
 
     def _tune_model(
         self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
@@ -218,15 +178,16 @@ class Trainer:
         if tuning is None:
             raise ValueError("Tuning requested without tuning parameters")
 
-        grid = model_spec.tuning_grid(tuning.search_space, tuning.grid)
-        grid_candidate_count = self._count_grid_candidates(grid)
+        search_space = model_spec.tuning_search_space(tuning.search_space, tuning.grid)
+        if not search_space:
+            raise ValueError("Tuning requires a non-empty search space")
         X_train, y_train = _databundle_to_xy_train(data)
 
         folds = list(self._build_cv(model_config, tuning).split(X_train, y_train))
 
         logger.info(
             f"Tuning {model_config.name}: trials={tuning.optuna.n_trials} "
-            f"grid_candidates={grid_candidate_count} folds={len(folds)} "
+            f"dimensions={len(search_space)} folds={len(folds)} "
             f"scoring={tuning.scoring} method=optuna"
         )
 
@@ -239,11 +200,7 @@ class Trainer:
 
         def objective(trial):
             candidate_index = len(evaluations)
-            sampled_params = {
-                key: trial.suggest_categorical(key, values)
-                for key, values in grid.items()
-            }
-            candidate_params = model_spec.tuning_candidate_from_values(sampled_params)
+            candidate_params = model_spec.sample_tuning_candidate(trial, search_space)
             start_time_candidate = timer()
             evaluation = self._evaluate_cv_candidate(
                 model_config,
@@ -266,6 +223,15 @@ class Trainer:
             n_trials=tuning.optuna.n_trials,
             timeout=tuning.optuna.timeout,
             n_jobs=1,
+            callbacks=[
+                partial(
+                    stop_stale_study,
+                    patience=tuning.optuna.patience,
+                    minimum_trials=(
+                        tuning.optuna.n_startup_trials + tuning.optuna.patience
+                    ),
+                )
+            ],
             gc_after_trial=True,
         )
 

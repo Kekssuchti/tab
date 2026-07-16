@@ -2,12 +2,19 @@ import importlib
 import sys
 
 import numpy as np
+import optuna
 import pytest
 
 from src.schemas.training_schemas import ModelConfig
 from src.utils import model_registry
 from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
 from src.utils.model_lifecycle import release_model
+from src.utils.tuning_distributions import (
+    DiscreteUniform,
+    LogUniform,
+    Uniform,
+    UniformChoice,
+)
 
 ADAPTER_MODULES = {
     "src.adapter.sklearn_adapter",
@@ -135,6 +142,124 @@ def test_model_spec_expands_nested_tuning_grid_keys():
             }
         },
     ]
+
+
+def test_model_spec_samples_mixed_optuna_search_space():
+    spec = model_registry.ModelSpec(
+        adapter_path="unused:Adapter",
+        search_spaces={
+            "mixed": {
+                "uniform": Uniform(0.0, 1.0),
+                "discrete": DiscreteUniform(0.0, 1.0, step=0.25),
+                "log_uniform": LogUniform(1e-3, 1.0),
+                "nested.category": ["first", "second"],
+            }
+        },
+    )
+    search_space = spec.tuning_search_space("mixed", overrides=None)
+    trial = optuna.trial.FixedTrial(
+        {
+            "uniform": 0.4,
+            "discrete": 0.5,
+            "log_uniform": 0.1,
+            "nested.category": "second",
+        }
+    )
+
+    candidate = spec.sample_tuning_candidate(trial, search_space)
+
+    assert candidate == {
+        "uniform": 0.4,
+        "discrete": 0.5,
+        "log_uniform": 0.1,
+        "nested": {"category": "second"},
+    }
+    assert trial.distributions["uniform"] == optuna.distributions.FloatDistribution(
+        0.0, 1.0
+    )
+    assert trial.distributions["discrete"] == optuna.distributions.FloatDistribution(
+        0.0, 1.0, step=0.25
+    )
+    assert trial.distributions[
+        "log_uniform"
+    ] == optuna.distributions.FloatDistribution(1e-3, 1.0, log=True)
+    assert isinstance(
+        trial.distributions["nested.category"],
+        optuna.distributions.CategoricalDistribution,
+    )
+
+
+def test_uniform_choice_returns_constant_without_sampling_nested_distribution():
+    distribution = UniformChoice(0.0, LogUniform(1e-16, 1e2))
+    trial = optuna.trial.FixedTrial({"regularization.__uniform_choice": 0})
+
+    value = distribution.suggest(trial, "regularization")
+
+    assert value == 0.0
+    assert trial.params == {"regularization.__uniform_choice": 0}
+
+
+def test_uniform_choice_samples_selected_nested_distribution():
+    distribution = UniformChoice(0.0, LogUniform(1e-16, 1e2))
+    trial = optuna.trial.FixedTrial(
+        {
+            "regularization.__uniform_choice": 1,
+            "regularization.__uniform_choice_1": 0.25,
+        }
+    )
+
+    value = distribution.suggest(trial, "regularization")
+
+    assert value == 0.25
+    assert trial.distributions[
+        "regularization.__uniform_choice_1"
+    ] == optuna.distributions.FloatDistribution(1e-16, 1e2, log=True)
+
+
+def test_uniform_choice_supports_recursive_choices():
+    distribution = UniformChoice(
+        0.0,
+        UniformChoice(Uniform(0.1, 1.0), LogUniform(1e-3, 1.0)),
+    )
+    trial = optuna.trial.FixedTrial(
+        {
+            "value.__uniform_choice": 1,
+            "value.__uniform_choice_1.__uniform_choice": 1,
+            "value.__uniform_choice_1.__uniform_choice_1": 0.1,
+        }
+    )
+
+    value = distribution.suggest(trial, "value")
+
+    assert value == 0.1
+
+
+def test_grid_tuning_rejects_distribution_search_space():
+    spec = model_registry.ModelSpec(
+        adapter_path="unused:Adapter",
+        search_spaces={"continuous": {"learning_rate": LogUniform(1e-3, 1.0)}},
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Grid tuning cannot expand distribution domains: learning_rate",
+    ):
+        spec.tuning_candidates("continuous", overrides=None)
+
+
+@pytest.mark.parametrize(
+    ("distribution", "message"),
+    [
+        (lambda: Uniform(1.0, 1.0), "low must be less than high"),
+        (lambda: LogUniform(0.0, 1.0), "bounds must be greater than zero"),
+        (lambda: DiscreteUniform(0.0, 1.0, 0.3), "evenly divisible"),
+        (lambda: DiscreteUniform(0.0, 1.0, 0.0), "greater than zero"),
+        (lambda: UniformChoice(), "at least one choice"),
+    ],
+)
+def test_tuning_distributions_reject_invalid_domains(distribution, message):
+    with pytest.raises(ValueError, match=message):
+        distribution()
 
 
 @pytest.mark.parametrize("model_name", CLASSIFICATION_MODELS)

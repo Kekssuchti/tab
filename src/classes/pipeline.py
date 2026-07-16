@@ -47,7 +47,6 @@ class Pipeline:
             self.pipeline_config.dataset.imputer,
             self.pipeline_config.dataset.scaler_encoder,
         )
-        # trainer.validate_model_configs()
 
         data = self.dataset.get_dataset()
         dataset_summary = self.dataset.summarize(data)

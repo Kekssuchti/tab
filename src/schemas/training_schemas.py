@@ -46,11 +46,15 @@ class OptunaConfig(StrictConfig):
 
         timeout: float or None, default=None
             Maximum optimization time in seconds.
+
+        patience: int, default=10
+            Number of trials to wait before early stopping.
     """
 
     n_trials: int = Field(default=20, ge=1)
     sampler: Literal["tpe", "random"] = "tpe"
     n_startup_trials: int = Field(default=5, ge=0)
+    patience: int = Field(default=10, ge=0)
     timeout: float | None = Field(default=None, gt=0)
 
 

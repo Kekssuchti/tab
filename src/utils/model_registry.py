@@ -5,12 +5,25 @@ from importlib import import_module
 from itertools import product
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+from torch._C import BenchmarkExecutionStats
+
 from src.schemas.base_schemas import TaskType
 from src.schemas.training_schemas import ModelConfig
 from src.utils.logger import logger
+from src.utils.tuning_distributions import (
+    DiscreteUniform,
+    IntUniform,
+    LogUniform,
+    OptunaDistribution,
+    Uniform,
+    UniformChoice,
+)
 
 if TYPE_CHECKING:
     from src.interfaces.model_interface import ModelAdapter
+
+SearchDomain = Sequence[Any] | OptunaDistribution
 
 SKLEARN_ADAPTER = "src.adapter.sklearn_adapter"
 TABPFN_ADAPTER = "src.adapter.tabpfn_adapter:TabPFNAdapter"
@@ -36,12 +49,12 @@ class ModelSpec:
             Parameters always applied before user parameters.
 
         search_spaces: mapping, default={}
-            Named hyperparameter grids available for tuning.
+            Named categorical and distribution-based spaces available for tuning.
     """
 
     adapter_path: str
     default_params: dict[str, Any] = field(default_factory=dict)
-    search_spaces: Mapping[str, Mapping[str, Sequence[Any]]] = field(
+    search_spaces: Mapping[str, Mapping[str, SearchDomain]] = field(
         default_factory=dict
     )
 
@@ -52,13 +65,29 @@ class ModelSpec:
     def tuning_grid(
         self, search_space: str | None, overrides: dict[str, list[Any]] | None
     ) -> dict[str, list[Any]]:
+        space = self.tuning_search_space(search_space, overrides)
+        distributions = [
+            key
+            for key, domain in space.items()
+            if isinstance(domain, OptunaDistribution)
+        ]
+        if distributions:
+            joined = ", ".join(distributions)
+            raise ValueError(
+                "Grid tuning cannot expand distribution domains: " + joined
+            )
+        return {key: list(domain) for key, domain in space.items()}
+
+    def tuning_search_space(
+        self, search_space: str | None, overrides: dict[str, list[Any]] | None
+    ) -> dict[str, SearchDomain]:
         if overrides is not None:
-            return _copy_grid(overrides)
+            return _copy_search_space(overrides)
 
         if search_space is None:
             search_space = "default"
         try:
-            return _copy_grid(self.search_spaces[search_space])
+            return _copy_search_space(self.search_spaces[search_space])
         except KeyError as exc:
             available = ", ".join(sorted(self.search_spaces)) or "none"
             raise ValueError(
@@ -72,6 +101,19 @@ class ModelSpec:
 
     def tuning_candidate_from_values(self, values: Mapping[str, Any]) -> dict[str, Any]:
         return _expand_candidate(values)
+
+    def sample_tuning_candidate(
+        self,
+        trial,
+        search_space: Mapping[str, SearchDomain],
+    ) -> dict[str, Any]:
+        sampled_values = {}
+        for key, domain in search_space.items():
+            if isinstance(domain, OptunaDistribution):
+                sampled_values[key] = domain.suggest(trial, key)
+            else:
+                sampled_values[key] = trial.suggest_categorical(key, domain)
+        return self.tuning_candidate_from_values(sampled_values)
 
 
 @dataclass(frozen=True)
@@ -107,8 +149,13 @@ def get_model_spec(model_params: ModelConfig) -> ModelSpec:
     return MODEL_CATALOG.spec_for(model_params)
 
 
-def _copy_grid(grid: Mapping[str, Sequence[Any]]) -> dict[str, list[Any]]:
-    return {key: list(values) for key, values in grid.items()}
+def _copy_search_space(
+    search_space: Mapping[str, SearchDomain],
+) -> dict[str, SearchDomain]:
+    copied = {}
+    for key, domain in search_space.items():
+        copied[key] = domain if isinstance(domain, OptunaDistribution) else list(domain)
+    return copied
 
 
 def _expand_grid(grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
@@ -188,10 +235,10 @@ CLASSIFICATION_SEARCH_SPACES = {
             "max_iter": [300, 500, 1000],
             # "l1_ratio": [0.0, 0.25, 0.5, 0.75, 1.0],
         },
-        "big": {
-            "C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0],
+        "good": {
+            "C": LogUniform(0.001, 1000.0),
             "solver": ["lbfgs", "newton-cg", "saga", "sag"],
-            "max_iter": [100, 300, 500, 1000],
+            "max_iter": IntUniform(100, 1000, 10),
             "fit_intercept": [True, False],
             "class_weight": [None, "balanced"],
             "warm_start": [False, True],
@@ -203,24 +250,26 @@ CLASSIFICATION_SEARCH_SPACES = {
             "max_depth": [3, 6, 9, 12, None],
             "learning_rate": [0.01, 0.05, 0.1, 0.3],
         },
-        "big": {
-            "n_estimators": [50, 100, 200, 500, 1000, 2000],
-            "max_depth": [3, 6, 9, 12, None],  # max splits of trees
-            "learning_rate": [0.001, 0.005, 0.01, 0.03, 0.05, 0.1, 0.2, 0.3],
-            # min loss reduction per split needed
-            "min_split_loss": [0, 0.01, 0.1, 1, 10, 100],
-            "min_child_weight": [1, 10, 20, 50, 100],  # how many samples in child
-            "subsample": [1, 0.8, 0.5, 0.3, 0.1],  # subsample samples
-            "colsample_bytree": [1, 0.8, 0.5, 0.3],  # subsample features
-            "reg_lambda": [0, 1, 2, 10],  # l2 regularization
-            "reg_alpha": [0, 1, 2, 10],  # l1 regularization
-            # increase pos impact suggested sum(neg)/sum(pos)
-            # we have approx. ratio of: 13
-            "scale_pos_weight": [1, 10, 13],
+        "good": {
+            # after Shwartz-Ziv et. al
+            "n_estimators": IntUniform(100, 4000, 10),
+            "eta": LogUniform(np.e**-7, 1),  # np.e**-7=0.00091
+            "max_depth": IntUniform(1, 10, 1),
+            "subsample": Uniform(0.2, 1),
+            "colsample_bytree": Uniform(0.2, 1),
+            "colsample_bylevel": Uniform(0.2, 1),
+            "min_child_weight": LogUniform(np.e**-16, np.e**5),  # 1.125e-07 - 148.413
+            "reg_alpha": UniformChoice(
+                0, LogUniform(np.e**-16, np.e**2)
+            ),  # l1 regularization
+            "reg_lambda": UniformChoice(
+                0, LogUniform(np.e**-16, np.e**2)
+            ),  # l2 regularization
         },
     },
     "ebm": {
         "default": {
+            # taken from bohlen et al.
             "learning_rate": [0.005, 0.015, 0.03],
             "max_bins": [256, 512, 1024],
             "outer_bags": [8, 14],
@@ -230,49 +279,78 @@ CLASSIFICATION_SEARCH_SPACES = {
     },
     "tabpfn": {
         "default": {
-            "n_estimators": [1, 4, 8, 16],
-            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "n_estimators": [4, 8, 16],
+            "softmax_temperature": [0.75, 0.8, 0.9, 0.95, 1],
+            "inference_config.POLYNOMIAL_FEATURES": ["no", 5, 10, 15],
             "balance_probabilities": [True, False],
         },
-        "big": {
+        "good": {
+            # based on tabpfn2 paper
+            # later paper dont really discuss this.
             "n_estimators": [1, 4, 8, 16, 32],
-            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "softmax_temperature": Uniform(0.7, 1.1),
             "balance_probabilities": [True, False],
-            "inference_config.SUBSAMPLE_SAMPLES": [None, 0.1, 0.3, 0.5, 0.8],
-            "inference_config.POLYNOMIAL_FEATURES": ["no", 5, 10, 15],
+            "inference_config.SUBSAMPLE_SAMPLES": UniformChoice(
+                None, DiscreteUniform(0.1, 0.8, 0.1)
+            ),
+            "inference_config.POLYNOMIAL_FEATURES": UniformChoice(
+                "no", DiscreteUniform(1, 20, 1)
+            ),
+            "inference_config.ENABLE_GPU_PREPROCESSING": [True],
+        },
+        "best": {
+            "n_estimators": [32],
+        },
+        "tabpfn2.5": {
+            "n_estimators": [1, 2],  # oom else
+            "softmax_temperature": Uniform(0.7, 1.1),
+            "balance_probabilities": [True, False],
+            "inference_config.SUBSAMPLE_SAMPLES": UniformChoice(
+                None, DiscreteUniform(0.1, 0.8, 0.1)
+            ),
+            "inference_config.POLYNOMIAL_FEATURES": UniformChoice(
+                "no", DiscreteUniform(1, 20, 1)
+            ),
             "inference_config.ENABLE_GPU_PREPROCESSING": [True],
         },
     },
     "tabicl-2": {
         "default": {
-            "n_estimators": [1, 4, 8, 16],
-            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "n_estimators": [4, 8, 16],
+            "softmax_temperature": [0.75, 0.8, 0.9, 0.95, 1],
             "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
             "average_logits": [True, False],
         },
-        "big": {
+        "good": {
             "n_estimators": [1, 4, 8, 16, 32],
-            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "softmax_temperature": Uniform(0.7, 1.1),
             "average_logits": [True, False],
             "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
+        },
+        "best": {
+            "n_estimators": [32],
         },
     },
     "limix": {
         "default": {
-            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "softmax_temperature": Uniform(0.7, 1.1),
         }
     },
     "orion": {
         "default": {
             "n_estimators": [1, 2, 4, 8, 16, 32],
-            "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "softmax_temperature": Uniform(0.7, 1.1),
             "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
             "average_logits": [True, False],
-        }
+        },
+        "bix": {
+            "n_estimators": [1, 2],
+            "softmax_temperature": Uniform(0.7, 1.1),
+        },
     },
     "mitra": {
         "default": {
-            "n_estimators": [1, 2, 4, 8],
+            "n_estimators": [1, 2, 4],
             "shuffle_classes": [True, False],
             "shuffle_features": [True, False],
             "use_random_transforms": [True, False],
@@ -281,7 +359,7 @@ CLASSIFICATION_SEARCH_SPACES = {
     "tabfm": {
         "default": {
             "n_estimators": [1, 2],  # 4, 8
-            # "softmax_temperature": [0.5, 0.75, 0.9, 1.2],
+            "softmax_temperature": Uniform(0.7, 1.1),
         }
     },
 }
