@@ -35,7 +35,5 @@ def test_tabpfn_adapter_wraps_single_preprocess_transform():
 
     assert kwargs["inference_config"] == {
         "ENABLE_GPU_PREPROCESSING": True,
-        "PREPROCESS_TRANSFORMS": [
-            {"name": "power", "categorical_name": "none"}
-        ],
+        "PREPROCESS_TRANSFORMS": [{"name": "power", "categorical_name": "none"}],
     }

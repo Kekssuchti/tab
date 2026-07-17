@@ -6,11 +6,8 @@ app = marimo.App()
 
 @app.cell
 def _():
-    import os
     import sys
-    from pathlib import Path
 
-    import numpy as np
     import pandas as pd
 
     sys.path.append("/var/home/keks/projects/tab")

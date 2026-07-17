@@ -19,7 +19,6 @@ from src.schemas.metrics import (
     ClassificationMetricsAggregate,
     ClassificationPredictionBatch,
     FinalTestMetrics,
-    RegressionMetrics,
 )
 from src.utils.logger import logger
 
@@ -182,7 +181,9 @@ def _format_metrics(
     mimic_test = ClassificationMetricsAggregate(
         [result.mimic_test for result in cv_results]
     )
-    tudd_test = ClassificationMetricsAggregate([result.tudd_test for result in cv_results])
+    tudd_test = ClassificationMetricsAggregate(
+        [result.tudd_test for result in cv_results]
+    )
 
     return AggregatedFinalTestMetrics(
         mimic_test=mimic_test,

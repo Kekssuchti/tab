@@ -556,9 +556,7 @@ def _model_metric_logs(
                 ((METRIC_CV_TOTAL_TIME, tuning_result.total_time),)
             )
         )
-        metrics.extend(
-            _cv_final_test_metric_logs(tuning_result.final_test_metrics)
-        )
+        metrics.extend(_cv_final_test_metric_logs(tuning_result.final_test_metrics))
 
     for test_result in model_result.test_results:
         dataset_name = test_result.dataset_name
@@ -570,9 +568,7 @@ def _model_metric_logs(
         if tuning_result is None:
             metrics.extend(_test_metric_logs(dataset_name, test_result.metrics))
 
-    metrics.extend(
-        _metric_delta_logs(model_result.final_test_metrics.mimic_minus_tudd)
-    )
+    metrics.extend(_metric_delta_logs(model_result.final_test_metrics.mimic_minus_tudd))
     return tuple(metrics)
 
 

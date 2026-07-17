@@ -242,10 +242,12 @@ class FinalTestMetrics:
     def mimic_minus_tudd(self) -> ClassificationMetricDeltas:
         return ClassificationMetricDeltas(
             roc_auc=self.mimic_test.roc_auc - self.tudd_test.roc_auc
-            if self.mimic_test.roc_auc is not None and self.tudd_test.roc_auc is not None
+            if self.mimic_test.roc_auc is not None
+            and self.tudd_test.roc_auc is not None
             else None,
             prc_auc=self.mimic_test.prc_auc - self.tudd_test.prc_auc
-            if self.mimic_test.prc_auc is not None and self.tudd_test.prc_auc is not None
+            if self.mimic_test.prc_auc is not None
+            and self.tudd_test.prc_auc is not None
             else None,
             f1=self.mimic_test.f1 - self.tudd_test.f1,
             accuracy=self.mimic_test.accuracy - self.tudd_test.accuracy,

@@ -197,9 +197,7 @@ def test_loads_multiple_experiments_into_plotting_tables(tracking_uri):
     ].iloc[0]
     assert logistic_delta["value"] == pytest.approx(0.2)
 
-    logistic_times = timings.loc[
-        timings["model_name"] == "logistic-regression"
-    ]
+    logistic_times = timings.loc[timings["model_name"] == "logistic-regression"]
     assert set(logistic_times["value"]) >= {0.1, 2.0}
 
     xgboost_accuracy = scores.loc[
@@ -244,8 +242,7 @@ def test_filters_pipeline_runs_and_models_by_names(tracking_uri):
     )
     assert set(untuned["model_name"]) == {"xgboost"}
     untuned_accuracy = untuned.loc[
-        (untuned["dataset"] == "mimic")
-        & (untuned["metric"] == "accuracy")
+        (untuned["dataset"] == "mimic") & (untuned["metric"] == "accuracy")
     ].iloc[0]
     assert pd.isna(untuned_accuracy["ci_lower"])
 
@@ -256,9 +253,7 @@ def test_calculates_comparative_generalizability_on_external_test(tracking_uri):
     by_model = comparison.set_index("model_name")
 
     assert set(comparison["external_dataset"]) == {"tudd"}
-    assert by_model.loc["logistic-regression", "external_score"] == pytest.approx(
-        0.75
-    )
+    assert by_model.loc["logistic-regression", "external_score"] == pytest.approx(0.75)
     assert by_model.loc[
         "logistic-regression", "comparative_generalizability_loss"
     ] == pytest.approx(0.0)
@@ -321,9 +316,7 @@ def test_rejects_unknown_experiment_run_and_model_names(tracking_uri):
         load_evaluation_data("missing", tracking_uri=tracking_uri)
 
     with pytest.raises(ValueError, match="No matching pipeline runs for: missing"):
-        load_evaluation_data(
-            "tab", pipeline_runs="missing", tracking_uri=tracking_uri
-        )
+        load_evaluation_data("tab", pipeline_runs="missing", tracking_uri=tracking_uri)
 
     with pytest.raises(ValueError, match="No matching successful models for: missing"):
         load_evaluation_data("tab", models="missing", tracking_uri=tracking_uri)

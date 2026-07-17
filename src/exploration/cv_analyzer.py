@@ -320,9 +320,7 @@ def _analyze_model(
         available = [c for c in df.columns if c.startswith("mean_")]
         raise ValueError(f"Metric '{metric_col}' not found. Available: {available}")
 
-    n_folds = (
-        max((fold.fold_index for fold in tuning.fold_results), default=-1) + 1
-    )
+    n_folds = max((fold.fold_index for fold in tuning.fold_results), default=-1) + 1
     lines = [
         f"\n{'=' * 80}",
         f"Model: {model}",

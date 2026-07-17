@@ -235,7 +235,9 @@ class PipelineRunRecord:
 
     @property
     def model_results(self) -> tuple[ModelEvaluationRecord, ...]:
-        return tuple(run.evaluation for run in self.model_runs if run.evaluation is not None)
+        return tuple(
+            run.evaluation for run in self.model_runs if run.evaluation is not None
+        )
 
     @property
     def training_results(self) -> tuple[ModelTrainingResult, ...]:

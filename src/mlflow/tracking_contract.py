@@ -33,9 +33,7 @@ METRIC_TRAIN_FIT_TIME = "train.fit_time"
 METRIC_MODEL_TOTAL_TIME = "model.total_time"
 METRIC_CV_TOTAL_TIME = "cv.total_time"
 
-_TEST_SCORE_CI_PATTERN = re.compile(
-    r"^ci_95_(?P<metric>.+)_(?:lower|upper)$"
-)
+_TEST_SCORE_CI_PATTERN = re.compile(r"^ci_95_(?P<metric>.+)_(?:lower|upper)$")
 _TEST_DELTA_PREFIX = f"test.{TEST_DELTA_DATASET}."
 
 

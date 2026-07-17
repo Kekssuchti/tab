@@ -7,7 +7,6 @@ import pandas as pd
 
 from mlflow import MlflowClient
 from mlflow.entities import Experiment, Run, RunStatus
-from src.mlflow.serialization import training_result_to_dict
 from src.mlflow.tracking_contract import (
     METRIC_CV_TOTAL_TIME,
     METRIC_MODEL_TOTAL_TIME,

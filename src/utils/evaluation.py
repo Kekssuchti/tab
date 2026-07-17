@@ -1,6 +1,6 @@
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
-from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics
+from src.schemas.metrics import FinalTestMetrics
 from src.schemas.run_records import TestSetEvaluationRecord
 from src.utils.evaluation_utils import (
     evaluate_classification_predictions,

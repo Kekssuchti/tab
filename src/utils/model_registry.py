@@ -392,7 +392,9 @@ MODEL_REGISTRY_REG = {
     # "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
     # "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
     # "mitra": ModelSpec(MITRA_ADAPTER),
-    "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["tabswift"]),
+    "tabswift": ModelSpec(
+        TABSWIFT_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["tabswift"]
+    ),
 }
 
 MODEL_CATALOG = ModelCatalog(

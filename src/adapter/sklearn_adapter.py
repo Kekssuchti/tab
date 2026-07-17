@@ -6,7 +6,7 @@ from interpret.glassbox import (
     ExplainableBoostingClassifier,
     ExplainableBoostingRegressor,
 )
-from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier, XGBRegressor
 
 from src.config import config

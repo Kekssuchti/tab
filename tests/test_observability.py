@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import mlflow
 import numpy as np
 from src.mlflow.mlflow_logger import MLflowPipelineLogger
@@ -364,8 +362,7 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
 
     loaded = load_evaluation_data("test-tab", tracking_uri=tracking_uri)
     accuracy = loaded.loc[
-        (loaded["dataset"] == "mimic")
-        & (loaded["metric"] == "accuracy")
+        (loaded["dataset"] == "mimic") & (loaded["metric"] == "accuracy")
     ].iloc[0]
     assert accuracy["value"] == 0.95
     assert accuracy["ci_lower"] is not None

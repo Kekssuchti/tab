@@ -34,7 +34,8 @@ dependencies = [
     "ipykernel>=7.3.0",
     "mlflow>=3.14.0",
     "memray>=1.19.3",
-    "tabfm[pytorch]"
+    "tabfm[pytorch]",
+    "ruff>=0.15.22",
 ]
 
 [tool.uv.sources]
@@ -71,3 +72,6 @@ filterwarnings = [
     "ignore:`BaseEstimator\\._validate_data` is deprecated:FutureWarning",
     "ignore:'force_all_finite' was renamed to 'ensure_all_finite':FutureWarning",
 ]
+
+[tool.ruff]
+exclude = ["external"]

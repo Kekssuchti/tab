@@ -60,7 +60,9 @@ def test_data_cleaner_writes_filtered_files_with_preprocessed_content(
     limits_path.write_text(
         json.dumps({"lab_value": {"lower_bound": 0, "upper_bound": 100}})
     )
-    monkeypatch.setattr(data_cleaner_module, "config", SimpleNamespace(dir_data=tmp_path))
+    monkeypatch.setattr(
+        data_cleaner_module, "config", SimpleNamespace(dir_data=tmp_path)
+    )
 
     cleaner = DataCleaner(
         DataCleanerConfig(outlier_limits_path=limits_path, missing_threshold_row=1.0)

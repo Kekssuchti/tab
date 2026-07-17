@@ -22,9 +22,6 @@ def _():
     import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
 
-    from src.config import config
-
-
     return (
         list_pipeline_runs,
         load_evaluation_data,
@@ -41,12 +38,11 @@ def _(list_pipeline_runs):
     def list_run_id(experiment_name: str = "tab"):
         runs = list_pipeline_runs(experiment_name)
         print(
-            runs[
-                ["run_name", "mlflow_run_id", "model_instances"]
-            ].to_string(index=False)
+            runs[["run_name", "mlflow_run_id", "model_instances"]].to_string(
+                index=False
+            )
         )
         return runs
-
 
     experiment_name = "tudd_small"
     list_run_id(experiment_name)
@@ -62,14 +58,13 @@ def _(list_pipeline_runs):
         "cc4a485361474a77ae9a589a83a86136",
         "1d874c9297e740e8839388ce2d2ac7ac",
         "1ef3b80164784b7c89bc692caa77c9df",
-        "270eea42c596414fa91698327338dc05"
+        "270eea42c596414fa91698327338dc05",
     ]
 
-
-    #selected_ids = runs.loc[
+    # selected_ids = runs.loc[
     #    runs["mlflow_run_id"].isin(run_ids_to_analyze),
     #    "mlflow_run_id",
-    #].tolist()
+    # ].tolist()
 
     selected_ids = runs["mlflow_run_id"]
     print(selected_ids)
@@ -121,18 +116,14 @@ def _(data, plt):
     df = data.copy()
     for metric in ["roc_auc", "prc_auc", "f1"]:
         for test_set in ["tudd", "mimic"]:
-            plot_df = df[
-                (df["metric"] == metric)
-                & (df["dataset"] == test_set)
-            ].copy()
+            plot_df = df[(df["metric"] == metric) & (df["dataset"] == test_set)].copy()
 
             for model in df["model_name"].unique():
-                model_df = (
-                    plot_df[plot_df["model_name"] == model]
-                    .sort_values("training_size")
+                model_df = plot_df[plot_df["model_name"] == model].sort_values(
+                    "training_size"
                 )
 
-                line, = plt.plot(
+                (line,) = plt.plot(
                     model_df["training_size"],
                     model_df["value"],
                     marker="o",
@@ -146,13 +137,12 @@ def _(data, plt):
                     alpha=0.15,
                 )
 
-
             plt.xlabel("Training size")
             plt.ylabel(f"{metric} on {test_set}")
             plt.legend(title="Model")
             plt.grid(alpha=0.3)
             plt.tight_layout()
-            #plt.savefig(config.dir_plots / f"trainsize_{test_set}_{metric}")
+            # plt.savefig(config.dir_plots / f"trainsize_{test_set}_{metric}")
             plt.show()
     return
 
@@ -160,25 +150,25 @@ def _(data, plt):
 @app.cell
 def _(data, mticker, plt):
     import numpy as np
+
     def plot_sample_size_growth():
         df = data.copy()
-    
+
         models = df["model_name"].unique()
-        metrics = ["roc_auc"] # , "prc_auc", "f1"
+        metrics = ["roc_auc"]  # , "prc_auc", "f1"
         test_sets = ["tudd", "mimic"]
-       
+
         metric_labels = {
             "roc_auc": "ROC AUC",
             "prc_auc": "PRC AUC",
             "f1": "F1 score",
         }
-    
+
         palette = plt.colormaps["tab10"].colors
         model_colors = {
-            model: palette[i % len(palette)]
-            for i, model in enumerate(models)
+            model: palette[i % len(palette)] for i, model in enumerate(models)
         }
-    
+
         fig, axes = plt.subplots(
             nrows=len(metrics),
             ncols=len(test_sets),
@@ -186,25 +176,22 @@ def _(data, mticker, plt):
             sharex=True,
             squeeze=False,
         )
-    
-    
+
         for row, metric in enumerate(metrics):
             for col, test_set in enumerate(test_sets):
                 ax = axes[row, col]
-    
+
                 plot_df = df[
-                    (df["metric"] == metric)
-                    & (df["dataset"] == test_set)
+                    (df["metric"] == metric) & (df["dataset"] == test_set)
                 ].copy()
-    
+
                 for model in models:
-                    model_df = (
-                        plot_df[plot_df["model_name"] == model]
-                        .sort_values("training_size")
+                    model_df = plot_df[plot_df["model_name"] == model].sort_values(
+                        "training_size"
                     )
-       
+
                     color = model_colors[model]
-    
+
                     ax.plot(
                         model_df["training_size"],
                         model_df["value"],
@@ -217,7 +204,7 @@ def _(data, mticker, plt):
                         label=model,
                         zorder=3,
                     )
-    
+
                     ax.fill_between(
                         model_df["training_size"],
                         model_df["ci_lower"],
@@ -227,14 +214,14 @@ def _(data, mticker, plt):
                         linewidth=0,
                         zorder=2,
                     )
-    
+
                 ax.set_title(
                     test_set.upper(),
                     fontsize=12,
                     fontweight="semibold",
                     pad=10,
                 )
-    
+
                 """ax.set_xscale(
                     "function",
                     functions=(
@@ -245,11 +232,10 @@ def _(data, mticker, plt):
 
                 ax.set_xscale("linear")
 
-            
                 # Display 100, 1000, etc. rather than 10², 10³
                 ax.xaxis.set_major_formatter(mticker.ScalarFormatter())
                 ax.xaxis.set_minor_formatter(mticker.NullFormatter())
-    
+
                 # A horizontal grid is usually sufficient for this plot
                 ax.grid(
                     axis="y",
@@ -257,23 +243,23 @@ def _(data, mticker, plt):
                     alpha=0.2,
                 )
                 ax.grid(axis="x", visible=True)
-    
+
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
                 ax.spines["left"].set_alpha(0.4)
                 ax.spines["bottom"].set_alpha(0.4)
-    
+
                 ax.tick_params(length=0, pad=6)
-    
+
                 if col == 0:
                     ax.set_ylabel(metric_labels[metric], fontsize=11)
-    
+
                 if row == len(metrics) - 1:
                     ax.set_xlabel("Training size", fontsize=11)
-    
+
         # One shared legend instead of six repeated legends
         handles, labels = axes[0, 0].get_legend_handles_labels()
-    
+
         fig.legend(
             handles,
             labels,
@@ -283,14 +269,14 @@ def _(data, mticker, plt):
             ncol=min(len(labels), 5),
             frameon=False,
         )
-    
+
         fig.suptitle(
             "Model performance by training-set size",
             fontsize=15,
             fontweight="semibold",
             y=1.05,
         )
-    
+
         fig.tight_layout(rect=(0, 0, 1, 0.97))
         plt.show()
 
@@ -302,55 +288,45 @@ def _(data, mticker, plt):
 def _(data, np, plt):
     def plot_2():
         df = data.copy()
-    
+
         models = df["model_name"].unique()
-        metrics = ["roc_auc"] # , "prc_auc", "f1"
+        metrics = ["roc_auc"]  # , "prc_auc", "f1"
         test_sets = ["tudd", "mimic"]
-       
+
         metric_labels = {
             "roc_auc": "ROC AUC",
             "prc_auc": "PRC AUC",
             "f1": "F1 score",
         }
-    
+
         palette = plt.colormaps["tab10"].colors
         model_colors = {
-            model: palette[i % len(palette)]
-            for i, model in enumerate(models)
+            model: palette[i % len(palette)] for i, model in enumerate(models)
         }
 
         for metric in ["roc_auc", "prc_auc", "f1"]:
             for test_set in ["tudd", "mimic"]:
                 fig, ax = plt.subplots(figsize=(7, 5))
-    
+
                 plot_df = df[
-                    (df["metric"] == metric)
-                    & (df["dataset"] == test_set)
+                    (df["metric"] == metric) & (df["dataset"] == test_set)
                 ].copy()
-    
+
                 # Shared positions across all models in this panel
-                training_sizes = np.sort(
-                    plot_df["training_size"].unique()
-                )
-    
+                training_sizes = np.sort(plot_df["training_size"].unique())
+
                 x_positions = {
-                    size: position
-                    for position, size in enumerate(training_sizes)
+                    size: position for position, size in enumerate(training_sizes)
                 }
-    
+
                 for model in plot_df["model_name"].unique():
-                    model_df = (
-                        plot_df[plot_df["model_name"] == model]
-                        .sort_values("training_size")
+                    model_df = plot_df[plot_df["model_name"] == model].sort_values(
+                        "training_size"
                     )
-    
-                    x = (
-                        model_df["training_size"]
-                        .map(x_positions)
-                        .to_numpy()
-                    )
-    
-                    line, = ax.plot(
+
+                    x = model_df["training_size"].map(x_positions).to_numpy()
+
+                    (line,) = ax.plot(
                         x,
                         model_df["value"],
                         marker="o",
@@ -358,7 +334,7 @@ def _(data, np, plt):
                         linewidth=2,
                         label=model,
                     )
-    
+
                     ax.fill_between(
                         x,
                         model_df["ci_lower"],
@@ -368,33 +344,27 @@ def _(data, np, plt):
                         linewidth=0,
                     )
 
-                tick_sizes = [
-                    size for size in training_sizes
-                    if size % 2000 == 0
-                ]
+                tick_sizes = [size for size in training_sizes if size % 2000 == 0]
                 tick_sizes.extend([500, 1000])
 
-                tick_positions = [
-                    x_positions[size]
-                    for size in tick_sizes
-                ]
+                tick_positions = [x_positions[size] for size in tick_sizes]
                 ax.set_xticks(tick_positions)
                 ax.set_xticklabels(
                     [f"{size:,}" for size in tick_sizes],
                     rotation=30,
                     ha="right",
                 )
-    
+
                 ax.set_xlabel("Training size")
                 ax.set_ylabel(f"{metric} on {test_set}")
                 ax.legend(title="Model", frameon=False)
                 ax.grid(axis="y", alpha=0.25)
-    
+
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
-    
+
                 fig.tight_layout()
-                #fig.savefig(config.dir_plots / f"trainsize2_{test_set}_{metric}.png")
+                # fig.savefig(config.dir_plots / f"trainsize2_{test_set}_{metric}.png")
                 plt.show()
 
     plot_2()
@@ -407,14 +377,15 @@ def _(data, plt):
         df = data.copy()
 
         times = df[
-            (df["scope"] != "cv")
-            & (df["metric"].isin(["fit_time", "predict_time"]))
+            (df["scope"] != "cv") & (df["metric"].isin(["fit_time", "predict_time"]))
         ].copy()
 
-        times["component"] = times["dataset"].map({
-            "mimic": "Predict MIMIC",
-            "tudd": "Predict TUDD",
-        })
+        times["component"] = times["dataset"].map(
+            {
+                "mimic": "Predict MIMIC",
+                "tudd": "Predict TUDD",
+            }
+        )
         times.loc[times["metric"] == "fit_time", "component"] = "Train"
 
         components = ["Train", "Predict MIMIC", "Predict TUDD"]
@@ -439,10 +410,7 @@ def _(data, plt):
         timings = timings.sort_values("Total")
 
         timings["label"] = (
-            timings["model_name"]
-            + " (n="
-            + timings["training_size"].astype(str)
-            + ")"
+            timings["model_name"] + " (n=" + timings["training_size"].astype(str) + ")"
         )
 
         ax = timings.set_index("label")[components].plot(
@@ -472,9 +440,8 @@ def _(data, plt):
         ax.set_axisbelow(True)
 
         plt.tight_layout()
-        #plt.savefig(config.dir_plots / "train_pred_time.png")
+        # plt.savefig(config.dir_plots / "train_pred_time.png")
         plt.show()
-
 
     run()
     return

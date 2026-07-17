@@ -6,7 +6,6 @@ from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 
 from src.classes import pipeline as pipeline_module
 from src.classes.pipeline import Pipeline
-from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
     ClassificationMetrics,

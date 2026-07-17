@@ -1,7 +1,6 @@
 from functools import partial
 
 import optuna
-import pytest
 
 from src.utils.optuna_callbacks import stop_stale_study
 

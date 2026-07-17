@@ -4,7 +4,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
-from src.utils.logger import logger
 
 
 class Preprocessor:
