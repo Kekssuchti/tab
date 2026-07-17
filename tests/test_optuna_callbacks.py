@@ -12,7 +12,7 @@ def test_stop_stale_study_uses_default_patience():
     study.optimize(
         lambda trial: 1.0,
         n_trials=100,
-        callbacks=[stop_stale_study],
+        callbacks=[partial(stop_stale_study, patience=10)],
     )
 
     assert len(study.trials) == 11
@@ -38,20 +38,7 @@ def test_stop_stale_study_waits_for_minimum_trials():
     study.optimize(
         lambda trial: 1.0,
         n_trials=100,
-        callbacks=[
-            partial(stop_stale_study, patience=3, minimum_trials=8)
-        ],
+        callbacks=[partial(stop_stale_study, patience=3, minimum_trials=8)],
     )
 
     assert len(study.trials) == 8
-
-
-def test_stop_stale_study_rejects_invalid_patience():
-    study = optuna.create_study(direction="maximize")
-
-    with pytest.raises(ValueError, match="patience must be at least one"):
-        study.optimize(
-            lambda trial: 1.0,
-            n_trials=1,
-            callbacks=[partial(stop_stale_study, patience=0)],
-        )

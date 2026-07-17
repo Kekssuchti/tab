@@ -6,7 +6,6 @@ from tabicl import TabICLClassifier, TabICLRegressor
 from src.config import config
 from src.interfaces.model_interface import ModelAdapter
 from src.schemas.base_schemas import TaskType
-from src.utils.logger import logger
 
 
 class TabICLAdapter(ModelAdapter):

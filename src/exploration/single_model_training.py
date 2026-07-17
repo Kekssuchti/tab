@@ -26,11 +26,10 @@ def _():
     from src.classes.trainer import Trainer
     from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig
     from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
-    from src.schemas.training_schemas import ModelConfig
+    from src.schemas.training_schemas import ModelConfig, TuningConfig
     from src.utils.evaluation_utils import evaluate_classification_predictions
     from src.utils.model_lifecycle import release_model
     from src.utils.model_registry import get_model_spec
-    from src.schemas.training_schemas import TuningConfig
 
     return (
         DataSplitConfig,
@@ -77,9 +76,9 @@ def _():
     }
     DATASET_SCALER = {"type": "none"}
 
-    MODEL_NAME = "tabpfn-2.5"
+    MODEL_NAME = "tabswift"
     MODEL_PARAMS = {
-        "n_estimators": [4],
+        "n_estimators": [32],
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None
@@ -157,9 +156,7 @@ def _(
             task_type=TASK_TYPE,
             params=params,
             preprocessing=MODEL_PREPROCESSING,
-            tuning=TuningConfig(
-                method="grid"
-            )
+            tuning=TuningConfig(method="grid"),
         )
         for params in model_param_sets
     )

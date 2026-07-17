@@ -1,16 +1,19 @@
+import sys
+
+from src.config import config
+
+sys.path.insert(0, str(config.dir_external_limix))
+
 from timeit import default_timer as timer
 
-from autogluon.tabular.models.mitra.sklearn_interface import (
-    MitraClassifier,
-    MitraRegressor,
-)
-
+from external.TabSwift.TALENT.model.lib.tabswift.classifier import TabSwiftClassifier
+from external.TabSwift.TALENT.model.lib.tabswift.regressor import TabSwiftRegressor
 from src.config import config
 from src.interfaces.model_interface import ModelAdapter
 from src.schemas.base_schemas import TaskType
 
 
-class MitraAdapter(ModelAdapter):
+class TabSwiftAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "classification",
@@ -19,20 +22,17 @@ class MitraAdapter(ModelAdapter):
         super().__init__()
         self.task_type = task_type
         default_params = {
-            "device": "cuda",
-            "fine_tune": False,
-            "fine_tune_steps": 0,
-            "seed": config.seed,
-            "n_estimators": 1,
+            "model_path": "swift.ckpt",
+            "random_state": config.seed,
         }
         self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):
         if self.task_type == "regression":
-            return MitraRegressor(**self.kwargs)
+            return TabSwiftRegressor(**self.kwargs)
         else:
-            return MitraClassifier(**self.kwargs)
+            return TabSwiftClassifier(**self.kwargs)
 
     def fit(self, X_train, y_train):
         start_time = timer()

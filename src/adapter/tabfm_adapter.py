@@ -1,7 +1,6 @@
 import sys
 
 from src.config import config
-from src.schemas.base_schemas import TaskType
 
 sys.path.insert(0, str(config.dir_external_tabfm))
 
@@ -12,6 +11,7 @@ import torch
 
 from external.tabfm.tabfm import TabFMClassifier, tabfm_v1_0_0_pytorch
 from src.interfaces.model_interface import ModelAdapter, PredictionOutput
+from src.schemas.base_schemas import TaskType
 
 
 class TabfmAdapter(ModelAdapter):

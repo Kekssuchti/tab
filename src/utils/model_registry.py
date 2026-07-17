@@ -1,16 +1,18 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from functools import lru_cache
-from importlib import import_module
-from itertools import product
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from torch._C import BenchmarkExecutionStats
 
 from src.schemas.base_schemas import TaskType
 from src.schemas.training_schemas import ModelConfig
-from src.utils.logger import logger
+from src.utils.model_registry_utils import (
+    SearchDomain,
+    _copy_search_space,
+    _expand_candidate,
+    _expand_grid,
+    _load_adapter_cls,
+)
 from src.utils.tuning_distributions import (
     DiscreteUniform,
     IntUniform,
@@ -22,17 +24,6 @@ from src.utils.tuning_distributions import (
 
 if TYPE_CHECKING:
     from src.interfaces.model_interface import ModelAdapter
-
-SearchDomain = Sequence[Any] | OptunaDistribution
-
-SKLEARN_ADAPTER = "src.adapter.sklearn_adapter"
-TABPFN_ADAPTER = "src.adapter.tabpfn_adapter:TabPFNAdapter"
-TABICL_ADAPTER = "src.adapter.tabicl_adapter:TabICLAdapter"
-LIMIX_ADAPTER = "src.adapter.limix_adapter:LimixAdapter"
-MITRA_ADAPTER = "src.adapter.mitra_adapter:MitraAdapter"
-ORION_MSP_ADAPTER = "src.adapter.orion_msp_adapter:OrionMSPAdapter"
-ORION_BIX_ADAPTER = "src.adapter.orion_bix_adapter:OrionBixAdapter"
-TABFM_ADAPTER = "src.adapter.tabfm_adapter:TabfmAdapter"
 
 
 @dataclass(frozen=True)
@@ -149,82 +140,15 @@ def get_model_spec(model_params: ModelConfig) -> ModelSpec:
     return MODEL_CATALOG.spec_for(model_params)
 
 
-def _copy_search_space(
-    search_space: Mapping[str, SearchDomain],
-) -> dict[str, SearchDomain]:
-    copied = {}
-    for key, domain in search_space.items():
-        copied[key] = domain if isinstance(domain, OptunaDistribution) else list(domain)
-    return copied
-
-
-def _expand_grid(grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
-    if not grid:
-        raise ValueError("Tuning requires a non-empty grid")
-
-    keys = list(grid)
-    values = [grid[key] for key in keys]
-    if any(not value for value in values):
-        raise ValueError("Tuning grid values must be non-empty")
-
-    return [
-        _expand_candidate(dict(zip(keys, combination)))
-        for combination in product(*values)
-    ]
-
-
-def _expand_candidate(values: Mapping[str, Any]) -> dict[str, Any]:
-    candidate: dict[str, Any] = {}
-    for key, value in values.items():
-        _set_nested_value(candidate, key, value)
-    return candidate
-
-
-def _set_nested_value(candidate: dict[str, Any], key: str, value: Any) -> None:
-    # we define nested splits via '.'
-    # e.g. TabPFN accepts inference_config{nested_param=123}
-    # to iterate and have multiple values use: inference_config.nested_param: [123, 124, ...]
-
-    parts = key.split(".")
-    if any(part == "" for part in parts):
-        raise ValueError(f"Tuning grid key '{key}' contains an empty path segment")
-
-    current = candidate
-    for part in parts[:-1]:
-        if part not in current:
-            current[part] = {}
-        existing = current[part]
-        if not isinstance(existing, dict):
-            raise ValueError(
-                f"Tuning grid key '{key}' conflicts with non-nested parameter '{part}'"
-            )
-        current = existing
-
-    final_key = parts[-1]
-    if final_key in current:
-        raise ValueError(f"Tuning grid key '{key}' is duplicated")
-    current[final_key] = value
-
-
-@lru_cache
-def _load_adapter_cls(adapter_path: str):
-    # really complicated looking for what it does
-    # basically just lazy load all adapters only when we need them to reduce startup time
-
-    module_name, class_name = adapter_path.split(":", maxsplit=1)
-    logger.info(f"Loading model adapter: {adapter_path}")
-    try:
-        module = import_module(module_name)
-    except ImportError as exc:
-        raise ImportError(
-            f"Could not import model adapter module '{module_name}'"
-        ) from exc
-    try:
-        return getattr(module, class_name)
-    except AttributeError as exc:
-        raise ImportError(
-            f"Model adapter '{class_name}' not found in '{module_name}'"
-        ) from exc
+SKLEARN_ADAPTER = "src.adapter.sklearn_adapter"
+TABPFN_ADAPTER = "src.adapter.tabpfn_adapter:TabPFNAdapter"
+TABICL_ADAPTER = "src.adapter.tabicl_adapter:TabICLAdapter"
+LIMIX_ADAPTER = "src.adapter.limix_adapter:LimixAdapter"
+MITRA_ADAPTER = "src.adapter.mitra_adapter:MitraAdapter"
+ORION_MSP_ADAPTER = "src.adapter.orion_msp_adapter:OrionMSPAdapter"
+ORION_BIX_ADAPTER = "src.adapter.orion_bix_adapter:OrionBixAdapter"
+TABFM_ADAPTER = "src.adapter.tabfm_adapter:TabfmAdapter"
+TABSWIFT_ADAPTER = "src.adapter.tabswift_adapter:TabSwiftAdapter"
 
 
 CLASSIFICATION_SEARCH_SPACES = {
@@ -371,6 +295,11 @@ CLASSIFICATION_SEARCH_SPACES = {
             "n_estimators": [4],
         },
     },
+    "tabswift": {
+        "default": {
+            "n_estimators": [1, 2],
+        },
+    },
 }
 
 REGRESSION_SEARCH_SPACES = {
@@ -442,6 +371,9 @@ MODEL_REGISTRY_CLS = {
     "tabfm": ModelSpec(
         TABFM_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["tabfm"]
     ),
+    "tabswift": ModelSpec(
+        TABSWIFT_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["tabswift"]
+    ),
 }
 
 
@@ -460,6 +392,7 @@ MODEL_REGISTRY_REG = {
     # "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
     # "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
     # "mitra": ModelSpec(MITRA_ADAPTER),
+    "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["tabswift"]),
 }
 
 MODEL_CATALOG = ModelCatalog(

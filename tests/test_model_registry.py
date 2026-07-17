@@ -24,9 +24,11 @@ ADAPTER_MODULES = {
     "src.adapter.mitra_adapter",
     "src.adapter.orion_msp_adapter",
     "src.adapter.orion_bix_adapter",
+    "src.adapter.tabfm_adapter",
+    "src.adapter.tabswift_adapter",
 }
 CLASSIFICATION_MODELS = [name for name in model_registry.MODEL_REGISTRY_CLS]
-LIGHTWEIGHT_REGRESSION_MODELS = ["xgboost"]
+LIGHTWEIGHT_REGRESSION_MODELS = ["xgboost", "tabswift"]
 
 
 def _make_model(model_name, task_type):
@@ -180,9 +182,9 @@ def test_model_spec_samples_mixed_optuna_search_space():
     assert trial.distributions["discrete"] == optuna.distributions.FloatDistribution(
         0.0, 1.0, step=0.25
     )
-    assert trial.distributions[
-        "log_uniform"
-    ] == optuna.distributions.FloatDistribution(1e-3, 1.0, log=True)
+    assert trial.distributions["log_uniform"] == optuna.distributions.FloatDistribution(
+        1e-3, 1.0, log=True
+    )
     assert isinstance(
         trial.distributions["nested.category"],
         optuna.distributions.CategoricalDistribution,

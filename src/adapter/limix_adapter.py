@@ -1,13 +1,10 @@
 import sys
-from copy import deepcopy
 
 from src.config import config
-from src.schemas.base_schemas import TaskType
 
 sys.path.insert(0, str(config.dir_external_limix))
-
-
 import os
+from copy import deepcopy
 from timeit import default_timer as timer
 from typing import Literal
 
@@ -17,7 +14,7 @@ from huggingface_hub import hf_hub_download
 
 from external.limix.inference.predictor import LimiXPredictor
 from src.interfaces.model_interface import ModelAdapter
-from src.utils.logger import logger
+from src.schemas.base_schemas import TaskType
 
 
 class LimixAdapter(ModelAdapter):

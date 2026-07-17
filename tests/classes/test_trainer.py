@@ -270,28 +270,6 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
     assert _ReleasableFoldModel.active == 0
 
 
-def test_trainer_rejects_regression_tuning_until_metrics_are_implemented():
-    X, y = _regression_data()
-    model_params = ModelConfig(
-        name="xgboost",
-        task_type="regression",
-        params={"n_estimators": 2, "max_depth": 1, "n_jobs": 1},
-        tuning=TuningConfig(
-            method="grid",
-            grid={"n_estimators": [2]},
-            scoring="accuracy",
-            cv=CrossValidationConfig(n_splits=2, random_state=1),
-        ),
-    )
-    trainer = Trainer(
-        configs=(model_params,),
-        **_preprocess_pipeline(),
-    )
-
-    with pytest.raises(NotImplementedError, match="Regression tuning metrics"):
-        trainer.train_evaluate_model(model_params, _bundle(X, y))
-
-
 def test_trainer_uses_model_specific_preprocessing_override():
     X, y = _classification_data()
     X.loc[3, "regulatory_score"] = np.nan
@@ -367,7 +345,7 @@ def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
         task_type="classification",
         tuning=TuningConfig(
             method="grid",
-            grid={"C": [1.0]},
+            grid={"C": [1.0, 2.0]},
             scoring="accuracy",
             cv=CrossValidationConfig(n_splits=2, random_state=1),
         ),

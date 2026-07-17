@@ -4,3 +4,6 @@
 [submodule "external/tabfm"]
 	path = external/tabfm
 	url = git@github.com:google-research/tabfm.git
+[submodule "external/TabSwift"]
+	path = external/TabSwift
+	url = git@github.com:LAMDA-Tabular/TabSwift.git
