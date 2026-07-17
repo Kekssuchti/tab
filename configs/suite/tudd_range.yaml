@@ -3,6 +3,6 @@ base_config: ../pipeline/tudd_baseline.yaml
 matrix:
   - path: dataset.train_on.0.fraction
     range:
-      start: 500
-      stop: 5000
-      step: 500
+      start: 6000
+      stop: 16000
+      step: 1000

@@ -141,22 +141,36 @@ class Trainer:
 
         evaluations: list[_CandidateEvaluation] = []
 
-        for candidate_index, candidate_params in enumerate(candidates):
-            start_time_candidate = timer()
-            evaluation = self._evaluate_cv_candidate(
-                model_config,
-                model_spec,
-                candidate_params,
-                candidate_index,
-                folds,
-                X_train,
-                y_train,
+        if len(candidates) == 1:
+            # skip initial cv, just pass params as best params
+            best_params = candidates[0]
+            logger.info(f"Only 1 set of params given, cv tuning skipped: {best_params}")
+
+            evaluation = _CandidateEvaluation(
+                candidate_params=best_params,
+                fold_scores=[],
+                fold_metrics=[],
+                fold_times=[0.0] * len(folds),
+                fold_results=[],
             )
             evaluations.append(evaluation)
-            logger.info(
-                f"Candidate {candidate_index + 1}/{len(candidates)} completed in "
-                f"{timer() - start_time_candidate:.2f}s"
-            )
+        else:
+            for candidate_index, candidate_params in enumerate(candidates):
+                start_time_candidate = timer()
+                evaluation = self._evaluate_cv_candidate(
+                    model_config,
+                    model_spec,
+                    candidate_params,
+                    candidate_index,
+                    folds,
+                    X_train,
+                    y_train,
+                )
+                evaluations.append(evaluation)
+                logger.info(
+                    f"Candidate {candidate_index + 1}/{len(candidates)} completed in "
+                    f"{timer() - start_time_candidate:.2f}s"
+                )
 
         return self._fit_best_tuned_model(
             model_config,
@@ -346,22 +360,25 @@ class Trainer:
         """
 
         tuning_config = model_config.tuning
-        if tuning_config is None:
-            raise ValueError("Tuning requested without tuning parameters")
 
-        candidates = [evaluation.candidate_params for evaluation in evaluations]
-        fold_scores_by_candidate = [
-            evaluation.fold_scores for evaluation in evaluations
-        ]
         fold_results = [
             fold_result
             for evaluation in evaluations
             for fold_result in evaluation.fold_results
         ]
 
-        mean_scores = [float(np.mean(scores)) for scores in fold_scores_by_candidate]
-        best_index = int(np.argmax(mean_scores))
-        best_params = candidates[best_index]
+        candidates = [evaluation.candidate_params for evaluation in evaluations]
+        if len(candidates) == 1:
+            best_params = candidates[0]
+        else:
+            fold_scores_by_candidate = [
+                evaluation.fold_scores for evaluation in evaluations
+            ]
+            mean_scores = [
+                float(np.mean(scores)) for scores in fold_scores_by_candidate
+            ]
+            best_index = int(np.argmax(mean_scores))
+            best_params = candidates[best_index]
 
         logger.info(f"CV Done. Best params: {best_params}")
         base_X_train, base_y_train = _databundle_to_xy_train(data)

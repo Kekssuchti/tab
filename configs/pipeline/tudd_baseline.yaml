@@ -17,6 +17,62 @@ dataset:
     knn_neighbors: 5
 
 training:
+  - name: logistic-regression
+    task_type: classification
+    params: {}
+    preprocessing:
+      imputer:
+        imputation_method: mean
+      scaler_encoder:
+        type: standardization
+    tuning:
+      method: optuna
+      search_space: good
+      scoring: roc_auc
+      optuna:
+        n_trials: 100
+        sampler: tpe
+        n_startup_trials: 10
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: xgboost
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: good
+      scoring: roc_auc
+      optuna:
+        n_trials: 100
+        sampler: tpe
+        n_startup_trials: 10
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: ebm
+    task_type: classification
+    params: {}
+    tuning:
+      method: optuna
+      search_space: default
+      scoring: roc_auc
+      optuna:
+        n_trials: 50
+        sampler: tpe
+        n_startup_trials: 5
+        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
   - name: tabpfn-3
     task_type: classification
     params: {}
@@ -77,4 +133,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tab
+  experiment_name: tudd_small

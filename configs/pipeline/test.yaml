@@ -4,9 +4,7 @@ dataset:
   train_size: 0.8
   train_on:
     - dataset: tudd
-      fraction: 1.0
-    - dataset: mimic
-      fraction: 0.1
+      fraction: 200
   classification: true
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
@@ -17,13 +15,13 @@ dataset:
     imputation_method: mean
 
 training:
-  - name: logistic-regression
+  - name: tabicl-2
     task_type: classification
     params:
       random_state: 1337
     tuning:
-      method: optuna
-      search_space: good
+      method: grid
+      search_space: best
       scoring: roc_auc
       cv:
         n_splits: 5
