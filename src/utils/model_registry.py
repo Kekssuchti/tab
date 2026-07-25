@@ -279,6 +279,9 @@ CLASSIFICATION_SEARCH_SPACES = {
             "n_estimators": [1, 2],
             "softmax_temperature": Uniform(0.7, 1.1),
         },
+        "best": {
+            "n_estimators": [32],
+        },
     },
     "mitra": {
         "default": {

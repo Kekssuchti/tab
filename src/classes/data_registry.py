@@ -4,13 +4,12 @@ import pandas as pd
 
 from src.schemas.dataset_schemas import DatasetName, DatasetOrigin, Target
 
-TARGET_LIKE_COLUMNS = (
+TARGET_LIKE_COLUMNS = [
     "mortality",
-    "LOS",
     "LOS3",
     "LOS7",
     "hours_to_readmit",
-)
+]
 
 
 @dataclass(frozen=True)
@@ -59,7 +58,14 @@ class DatasetTask:
         return labels.astype(int)
 
     def features_from(self, df: pd.DataFrame) -> pd.DataFrame:
-        return df.drop(columns=list(TARGET_LIKE_COLUMNS), errors="ignore")
+        cols_to_drop = TARGET_LIKE_COLUMNS
+
+        if "hours_to_readmit" not in df.columns:
+            # LOS is fully reasonable feature for readmission
+            # for all other cases its not!
+            cols_to_drop.append("LOS")
+
+        return df.drop(columns=cols_to_drop, errors="ignore")
 
 
 DATA_FILES_NORMAL: dict[DatasetName, DataFile] = {
