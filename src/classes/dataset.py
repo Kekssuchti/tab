@@ -74,7 +74,8 @@ class Dataset:
         """Load the filtered files required by the configured clinical target."""
 
         # ensure filtered csvs exist
-        data_preprocessed = True
+        # force repreprocesisng each time to ensure consistency
+        data_preprocessed = False
 
         for data_file in self._task.data_files.values():
             path = config.dir_data / "filtered" / data_file.file_name
@@ -121,7 +122,7 @@ class Dataset:
             logger.info(f"Runtime removed unreasonable values: {removed_counts}")
 
         # here we set age to max = 90 (only really needed for tudd data)
-        df["Age"] = df["Age"].clip(upper=90)
+        df["Age"] = df["Age"].clip(upper=91)
         return df
 
     def _split_data(self, dfs: dict[DatasetOrigin, pd.DataFrame]) -> DatasetBundle:

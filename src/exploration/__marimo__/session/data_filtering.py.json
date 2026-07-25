@@ -7,7 +7,7 @@
   "cells": [
     {
       "id": "Hbol",
-      "code_hash": "b3a3888b4cfa7d430378a500de219648",
+      "code_hash": "d0e263b19ffb669207c3772fb4ed92b5",
       "outputs": [
         {
           "type": "data",
@@ -20,7 +20,7 @@
     },
     {
       "id": "MJUe",
-      "code_hash": "cd14e7e1cc837a3d364555ed4aca7dd0",
+      "code_hash": "dd41f8c7f7514903b10c026606bb4bd4",
       "outputs": [
         {
           "type": "data",
@@ -33,39 +33,39 @@
     },
     {
       "id": "vblA",
-      "code_hash": "64e5912ee140aa578ad827f06fcd5f61",
+      "code_hash": "759e5d9fafad2bacd9840d87e48462bd",
       "outputs": [],
       "console": []
     },
     {
       "id": "bkHC",
-      "code_hash": "b2a17806a01917c002804fb8eb023ab1",
-      "outputs": [],
+      "code_hash": "2fbd4394faadb54c58fc039f58629d57",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>http://fedora.fritz.box:40000/dtale/main/1</pre>"
+          }
+        }
+      ],
       "console": []
     },
     {
       "id": "lEQa",
-      "code_hash": "68b089fd4201d54981524e60a76c3caf",
+      "code_hash": "1e329064123ed4dc711340186790df5f",
       "outputs": [
         {
           "type": "data",
           "data": {
-            "text/plain": ""
+            "text/html": "<pre class='text-xs'>http://fedora.fritz.box:40000/dtale/main/1</pre>"
           }
         }
       ],
-      "console": [
-        {
-          "type": "stream",
-          "name": "stdout",
-          "text": "original:\t\t 46827\nfilter paper:\t 20337\nmy filter:\t\t 20106\n(20337, 34)\n(20106, 33)\n",
-          "mimetype": "text/plain"
-        }
-      ]
+      "console": []
     },
     {
       "id": "PKri",
-      "code_hash": "4650503460cc9b2a6502669fb421116f",
+      "code_hash": "74ba0aaff0db32466535d3b39710dfde",
       "outputs": [
         {
           "type": "data",
@@ -78,27 +78,44 @@
         {
           "type": "stream",
           "name": "stdout",
-          "text": "original: \t\t 46827\nfilter paper: \t 25438\nmy filter: \t\t 27349\n(25438, 34)\n(27349, 33)\n",
+          "text": "original:\t\t 46827\nfilter paper:\t 20337\nmy filter:\t\t 20474\n(20337, 34)\n(20474, 32)\n",
           "mimetype": "text/plain"
         }
       ]
     },
     {
       "id": "Xref",
-      "code_hash": "1f586942a6fd60cb7bf3fac84f0d6b47",
-      "outputs": [
-        {
-          "type": "data",
-          "data": {
-            "text/html": "<pre class='text-xs'>Index([&#x27;Unnamed: 0&#x27;], dtype=&#x27;object&#x27;)</pre>"
-          }
-        }
-      ],
+      "code_hash": "7b24666e0e20c52a33e7e27fb6357093",
+      "outputs": [],
       "console": []
     },
     {
       "id": "SFPL",
-      "code_hash": "74ca0780265698219c9571062292150b",
+      "code_hash": "8c80385d72ef5f1b708c55c043f50919",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "a3197cbc36355fe84731734d0e890192",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "b8e2d115f18dd90680e611338335a804",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "b174091b1d47a6003f816d0d601e4dfe",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "96d090703c84d92cb4bc3f4b386d8c7d",
       "outputs": [
         {
           "type": "data",
@@ -107,53 +124,57 @@
           }
         }
       ],
-      "console": []
-    },
-    {
-      "id": "BYtC",
-      "code_hash": "6e4370728e465b75127a74a0f8eb3104",
-      "outputs": [
-        {
-          "type": "data",
-          "data": {
-            "text/html": "<marimo-ui-element object-id='BYtC-0' random-id='b99a20b0-e165-6ebe-e200-96ef4d17625d'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;&#92;&quot;:&#92;&quot;Unnamed: 0&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;int64&#92;&quot;},{&#92;&quot;&#92;&quot;:&#92;&quot;mortality&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;float64&#92;&quot;},{&#92;&quot;&#92;&quot;:&#92;&quot;LOS&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;float64&#92;&quot;},{&#92;&quot;&#92;&quot;:&#92;&quot;Age&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;float64&#92;&quot;},{&#92;&quot;&#92;&quot;:&#92;&quot;Sex&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;int64&#92;&quot;},{&#92;&quot;&#92;&quot;:&#92;&quot;Height+100%mean&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;float64&#92;&quot;},{&#92;&quot;&#92;&quot;:&#92;&quot;Weight+100%mean&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;float64&#92;&quot;},{&#92;&quot;&#92;&quot;:&#92;&quot;ALAT+100%mean&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;float64&#92;&quot;},{&#92;&quot;&#92;&quot;:&#92;&quot;ASAT+100%mean&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;float64&#92;&quot;},{&#92;&quot;&#92;&quot;:&#92;&quot;Albumin+100%mean&#92;&quot;,&#92;&quot;value&#92;&quot;:&#92;&quot;float64&#92;&quot;}]&quot;' data-total-rows='34' data-total-columns='1' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;value&quot;,[&quot;string&quot;,&quot;object&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[[&quot;&quot;,[&quot;string&quot;,&quot;object&quot;]]]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
-          }
-        }
-      ],
-      "console": []
-    },
-    {
-      "id": "ipBA",
-      "code_hash": "8fcd5c6ca597cbcfafd59a26c5a420b0",
-      "outputs": [
-        {
-          "type": "data",
-          "data": {
-            "text/html": "<marimo-ui-element object-id='ipBA-0' random-id='a5c60766-e1b1-e769-ac44-036dd19ea075'><marimo-table data-initial-value='[]' data-label='null' data-data='&quot;[{&#92;&quot;&#92;&quot;:1,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:true,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:true,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:true,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false},{&#92;&quot;&#92;&quot;:3,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:false,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:false,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:false,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false},{&#92;&quot;&#92;&quot;:4,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:false,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:false,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:false,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false},{&#92;&quot;&#92;&quot;:6,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:true,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:false,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:false,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false},{&#92;&quot;&#92;&quot;:7,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:false,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:false,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:false,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false},{&#92;&quot;&#92;&quot;:9,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:false,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:false,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:false,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false},{&#92;&quot;&#92;&quot;:10,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:false,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:false,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:false,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false},{&#92;&quot;&#92;&quot;:11,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:false,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:false,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:false,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false},{&#92;&quot;&#92;&quot;:12,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:false,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:false,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:false,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false},{&#92;&quot;&#92;&quot;:13,&#92;&quot;mortality&#92;&quot;:false,&#92;&quot;LOS&#92;&quot;:false,&#92;&quot;Age&#92;&quot;:false,&#92;&quot;Sex&#92;&quot;:false,&#92;&quot;Height+100%mean&#92;&quot;:false,&#92;&quot;Weight+100%mean&#92;&quot;:false,&#92;&quot;ALAT+100%mean&#92;&quot;:false,&#92;&quot;ASAT+100%mean&#92;&quot;:false,&#92;&quot;Albumin+100%mean&#92;&quot;:false,&#92;&quot;AnionGAP+100%mean&#92;&quot;:false,&#92;&quot;Bilirubin+100%mean&#92;&quot;:false,&#92;&quot;FiO2+100%mean&#92;&quot;:false,&#92;&quot;GCST+100%mean&#92;&quot;:false,&#92;&quot;GLU+100%mean&#92;&quot;:false,&#92;&quot;HCO3+100%mean&#92;&quot;:false,&#92;&quot;HR+100%mean&#92;&quot;:false,&#92;&quot;Urea+100%mean&#92;&quot;:false,&#92;&quot;Hb+100%mean&#92;&quot;:false,&#92;&quot;Kalium+100%mean&#92;&quot;:false,&#92;&quot;Kreatinin+100%mean&#92;&quot;:false,&#92;&quot;Lactate+100%mean&#92;&quot;:false,&#92;&quot;Leukocyten+100%mean&#92;&quot;:false,&#92;&quot;MBP+100%mean&#92;&quot;:false,&#92;&quot;Natrium+100%mean&#92;&quot;:false,&#92;&quot;PaCO2+100%mean&#92;&quot;:false,&#92;&quot;PaO2+100%mean&#92;&quot;:false,&#92;&quot;Quick+100%mean&#92;&quot;:false,&#92;&quot;RR+100%mean&#92;&quot;:true,&#92;&quot;Temp+100%mean&#92;&quot;:false,&#92;&quot;Thrombocyten+100%mean&#92;&quot;:false,&#92;&quot;Ph+100%mean&#92;&quot;:false,&#92;&quot;Bmi+100%mean&#92;&quot;:false,&#92;&quot;LOS3&#92;&quot;:false}]&quot;' data-total-rows='20106' data-total-columns='33' data-max-columns='50' data-banner-text='&quot;&quot;' data-pagination='true' data-page-size='10' data-field-types='[[&quot;mortality&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;LOS&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Age&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Sex&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Height+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Weight+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;ALAT+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;ASAT+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Albumin+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;AnionGAP+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Bilirubin+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;FiO2+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;GCST+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;GLU+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;HCO3+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;HR+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Urea+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Hb+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Kalium+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Kreatinin+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Lactate+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Leukocyten+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;MBP+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Natrium+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;PaCO2+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;PaO2+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Quick+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;RR+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Temp+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Thrombocyten+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Ph+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;Bmi+100%mean&quot;,[&quot;boolean&quot;,&quot;bool&quot;]],[&quot;LOS3&quot;,[&quot;boolean&quot;,&quot;bool&quot;]]]' data-show-filters='true' data-show-download='true' data-show-column-summaries='true' data-show-data-types='true' data-show-page-size-selector='true' data-show-column-explorer='true' data-show-chart-builder='true' data-row-headers='[[&quot;&quot;,[&quot;integer&quot;,&quot;int64&quot;]]]' data-hidden-columns='[]' data-has-stable-row-id='false' data-lazy='false' data-preload='false'></marimo-table></marimo-ui-element>"
-          }
-        }
-      ],
-      "console": []
-    },
-    {
-      "id": "RGSE",
-      "code_hash": "95a8e92da091ab2a33ae21a17650a68f",
-      "outputs": [
-        {
-          "type": "error",
-          "ename": "exception",
-          "evalue": "The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().",
-          "traceback": null
-        }
-      ],
       "console": [
         {
           "type": "stream",
-          "name": "stderr",
-          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/tmp/marimo_33502/__marimo__cell_HrDZ_.py&quot;</span>, line <span class=\"m\">1</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">df_tudd_filt</span><span class=\"p\">[</span><span class=\"s2\">&quot;Age&quot;</span><span class=\"p\">]</span> <span class=\"o\">=</span>  <span class=\"nb\">min</span><span class=\"p\">(</span><span class=\"n\">df_tudd_filt</span><span class=\"p\">[</span><span class=\"s2\">&quot;Age&quot;</span><span class=\"p\">]</span> <span class=\"p\">,</span> <span class=\"mi\">90</span><span class=\"p\">)</span>\n<span class=\"w\">                           </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/var/home/keks/projects/tab/.venv/lib/python3.12/site-packages/pandas/core/generic.py&quot;</span>, line <span class=\"m\">1580</span>, in <span class=\"n\">__nonzero__</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"ne\">ValueError</span><span class=\"p\">(</span>\n<span class=\"gr\">ValueError</span>: <span class=\"n\">The truth value of a Series is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().</span>\n</pre></div>\n</span>",
-          "mimetype": "application/vnd.marimo+traceback"
+          "name": "stdout",
+          "text": "original: \t\t 46827\nfilter paper: \t 25438\nmy filter: \t\t 25267\n(25438, 34)\n(25267, 32)\n",
+          "mimetype": "text/plain"
         }
       ]
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "4e0a8be9e3454c359035533443c5208b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>http://fedora.fritz.box:40000/dtale/main/1</pre>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "db2eaf48b89b92f46dfd0f7ec6c5dc45",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "74ca0780265698219c9571062292150b",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "6e4370728e465b75127a74a0f8eb3104",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "8fcd5c6ca597cbcfafd59a26c5a420b0",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "qnkX",
+      "code_hash": null,
+      "outputs": [],
+      "console": []
     }
   ]
 }

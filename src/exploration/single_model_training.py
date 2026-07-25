@@ -76,9 +76,10 @@ def _():
     }
     DATASET_SCALER = {"type": "none"}
 
-    MODEL_NAME = "tabswift"
+    MODEL_NAME = "tabpfn-2.6"
     MODEL_PARAMS = {
-        "n_estimators": [32],
+        "n_estimators": [2],
+        "fit_mode": "fit_preprocessors",
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None

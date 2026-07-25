@@ -225,6 +225,11 @@ CLASSIFICATION_SEARCH_SPACES = {
         "best": {
             "n_estimators": [32],
         },
+        "best_2_6": {
+            "n_estimators": [4],
+            "fit_mode": ["fit_preprocessors"],
+            "predict_batch_size": [8192],
+        },
         "tabpfn2.5": {
             "n_estimators": [1, 2],  # oom else
             "softmax_temperature": Uniform(0.7, 1.1),
@@ -297,7 +302,11 @@ CLASSIFICATION_SEARCH_SPACES = {
     },
     "tabswift": {
         "default": {
-            "n_estimators": [1, 2],
+            # could be extended!
+            "n_estimators": [4, 8, 16, 32],
+        },
+        "best": {
+            "n_estimators": [32],
         },
     },
 }
@@ -343,6 +352,11 @@ MODEL_REGISTRY_CLS = {
     "tabpfn-2.5": ModelSpec(
         TABPFN_ADAPTER,
         default_params={"version": "v2.5"},
+        search_spaces=CLASSIFICATION_SEARCH_SPACES["tabpfn"],
+    ),
+    "tabpfn-2.6": ModelSpec(
+        TABPFN_ADAPTER,
+        default_params={"version": "v2.6", "predict_batch_size": 8192},
         search_spaces=CLASSIFICATION_SEARCH_SPACES["tabpfn"],
     ),
     "tabicl-2": ModelSpec(

@@ -36,6 +36,7 @@ dependencies = [
     "memray>=1.19.3",
     "tabfm[pytorch]",
     "ruff>=0.15.22",
+    "dtale>=3.22.0",
 ]
 
 [tool.uv.sources]

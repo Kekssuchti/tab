@@ -17,6 +17,33 @@ dataset:
     knn_neighbors: 5
 
 training:
+  - name: tabswift
+    task_type: classification
+    params: {}
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabpfn-2.6
+    task_type: classification
+    params: {}
+    tuning:
+      method: grid
+      search_space: best_2_6
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
   - name: logistic-regression
     task_type: classification
     params: {}
@@ -97,7 +124,31 @@ training:
         shuffle: true
         random_state: 1337
 
-  - name: tabfm
+  - name: limix-16m
+    task_type: classification
+    params: {}
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: mitra
+    task_type: classification
+    params: {}
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: orion-msp
     task_type: classification
     params: {}
     preprocessing:
@@ -112,9 +163,12 @@ training:
         shuffle: true
         random_state: 1337
 
-  - name: limix-16m
+  - name: tabfm
     task_type: classification
     params: {}
+    preprocessing:
+      imputer:
+        imputation_method: mean
     tuning:
       method: grid
       search_space: best
@@ -133,4 +187,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tudd_small
+  experiment_name: tudd_baseline_mortality
