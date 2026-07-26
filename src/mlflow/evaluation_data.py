@@ -128,7 +128,7 @@ def load_evaluation_data(
     models: str | Sequence[str] | None = None,
     tracking_uri: str = DEFAULT_TRACKING_URI,
 ) -> pd.DataFrame:
-    """Load scores, test differences, and timings into one tidy DataFrame."""
+    """Load scores, test differences, and timings into one wide DataFrame."""
 
     client = MlflowClient(tracking_uri=tracking_uri)
     experiments = _get_experiments(client, experiment_names)
@@ -154,7 +154,7 @@ def load_evaluation_data(
     for pipeline_run in selected_pipeline_runs:
         for model_run in models_by_parent.get(pipeline_run.run.info.run_id, ()):
             measurements.extend(_model_measurements(pipeline_run, model_run))
-    return _frame(measurements, _Measurement)
+    return _wide_measurement_frame(measurements)
 
 
 def _get_experiments(
@@ -476,6 +476,142 @@ def _group_models_by_parent(model_runs: list[Run]) -> dict[str, tuple[Run, ...]]
         if parent_id is not None:
             grouped.setdefault(parent_id, []).append(model_run)
     return {key: tuple(value) for key, value in grouped.items()}
+
+
+def _wide_measurement_frame(measurements: list[_Measurement]) -> pd.DataFrame:
+    context_columns = [field.name for field in fields(_ModelContext)]
+    row_columns = context_columns + ["scope", "dataset"]
+    metadata_columns = [
+        "statistic",
+        "ci_level",
+        "n_classes",
+        "test_row_count",
+    ]
+    score_metrics = sorted(
+        {
+            measurement.metric
+            for measurement in measurements
+            if measurement.kind == "score"
+        }
+    )
+    timing_columns = [
+        "cv_time",
+        "fit_time",
+        "predict_time_mimic",
+        "predict_time_tudd",
+        "total_time",
+    ]
+    reserved_columns = set(row_columns + metadata_columns)
+    collisions = reserved_columns & set(score_metrics)
+    if collisions:
+        names = ", ".join(sorted(collisions))
+        raise ValueError(
+            f"MLflow metric names conflict with evaluation columns: {names}"
+        )
+
+    grouped: dict[tuple[object, ...], dict[str, object]] = {}
+    for measurement in measurements:
+        if measurement.kind != "score":
+            continue
+        values = astuple(measurement)
+        context_values = values[: len(context_columns)]
+        key = (*context_values, measurement.scope, measurement.dataset)
+        row = grouped.setdefault(
+            key,
+            dict(zip(row_columns, key, strict=True)),
+        )
+        for column in metadata_columns:
+            value = getattr(measurement, column)
+            if value is not None:
+                existing = row.get(column)
+                if existing is not None and existing != value:
+                    raise ValueError(
+                        f"Inconsistent {column} values for evaluation row {key!r}"
+                    )
+                row[column] = value
+        row[measurement.metric] = measurement.value
+        if measurement.scope == "test":
+            row[f"{measurement.metric}_ci_lower"] = measurement.ci_lower
+            row[f"{measurement.metric}_ci_upper"] = measurement.ci_upper
+
+    timings_by_model: dict[tuple[object, ...], dict[str, float]] = {}
+    timing_names = {
+        ("cv", None, "total_time"): "cv_time",
+        ("train", None, "fit_time"): "fit_time",
+        ("test", "mimic", "predict_time"): "predict_time_mimic",
+        ("test", "tudd", "predict_time"): "predict_time_tudd",
+    }
+    for measurement in measurements:
+        if measurement.kind != "time":
+            continue
+        column = timing_names.get(
+            (measurement.scope, measurement.dataset, measurement.metric)
+        )
+        if column is not None:
+            model_key = astuple(measurement)[: len(context_columns)]
+            timings_by_model.setdefault(model_key, {})[column] = measurement.value
+
+    component_columns = timing_columns[:-1]
+    for key, row in grouped.items():
+        timing_values = timings_by_model.get(key[: len(context_columns)], {})
+        row.update(timing_values)
+        present_values = [
+            timing_values[column]
+            for column in component_columns
+            if column in timing_values
+        ]
+        row["total_time"] = sum(present_values) if present_values else None
+
+    metric_columns = [
+        column
+        for metric in score_metrics
+        for column in (metric, f"{metric}_ci_lower", f"{metric}_ci_upper")
+    ]
+    columns = row_columns + metadata_columns + metric_columns + timing_columns
+    frame = pd.DataFrame.from_records(list(grouped.values()), columns=columns)
+    return _add_generalizability_losses(frame, score_metrics)
+
+
+def _add_generalizability_losses(
+    frame: pd.DataFrame,
+    score_metrics: list[str],
+) -> pd.DataFrame:
+    loss_columns = [
+        column
+        for metric in score_metrics
+        for column in (
+            f"generalizability_loss_{metric}",
+            f"comparative_generalizability_loss_{metric}",
+        )
+    ]
+    if frame.empty:
+        return frame.reindex(columns=[*frame.columns, *loss_columns])
+
+    test_rows = frame["scope"].eq("test")
+    external_rows = test_rows & frame["dataset"].ne(frame["trained_on"])
+    training_rows = test_rows & frame["dataset"].eq(frame["trained_on"])
+    for metric in score_metrics:
+        generalizability = f"generalizability_loss_{metric}"
+        comparative = f"comparative_generalizability_loss_{metric}"
+        frame[generalizability] = float("nan")
+        frame[comparative] = float("nan")
+
+        training_scores = (
+            frame.loc[training_rows, ["model_mlflow_run_id", metric]]
+            .dropna(subset=[metric])
+            .set_index("model_mlflow_run_id")[metric]
+        )
+        external_scores = frame.loc[external_rows, metric]
+        frame.loc[external_rows, generalizability] = external_scores - frame.loc[
+            external_rows, "model_mlflow_run_id"
+        ].map(training_scores)
+        best_external = (
+            frame.loc[external_rows]
+            .groupby(["target", "dataset"], dropna=False)[metric]
+            .transform("max")
+        )
+        frame.loc[external_rows, comparative] = external_scores - best_external
+    return frame
 
 
 def _frame(records, record_type: type) -> pd.DataFrame:

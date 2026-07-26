@@ -264,12 +264,14 @@ def plot_performance_vs_runtime(
     comparison = calculate_comparative_generalizability(
         results, metric=metric, external_dataset=external_dataset
     )
-    timings = results.loc[
-        (results["kind"] == "time")
-        & (results["scope"] == runtime_scope)
-        & (results["metric"] == runtime_metric),
-        ["model_mlflow_run_id", "value"],
-    ].rename(columns={"value": "runtime"})
+    timings = (
+        results.loc[
+            (results["scope"] == "test") & results[runtime_metric].notna(),
+            ["model_mlflow_run_id", runtime_metric],
+        ]
+        .drop_duplicates("model_mlflow_run_id")
+        .rename(columns={runtime_metric: "runtime"})
+    )
     plot_data = comparison.merge(timings, on="model_mlflow_run_id")
     plot_data = _with_model_labels(plot_data)
 
@@ -331,11 +333,14 @@ def plot_performance_vs_runtime(
 
 
 def _test_scores(results: pd.DataFrame, metric: str) -> pd.DataFrame:
-    return results.loc[
-        (results["kind"] == "score")
-        & (results["scope"] == "test")
-        & (results["metric"] == metric)
-    ].copy()
+    if metric not in results:
+        raise ValueError(f"Metric {metric!r} is not available in evaluation data")
+    scores = results.loc[(results["scope"] == "test") & results[metric].notna()].copy()
+    scores["metric"] = metric
+    scores["value"] = scores[metric]
+    scores["ci_lower"] = scores[f"{metric}_ci_lower"]
+    scores["ci_upper"] = scores[f"{metric}_ci_upper"]
+    return scores
 
 
 def _with_model_labels(frame: pd.DataFrame) -> pd.DataFrame:

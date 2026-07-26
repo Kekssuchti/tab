@@ -6,13 +6,13 @@ import pandas as pd
 import pytest
 
 from src.plot_results import (
-    calculate_comparative_generalizability,
     list_pipeline_runs,
     load_evaluation_data,
     plot_generalization_gaps,
     plot_performance_vs_runtime,
     plot_roc_auc,
 )
+from src.utils.evaluation_plot import calculate_comparative_generalizability
 
 
 def _log_pipeline(
@@ -172,40 +172,54 @@ def test_loads_multiple_experiments_into_plotting_tables(tracking_uri):
         "ebm",
     }
     assert set(data["training_size"]) == {100}
-    scores = data.loc[data["kind"] == "score"]
-    timings = data.loc[data["kind"] == "time"]
-    assert set(data["kind"]) == {"score", "time"}
+    scores = data
+    assert {"kind", "unit"}.isdisjoint(data.columns)
     assert set(scores["dataset"]) == {
         "mimic",
         "tudd",
         "mimic_minus_tudd",
     }
-    assert set(timings["unit"]) == {"seconds"}
+    assert {"metric", "value", "ci_lower", "ci_upper"}.isdisjoint(data.columns)
+    assert {
+        "accuracy",
+        "accuracy_ci_lower",
+        "accuracy_ci_upper",
+        "roc_auc",
+        "cv_time",
+        "fit_time",
+        "predict_time_mimic",
+        "predict_time_tudd",
+        "total_time",
+        "generalizability_loss_roc_auc",
+        "comparative_generalizability_loss_roc_auc",
+    } <= set(data.columns)
 
     logistic_accuracy = scores.loc[
         (scores["model_name"] == "logistic-regression")
         & (scores["dataset"] == "mimic")
-        & (scores["metric"] == "accuracy")
+        & (scores["scope"] == "test")
     ].iloc[0]
-    assert logistic_accuracy["value"] == pytest.approx(0.9)
-    assert logistic_accuracy["ci_lower"] == pytest.approx(0.85)
+    assert logistic_accuracy["accuracy"] == pytest.approx(0.9)
+    assert logistic_accuracy["accuracy_ci_lower"] == pytest.approx(0.85)
 
     logistic_delta = scores.loc[
         (scores["model_name"] == "logistic-regression")
         & (scores["dataset"] == "mimic_minus_tudd")
-        & (scores["metric"] == "accuracy")
     ].iloc[0]
-    assert logistic_delta["value"] == pytest.approx(0.2)
+    assert logistic_delta["accuracy"] == pytest.approx(0.2)
 
-    logistic_times = timings.loc[timings["model_name"] == "logistic-regression"]
-    assert set(logistic_times["value"]) >= {0.1, 2.0}
+    assert logistic_accuracy["cv_time"] == pytest.approx(4.0)
+    assert logistic_accuracy["fit_time"] == pytest.approx(2.0)
+    assert logistic_accuracy["predict_time_mimic"] == pytest.approx(0.1)
+    assert logistic_accuracy["predict_time_tudd"] == pytest.approx(0.2)
+    assert logistic_accuracy["total_time"] == pytest.approx(6.3)
 
     xgboost_accuracy = scores.loc[
         (scores["model_name"] == "xgboost")
         & (scores["dataset"] == "mimic")
-        & (scores["metric"] == "accuracy")
+        & (scores["scope"] == "test")
     ].iloc[0]
-    assert xgboost_accuracy["value"] == pytest.approx(0.85)
+    assert xgboost_accuracy["accuracy"] == pytest.approx(0.85)
     assert xgboost_accuracy["statistic"] == "point"
     assert pd.isna(xgboost_accuracy["ci_level"])
 
@@ -242,9 +256,9 @@ def test_filters_pipeline_runs_and_models_by_names(tracking_uri):
     )
     assert set(untuned["model_name"]) == {"xgboost"}
     untuned_accuracy = untuned.loc[
-        (untuned["dataset"] == "mimic") & (untuned["metric"] == "accuracy")
+        (untuned["dataset"] == "mimic") & (untuned["scope"] == "test")
     ].iloc[0]
-    assert pd.isna(untuned_accuracy["ci_lower"])
+    assert pd.isna(untuned_accuracy["accuracy_ci_lower"])
 
 
 def test_calculates_comparative_generalizability_on_external_test(tracking_uri):
@@ -265,6 +279,16 @@ def test_calculates_comparative_generalizability_on_external_test(tracking_uri):
     assert by_model.loc[
         "logistic-regression", "generalizability_loss"
     ] == pytest.approx(-0.05)
+
+    logistic_external = results.loc[
+        (results["model_name"] == "logistic-regression")
+        & (results["scope"] == "test")
+        & (results["dataset"] == "tudd")
+    ].iloc[0]
+    assert logistic_external["generalizability_loss_roc_auc"] == pytest.approx(-0.05)
+    assert logistic_external[
+        "comparative_generalizability_loss_roc_auc"
+    ] == pytest.approx(0.0)
 
 
 def test_plots_roc_auc_as_paired_test_centers(tracking_uri):

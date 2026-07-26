@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.23.9"
-app = marimo.App(width="medium")
+app = marimo.App(width="full")
 
 
 @app.cell
@@ -19,6 +19,7 @@ def _():
         plot_performance_vs_runtime,
         plot_roc_auc,
     )
+    from src.exploration.latex_table import performance_table_to_latex
     import matplotlib.pyplot as plt
     import matplotlib.ticker as mticker
 
@@ -26,6 +27,7 @@ def _():
         list_pipeline_runs,
         load_evaluation_data,
         mticker,
+        performance_table_to_latex,
         plot_generalization_gaps,
         plot_performance_vs_runtime,
         plot_roc_auc,
@@ -34,62 +36,63 @@ def _():
 
 
 @app.cell
-def _(list_pipeline_runs):
-    def list_run_id(experiment_name: str = "tab"):
-        runs = list_pipeline_runs(experiment_name)
-        print(
-            runs[["run_name", "mlflow_run_id", "model_instances"]].to_string(
-                index=False
-            )
-        )
-        return runs
+def _(list_pipeline_runs, load_evaluation_data):
+    mortality_exp_name = "tudd_baseline_mortality"
+    readmission_exp_name = "tudd_baseline_hours_to_readmit"
 
-    experiment_name = "tudd_small"
-    list_run_id(experiment_name)
-    runs = list_pipeline_runs(experiment_name)
+    runs_moratlity = list_pipeline_runs(mortality_exp_name)
+    runs_readmission = list_pipeline_runs(readmission_exp_name)
 
-    run_ids_to_analyze = [
-        "7e34d3f5359a4e9cb5141cf4b9c1fa1f",
-        "d599d0402eaa4abcb6db9a201326e27a",
-        "ffa0f74a73164834b01db2bac7967ddb",
-        "c87f8ffb2278400f96b24e157b81b373",
-        "b580c3e2183b4a09a6301b11665cfe45",
-        "147f2acdbb4046509496937b33551c35",
-        "cc4a485361474a77ae9a589a83a86136",
-        "1d874c9297e740e8839388ce2d2ac7ac",
-        "1ef3b80164784b7c89bc692caa77c9df",
-        "270eea42c596414fa91698327338dc05",
-    ]
-
-    # selected_ids = runs.loc[
-    #    runs["mlflow_run_id"].isin(run_ids_to_analyze),
-    #    "mlflow_run_id",
-    # ].tolist()
-
-    selected_ids = runs["mlflow_run_id"]
-    print(selected_ids)
-    return experiment_name, selected_ids
-
-
-@app.cell
-def _(experiment_name, load_evaluation_data, selected_ids):
-    data = load_evaluation_data(
-        experiment_names=experiment_name,
-        pipeline_runs=selected_ids,
+    data_mortality = load_evaluation_data(
+        experiment_names=mortality_exp_name,
+        pipeline_runs=runs_moratlity["mlflow_run_id"],
     )
-    data
-    return (data,)
+    data_readmission = load_evaluation_data(
+        experiment_names=readmission_exp_name,
+        pipeline_runs=runs_readmission["mlflow_run_id"],
+    )
+    data_mortality
+    return data_mortality, data_readmission
 
 
 @app.cell
-def _(data):
-    data["pipeline_run_name"].unique()
+def _(data_readmission):
+    data_readmission
     return
 
 
 @app.cell
-def _(data, plot_roc_auc):
-    plot_roc_auc(data)
+def _(data_mortality, data_readmission, performance_table_to_latex):
+    latex_mortality = performance_table_to_latex(
+        results=data_mortality,
+        metric="roc_auc",
+        include_ci=False
+    )
+
+    latex_readmission = performance_table_to_latex(
+        results=data_readmission,
+        metric="roc_auc",
+        include_ci=False
+    )
+    return latex_mortality, latex_readmission
+
+
+@app.cell
+def _(latex_mortality, latex_readmission):
+    print(latex_mortality)
+    print(latex_readmission)
+    return
+
+
+@app.cell
+def _(data_mortality, plot_roc_auc):
+    plot_roc_auc(data_mortality)
+    return
+
+
+@app.cell
+def _(data_readmission, plot_roc_auc):
+    plot_roc_auc(data_readmission)
     return
 
 

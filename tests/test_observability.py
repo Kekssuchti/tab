@@ -362,10 +362,16 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
 
     loaded = load_evaluation_data("test-tab", tracking_uri=tracking_uri)
     accuracy = loaded.loc[
-        (loaded["dataset"] == "mimic") & (loaded["metric"] == "accuracy")
+        (loaded["dataset"] == "mimic") & (loaded["scope"] == "test")
     ].iloc[0]
-    assert accuracy["value"] == 0.95
-    assert accuracy["ci_lower"] is not None
+    assert accuracy["accuracy"] == 0.95
+    assert accuracy["accuracy_ci_lower"] is not None
+    assert {"kind", "unit"}.isdisjoint(loaded.columns)
+    assert accuracy["cv_time"] == 0.1
+    assert accuracy["fit_time"] == 0.2
+    assert accuracy["predict_time_mimic"] == 0.03
+    assert accuracy["predict_time_tudd"] == 0.04
+    assert np.isclose(accuracy["total_time"], 0.37)
 
 
 def test_mlflow_logger_appends_model_runs_incrementally(tmp_path):
