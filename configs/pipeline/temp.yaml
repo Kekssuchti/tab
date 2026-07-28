@@ -4,7 +4,7 @@ dataset:
   train_size: 0.8
   train_on:
     - dataset: tudd
-      fraction: 1.0
+      fraction: 0.5
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
@@ -23,9 +23,14 @@ training:
       scaler_encoder:
         type: standardization
     tuning:
-      method: grid
-      search_space: default
+      method: optuna
+      search_space: good
       scoring: roc_auc
+      optuna:
+        n_trials: 50
+        sampler: tpe
+        n_startup_trials: 10
+        timeout: null
       cv:
         n_splits: 5
         shuffle: true
@@ -33,19 +38,14 @@ training:
 
   - name: xgboost
     tuning:
-      method: grid
-      search_space: default
+      method: optuna
+      search_space: good
       scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: ebm
-    tuning:
-      method: grid
-      search_space: default
-      scoring: roc_auc
+      optuna:
+        n_trials: 50
+        sampler: tpe
+        n_startup_trials: 10
+        timeout: null
       cv:
         n_splits: 5
         shuffle: true
@@ -54,7 +54,7 @@ training:
   - name: tabpfn-3
     tuning:
       method: grid
-      search_space: default
+      search_space: best
       scoring: roc_auc
       cv:
         n_splits: 5
@@ -64,20 +64,33 @@ training:
   - name: tabicl-2
     tuning:
       method: grid
-      search_space: default
+      search_space: best
       scoring: roc_auc
       cv:
         n_splits: 5
         shuffle: true
         random_state: 1337
 
-  - name: orion-msp
+  - name: tabfm
     preprocessing:
       imputer:
         imputation_method: mean
     tuning:
       method: grid
-      search_space: default
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabswift
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: best
       scoring: roc_auc
       cv:
         n_splits: 5
@@ -88,4 +101,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tab
+  experiment_name: tudd_baseline_testing

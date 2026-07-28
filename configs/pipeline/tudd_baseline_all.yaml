@@ -24,12 +24,12 @@ training:
         type: standardization
     tuning:
       method: optuna
-      search_space: big
+      search_space: good
       scoring: roc_auc
       optuna:
-        n_trials: 150
+        n_trials: 100
         sampler: tpe
-        n_startup_trials: 15
+        n_startup_trials: 10
         timeout: null
       cv:
         n_splits: 5
@@ -39,12 +39,12 @@ training:
   - name: xgboost
     tuning:
       method: optuna
-      search_space: big
+      search_space: good
       scoring: roc_auc
       optuna:
-        n_trials: 150
+        n_trials: 100
         sampler: tpe
-        n_startup_trials: 15
+        n_startup_trials: 10
         timeout: null
       cv:
         n_splits: 5
@@ -68,14 +68,29 @@ training:
 
   - name: tabpfn-3
     tuning:
-      method: optuna
-      search_space: big
+      method: grid
+      search_space: best
       scoring: roc_auc
-      optuna:
-        n_trials: 30
-        sampler: tpe
-        n_startup_trials: 3
-        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabpfn-2.5
+    tuning:
+      method: grid
+      search_space: best_2_5
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabpfn-2.6
+    tuning:
+      method: grid
+      search_space: best_2_6
+      scoring: roc_auc
       cv:
         n_splits: 5
         shuffle: true
@@ -83,14 +98,29 @@ training:
 
   - name: tabicl-2
     tuning:
-      method: optuna
-      search_space: big
+      method: grid
+      search_space: best
       scoring: roc_auc
-      optuna:
-        n_trials: 30
-        sampler: tpe
-        n_startup_trials: 3
-        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: limix-2m
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: limix-16m
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
       cv:
         n_splits: 5
         shuffle: true
@@ -101,14 +131,45 @@ training:
       imputer:
         imputation_method: mean
     tuning:
-      method: optuna
-      search_space: default
+      method: grid
+      search_space: best
       scoring: roc_auc
-      optuna:
-        n_trials: 30
-        sampler: tpe
-        n_startup_trials: 3
-        timeout: null
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: mitra
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabfm
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabswift
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
       cv:
         n_splits: 5
         shuffle: true

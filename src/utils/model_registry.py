@@ -213,6 +213,9 @@ SEARCH_SPACES = {
             "inference_config.POLYNOMIAL_FEATURES": UniformChoice("no", DiscreteUniform(1, 20, 1)),
             "inference_config.ENABLE_GPU_PREPROCESSING": [True],
         },
+        "best_2_5": {
+            "n_estimators": [2],
+        },
     },
     "tabicl": {
         "default": {
@@ -342,7 +345,7 @@ MODEL_REGISTRY_CLS = {
 
 
 MODEL_REGISTRY_REG = {
-    # "linear-regression": ModelSpec(f"{SKLEARN_ADAPTER}:LinearModelAdapter"),
+    "linear-regression": ModelSpec(f"{SKLEARN_ADAPTER}:LinearModelAdapter"),
     "xgboost": ModelSpec(
         f"{SKLEARN_ADAPTER}:XGBoostAdapter",
         search_spaces=SEARCH_SPACES["xgboost"],
