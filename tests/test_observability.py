@@ -217,9 +217,7 @@ def test_observation_assembly_describes_parent_model_and_cv_runs():
     assert observation.tags["run_type"] == "pipeline"
     assert observation.tags["trained_on"] == "mimic"
     assert observation.params["dataset.train.row_count"] == "8"
-    assert (
-        observation.params["model.logistic-regression.preprocessing.override"] == "True"
-    )
+    assert observation.params["model.logistic-regression.preprocessing.override"] == "True"
     assert _metric_value(observation.metrics, "pipeline.total_time") == 0.5
     assert {row["dataset"] for row in observation.table_rows} == {
         "mimic",
@@ -240,11 +238,10 @@ def test_observation_assembly_describes_parent_model_and_cv_runs():
     assert cv1.tags["candidate_rank"] == "1"
     assert cv0.params["cv.params.C"] == "0.1"
     assert _metric_value(cv0.metrics, "cv.rank") == 2.0
-    assert [
-        (metric.step, metric.value)
-        for metric in cv0.metrics
-        if metric.name == "cv.accuracy"
-    ] == [(0, 0.7), (1, 0.8)]
+    assert [(metric.step, metric.value) for metric in cv0.metrics if metric.name == "cv.accuracy"] == [
+        (0, 0.7),
+        (1, 0.8),
+    ]
 
 
 def test_observation_assembly_marks_failed_model_without_evaluations():
@@ -343,9 +340,7 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
         (0, 0.7),
         (1, 0.8),
     ]
-    artifact_names = {
-        artifact.path for artifact in client.list_artifacts(parent.info.run_id)
-    }
+    artifact_names = {artifact.path for artifact in client.list_artifacts(parent.info.run_id)}
     assert {
         "config.json",
         "pipeline_result.json",
@@ -355,15 +350,11 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
         "evaluation_metrics.json",
         "cv_results",
     } <= artifact_names
-    evaluation_metrics = mlflow.load_table(
-        "evaluation_metrics.json", run_ids=[parent.info.run_id]
-    )
+    evaluation_metrics = mlflow.load_table("evaluation_metrics.json", run_ids=[parent.info.run_id])
     assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(evaluation_metrics["dataset"])
 
     loaded = load_evaluation_data("test-tab", tracking_uri=tracking_uri)
-    accuracy = loaded.loc[
-        (loaded["dataset"] == "mimic") & (loaded["scope"] == "test")
-    ].iloc[0]
+    accuracy = loaded.loc[(loaded["dataset"] == "mimic") & (loaded["scope"] == "test")].iloc[0]
     assert accuracy["accuracy"] == 0.95
     assert accuracy["accuracy_ci_lower"] is not None
     assert {"kind", "unit"}.isdisjoint(loaded.columns)
@@ -407,13 +398,9 @@ def test_mlflow_logger_appends_model_runs_incrementally(tmp_path):
     assert "test.mimic.accuracy" not in model.data.metrics
 
     client = mlflow.MlflowClient(tracking_uri=tracking_uri)
-    artifact_names = {
-        artifact.path for artifact in client.list_artifacts(parent.info.run_id)
-    }
+    artifact_names = {artifact.path for artifact in client.list_artifacts(parent.info.run_id)}
     assert "pipeline_result.json" in artifact_names
-    evaluation_metrics = mlflow.load_table(
-        "evaluation_metrics.json", run_ids=[parent.info.run_id]
-    )
+    evaluation_metrics = mlflow.load_table("evaluation_metrics.json", run_ids=[parent.info.run_id])
     assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(evaluation_metrics["dataset"])
 
 
@@ -429,9 +416,7 @@ def test_mlflow_logger_writes_failed_nested_model_run(tmp_path):
         experiment_names=["test-tab"],
         output_format="list",
     )
-    child = next(
-        run for run in runs if run.data.tags["mlflow.runName"] == "logistic-regression"
-    )
+    child = next(run for run in runs if run.data.tags["mlflow.runName"] == "logistic-regression")
 
     assert child.data.tags["status"] == "failed"
     assert child.data.tags["failure_stage"] == "training"

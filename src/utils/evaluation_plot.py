@@ -51,25 +51,15 @@ def calculate_comparative_generalizability(
         ["model_mlflow_run_id", "value"],
     ].rename(columns={"value": "training_score"})
     external = external.merge(training, on="model_mlflow_run_id")
-    external["generalizability_loss"] = (
-        external["external_score"] - external["training_score"]
-    )
+    external["generalizability_loss"] = external["external_score"] - external["training_score"]
     groups = ["target", "external_dataset"]
-    external["best_external_score"] = external.groupby(groups, dropna=False)[
-        "external_score"
-    ].transform("max")
-    external["comparative_generalizability_loss"] = (
-        external["external_score"] - external["best_external_score"]
-    )
+    external["best_external_score"] = external.groupby(groups, dropna=False)["external_score"].transform("max")
+    external["comparative_generalizability_loss"] = external["external_score"] - external["best_external_score"]
     external["generalization_rank"] = (
-        external.groupby(groups, dropna=False)["external_score"]
-        .rank(method="min", ascending=False)
-        .astype(int)
+        external.groupby(groups, dropna=False)["external_score"].rank(method="min", ascending=False).astype(int)
     )
     external["model_specific_generalization_rank"] = (
-        external.groupby(groups, dropna=False)["generalizability_loss"]
-        .rank(method="min", ascending=False)
-        .astype(int)
+        external.groupby(groups, dropna=False)["generalizability_loss"].rank(method="min", ascending=False).astype(int)
     )
     return external[
         _MODEL_COLUMNS
@@ -86,9 +76,7 @@ def calculate_comparative_generalizability(
             "generalization_rank",
             "model_specific_generalization_rank",
         ]
-    ].sort_values(
-        ["target", "external_dataset", "generalization_rank", "model_instance"]
-    )
+    ].sort_values(["target", "external_dataset", "generalization_rank", "model_instance"])
 
 
 def plot_score_dumbbell(
@@ -159,11 +147,7 @@ def plot_score_dumbbell(
 
     metric_label = _metric_label(metric)
     score_bounds = pd.concat(
-        [
-            paired[f"{dataset}_{bound}"]
-            for dataset in datasets
-            for bound in ("value", "lower", "upper")
-        ]
+        [paired[f"{dataset}_{bound}"] for dataset in datasets for bound in ("value", "lower", "upper")]
     ).dropna()
     lower_limit = max(0.0, score_bounds.min() - 0.03)
     upper_limit = min(1.0, score_bounds.max() + 0.03)
@@ -196,9 +180,7 @@ def plot_generalization_gaps(
 ) -> Axes:
     """Plot model-specific or comparative external-test loss."""
 
-    gaps = calculate_comparative_generalizability(
-        results, metric=metric, external_dataset=external_dataset
-    )
+    gaps = calculate_comparative_generalizability(results, metric=metric, external_dataset=external_dataset)
     loss_column, rank_column, loss_label = {
         "model_specific": (
             "generalizability_loss",
@@ -235,9 +217,7 @@ def plot_generalization_gaps(
         )
 
     metric_label = _metric_label(metric)
-    centers = ", ".join(
-        dataset.upper() for dataset in gaps["external_dataset"].unique()
-    )
+    centers = ", ".join(dataset.upper() for dataset in gaps["external_dataset"].unique())
     ax.axvline(0, color="#333333", linewidth=0.8)
     ax.set_yticks(positions, gaps["model_label"])
     ax.invert_yaxis()
@@ -261,9 +241,7 @@ def plot_performance_vs_runtime(
 ) -> Axes:
     """Plot external-test performance against model runtime."""
 
-    comparison = calculate_comparative_generalizability(
-        results, metric=metric, external_dataset=external_dataset
-    )
+    comparison = calculate_comparative_generalizability(results, metric=metric, external_dataset=external_dataset)
     timings = (
         results.loc[
             (results["scope"] == "test") & results[runtime_metric].notna(),
@@ -319,9 +297,7 @@ def plot_performance_vs_runtime(
     )
 
     metric_label = _metric_label(metric)
-    centers = ", ".join(
-        dataset.upper() for dataset in plot_data["external_dataset"].unique()
-    )
+    centers = ", ".join(dataset.upper() for dataset in plot_data["external_dataset"].unique())
     ax.set_xscale("log")
     ax.set(
         xlabel=_runtime_label(runtime_scope, runtime_metric),

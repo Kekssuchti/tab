@@ -27,13 +27,9 @@ def _(config, pd):
 
     df_tudd_read = pd.read_csv(config.dir_data / "extracted" / "tudd_readmission.csv")
 
-    df_mimic_read = pd.read_csv(
-        config.dir_data / "extracted" / "mimic4_readmission.csv"
-    )
+    df_mimic_read = pd.read_csv(config.dir_data / "extracted" / "mimic4_readmission.csv")
 
-    df_tudd_fil_file = pd.read_csv(
-        config.dir_data / "filtered" / "tudd_mean_100_full.csv"
-    )
+    df_tudd_fil_file = pd.read_csv(config.dir_data / "filtered" / "tudd_mean_100_full.csv")
     return df_mimic, df_mimic_read, df_tudd, df_tudd_read
 
 
@@ -104,9 +100,7 @@ def _(df_tudd_filt):
 def _(config, df_tudd_read, pd, standard_preprocessing):
     df_tudd_read_filter = standard_preprocessing(df_tudd_read, "tudd", readmission=True)
 
-    df_tudd_read_filt = pd.read_csv(
-        config.dir_data / "filtered" / "tudd_readmission.csv"
-    )
+    df_tudd_read_filt = pd.read_csv(config.dir_data / "filtered" / "tudd_readmission.csv")
 
     print("original: \t\t", len(df_tudd_read))
     print("filter paper: \t", len(df_tudd_read_filt))
@@ -125,9 +119,7 @@ def _(df_tudd_read_filter, dtale):
 
 @app.cell
 def _(df_tudd_filt, df_tudd_filter):
-    missing_cols = df_tudd_filt.columns[
-        ~df_tudd_filt.columns.isin(df_tudd_filter.columns)
-    ]
+    missing_cols = df_tudd_filt.columns[~df_tudd_filt.columns.isin(df_tudd_filter.columns)]
     missing_cols
     return
 

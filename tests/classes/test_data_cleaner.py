@@ -52,21 +52,13 @@ def _write_extracted_data(tmp_path) -> None:
     readmission.to_csv(extracted_path / "tudd_readmission.csv", index=False)
 
 
-def test_data_cleaner_writes_filtered_files_with_preprocessed_content(
-    tmp_path, monkeypatch
-):
+def test_data_cleaner_writes_filtered_files_with_preprocessed_content(tmp_path, monkeypatch):
     _write_extracted_data(tmp_path)
     limits_path = tmp_path / "limits.json"
-    limits_path.write_text(
-        json.dumps({"lab_value": {"lower_bound": 0, "upper_bound": 100}})
-    )
-    monkeypatch.setattr(
-        data_cleaner_module, "config", SimpleNamespace(dir_data=tmp_path)
-    )
+    limits_path.write_text(json.dumps({"lab_value": {"lower_bound": 0, "upper_bound": 100}}))
+    monkeypatch.setattr(data_cleaner_module, "config", SimpleNamespace(dir_data=tmp_path))
 
-    cleaner = DataCleaner(
-        DataCleanerConfig(outlier_limits_path=limits_path, missing_threshold_row=1.0)
-    )
+    cleaner = DataCleaner(DataCleanerConfig(outlier_limits_path=limits_path, missing_threshold_row=1.0))
 
     cleaner.preprocess_extracted_to_filtered()
 

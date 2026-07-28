@@ -35,9 +35,7 @@ def remove_impossible_values(df, json_file_path):
             upper_bound = bounds["upper_bound"]
 
             before_count = df[column].notna().sum()
-            df[column] = df[column].apply(
-                lambda x: x if lower_bound <= x <= upper_bound else None
-            )
+            df[column] = df[column].apply(lambda x: x if lower_bound <= x <= upper_bound else None)
             after_count = df[column].notna().sum()
 
             removed_counts[column] = before_count - after_count

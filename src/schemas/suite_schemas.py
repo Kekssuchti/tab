@@ -164,9 +164,7 @@ class SuiteDryRunSummary:
             f"Changed parameters: {changed}",
         ]
         for variant in self.config_variants:
-            overrides = ", ".join(
-                f"{path}={value}" for path, value in variant.overrides.items()
-            )
+            overrides = ", ".join(f"{path}={value}" for path, value in variant.overrides.items())
             lines.append(f"- {variant.variant_id}: {overrides}")
         return "\n".join(lines)
 

@@ -61,9 +61,7 @@ def _(json):
                 upper_bound = bounds["upper_bound"]
 
                 before_count = df[column].notna().sum()
-                df[column] = df[column].apply(
-                    lambda x: x if lower_bound <= x <= upper_bound else None
-                )
+                df[column] = df[column].apply(lambda x: x if lower_bound <= x <= upper_bound else None)
                 after_count = df[column].notna().sum()
 
                 removed_counts[column] = before_count - after_count
@@ -75,9 +73,7 @@ def _(json):
 
 @app.cell
 def _(df_tudd, np, outlier_json, remove_impossible_values):
-    df_tudd_cleaned, tudd_remove_counts = remove_impossible_values(
-        df=df_tudd, json_file_path=outlier_json
-    )
+    df_tudd_cleaned, tudd_remove_counts = remove_impossible_values(df=df_tudd, json_file_path=outlier_json)
 
     print(tudd_remove_counts)
 
@@ -87,9 +83,7 @@ def _(df_tudd, np, outlier_json, remove_impossible_values):
 
 @app.cell
 def _(df_mimic, np, outlier_json, remove_impossible_values):
-    df_mimic_cleaned, mimic_remove_counts = remove_impossible_values(
-        df=df_mimic, json_file_path=outlier_json
-    )
+    df_mimic_cleaned, mimic_remove_counts = remove_impossible_values(df=df_mimic, json_file_path=outlier_json)
 
     print(mimic_remove_counts)
 
@@ -123,9 +117,7 @@ def _(df_mimic_read, np, outlier_json, remove_impossible_values):
 
 @app.cell
 def _(config, pathlib, plt, sns):
-    def plot_feature_comparision(
-        df_mimic, df_tudd, feature, save=False, path_addition="features"
-    ):
+    def plot_feature_comparision(df_mimic, df_tudd, feature, save=False, path_addition="features"):
         print(feature)
         plt.figure(figsize=(8, 5))
 
@@ -280,13 +272,9 @@ def _(features, pd):
             if pd.api.types.is_numeric_dtype(df[feature]):
                 mean_val = df[feature].mean()
                 std_val = df[feature].std()
-                print(
-                    f"{feature:<30} {missing_pct:10.2f} {mean_val:15.3f} {std_val:15.3f}"
-                )
+                print(f"{feature:<30} {missing_pct:10.2f} {mean_val:15.3f} {std_val:15.3f}")
             else:
-                print(
-                    f"{feature:<30} {missing_pct:10.2f} {'(categorical)':>15} {'':>15}"
-                )
+                print(f"{feature:<30} {missing_pct:10.2f} {'(categorical)':>15} {'':>15}")
                 value_counts = df[feature].value_counts(dropna=False)
                 for val, count in value_counts.items():
                     print(f"{'':<30} {str(val):<15} {count} instances")

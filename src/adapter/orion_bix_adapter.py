@@ -9,9 +9,7 @@ from src.utils.logger import logger
 
 
 class OrionBixAdapter(ModelAdapter):
-    def __init__(
-        self, task_type: Literal["classification"] = "classification", **kwargs
-    ) -> None:
+    def __init__(self, task_type: Literal["classification"] = "classification", **kwargs) -> None:
         super().__init__()
         if task_type != "classification":
             logger.error("Got wrong task type for Orion Bix model")

@@ -32,9 +32,7 @@ LIGHTWEIGHT_REGRESSION_MODELS = ["xgboost", "tabswift"]
 
 
 def _make_model(model_name, task_type):
-    spec = model_registry.get_model_spec(
-        ModelConfig(name=model_name, task_type=task_type)
-    )
+    spec = model_registry.get_model_spec(ModelConfig(name=model_name, task_type=task_type))
     return spec.create(task_type=task_type, params={})
 
 
@@ -55,9 +53,7 @@ def _assert_valid_fit_and_predict(model_name, model, X, y, task_type):
     assert len(predictions) == len(X), f"{model_name} returned wrong prediction count"
     if task_type == "classification":
         assert predictions.ndim == 2, f"{model_name} must return class probabilities"
-    assert np.isfinite(predictions).all(), (
-        f"{model_name} returned non-finite predictions"
-    )
+    assert np.isfinite(predictions).all(), f"{model_name} returned non-finite predictions"
 
 
 def _load_regression_data_for_model_smoke_test():
@@ -73,9 +69,7 @@ def test_model_catalog_lookup_and_search_spaces_are_lazy():
 
     importlib.reload(model_registry)
 
-    spec = model_registry.get_model_spec(
-        ModelConfig(name="logistic-regression", task_type="classification")
-    )
+    spec = model_registry.get_model_spec(ModelConfig(name="logistic-regression", task_type="classification"))
     candidates = spec.tuning_candidates(search_space=None, overrides=None)
 
     assert ADAPTER_MODULES.isdisjoint(sys.modules)
@@ -89,15 +83,11 @@ def test_model_catalog_reports_task_specific_unknown_models():
         ValueError,
         match="Unknown classification model 'linear-regression'.*logistic-regression",
     ):
-        model_registry.get_model_spec(
-            ModelConfig(name="linear-regression", task_type="classification")
-        )
+        model_registry.get_model_spec(ModelConfig(name="linear-regression", task_type="classification"))
 
 
 def test_model_spec_uses_explicit_tuning_grid_as_the_search_space():
-    spec = model_registry.get_model_spec(
-        ModelConfig(name="logistic-regression", task_type="classification")
-    )
+    spec = model_registry.get_model_spec(ModelConfig(name="logistic-regression", task_type="classification"))
 
     assert spec.tuning_candidates(None, {"C": [0.1, 1.0]}) == [
         {"C": 0.1},
@@ -110,9 +100,7 @@ def test_model_spec_uses_explicit_tuning_grid_as_the_search_space():
 
 
 def test_model_spec_expands_nested_tuning_grid_keys():
-    spec = model_registry.get_model_spec(
-        ModelConfig(name="tabpfn-3", task_type="classification")
-    )
+    spec = model_registry.get_model_spec(ModelConfig(name="tabpfn-3", task_type="classification"))
 
     assert spec.tuning_candidates(
         None,
@@ -176,15 +164,9 @@ def test_model_spec_samples_mixed_optuna_search_space():
         "log_uniform": 0.1,
         "nested": {"category": "second"},
     }
-    assert trial.distributions["uniform"] == optuna.distributions.FloatDistribution(
-        0.0, 1.0
-    )
-    assert trial.distributions["discrete"] == optuna.distributions.FloatDistribution(
-        0.0, 1.0, step=0.25
-    )
-    assert trial.distributions["log_uniform"] == optuna.distributions.FloatDistribution(
-        1e-3, 1.0, log=True
-    )
+    assert trial.distributions["uniform"] == optuna.distributions.FloatDistribution(0.0, 1.0)
+    assert trial.distributions["discrete"] == optuna.distributions.FloatDistribution(0.0, 1.0, step=0.25)
+    assert trial.distributions["log_uniform"] == optuna.distributions.FloatDistribution(1e-3, 1.0, log=True)
     assert isinstance(
         trial.distributions["nested.category"],
         optuna.distributions.CategoricalDistribution,
@@ -213,9 +195,9 @@ def test_uniform_choice_samples_selected_nested_distribution():
     value = distribution.suggest(trial, "regularization")
 
     assert value == 0.25
-    assert trial.distributions[
-        "regularization.__uniform_choice_1"
-    ] == optuna.distributions.FloatDistribution(1e-16, 1e2, log=True)
+    assert trial.distributions["regularization.__uniform_choice_1"] == optuna.distributions.FloatDistribution(
+        1e-16, 1e2, log=True
+    )
 
 
 def test_uniform_choice_supports_recursive_choices():

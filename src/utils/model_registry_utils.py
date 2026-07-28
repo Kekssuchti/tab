@@ -30,10 +30,7 @@ def _expand_grid(grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
     if any(not value for value in values):
         raise ValueError("Tuning grid values must be non-empty")
 
-    return [
-        _expand_candidate(dict(zip(keys, combination)))
-        for combination in product(*values)
-    ]
+    return [_expand_candidate(dict(zip(keys, combination))) for combination in product(*values)]
 
 
 def _expand_candidate(values: Mapping[str, Any]) -> dict[str, Any]:
@@ -58,9 +55,7 @@ def _set_nested_value(candidate: dict[str, Any], key: str, value: Any) -> None:
             current[part] = {}
         existing = current[part]
         if not isinstance(existing, dict):
-            raise ValueError(
-                f"Tuning grid key '{key}' conflicts with non-nested parameter '{part}'"
-            )
+            raise ValueError(f"Tuning grid key '{key}' conflicts with non-nested parameter '{part}'")
         current = existing
 
     final_key = parts[-1]
@@ -79,12 +74,8 @@ def _load_adapter_cls(adapter_path: str):
     try:
         module = import_module(module_name)
     except ImportError as exc:
-        raise ImportError(
-            f"Could not import model adapter module '{module_name}'"
-        ) from exc
+        raise ImportError(f"Could not import model adapter module '{module_name}'") from exc
     try:
         return getattr(module, class_name)
     except AttributeError as exc:
-        raise ImportError(
-            f"Model adapter '{class_name}' not found in '{module_name}'"
-        ) from exc
+        raise ImportError(f"Model adapter '{class_name}' not found in '{module_name}'") from exc

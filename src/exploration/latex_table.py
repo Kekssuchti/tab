@@ -106,18 +106,13 @@ def performance_table_to_latex(
             raise ValueError(f"Unknown filter column: {column}")
         table_data = table_data.loc[table_data[column].eq(value)]
 
-    table_data = table_data.loc[
-        table_data["scope"].eq("test") & table_data["statistic"].eq("mean")
-    ].copy()
+    table_data = table_data.loc[table_data["scope"].eq("test") & table_data["statistic"].eq("mean")].copy()
     if table_data.empty:
         raise ValueError("No scope='test', statistic='mean' rows match the filters")
 
     trained_on_values = table_data["trained_on"].dropna().unique().tolist()
     if len(trained_on_values) != 1:
-        raise ValueError(
-            "Expected exactly one trained_on value after filtering; found "
-            f"{trained_on_values}"
-        )
+        raise ValueError(f"Expected exactly one trained_on value after filtering; found {trained_on_values}")
     trained_on = str(trained_on_values[0])
 
     available_datasets = table_data["dataset"].dropna().astype(str).unique().tolist()
@@ -129,9 +124,7 @@ def performance_table_to_latex(
         datasets = list(dataset_order)
         unknown_datasets = sorted(set(datasets) - set(available_datasets))
         if unknown_datasets:
-            raise ValueError(
-                f"Datasets not present after filtering: {', '.join(unknown_datasets)}"
-            )
+            raise ValueError(f"Datasets not present after filtering: {', '.join(unknown_datasets)}")
     if not datasets:
         raise ValueError("No test datasets are available")
     table_data = table_data.loc[table_data["dataset"].astype(str).isin(datasets)]
@@ -147,9 +140,7 @@ def performance_table_to_latex(
     counts = table_data.groupby(["model_name", "dataset"], dropna=False).size()
     duplicates = counts[counts > 1]
     if not duplicates.empty:
-        combinations = ", ".join(
-            f"{model}/{dataset}" for model, dataset in duplicates.index.tolist()
-        )
+        combinations = ", ".join(f"{model}/{dataset}" for model, dataset in duplicates.index.tolist())
         raise ValueError(
             "Multiple rows exist for these model/dataset combinations; add filters "
             f"such as pipeline_id or target: {combinations}"
@@ -157,15 +148,10 @@ def performance_table_to_latex(
 
     observed = set(zip(table_data["model_name"], table_data["dataset"]))
     missing_pairs = [
-        f"{model}/{dataset}"
-        for model in models
-        for dataset in datasets
-        if (model, dataset) not in observed
+        f"{model}/{dataset}" for model in models for dataset in datasets if (model, dataset) not in observed
     ]
     if missing_pairs:
-        raise ValueError(
-            "Missing model/dataset evaluation rows: " + ", ".join(missing_pairs)
-        )
+        raise ValueError("Missing model/dataset evaluation rows: " + ", ".join(missing_pairs))
 
     indexed = table_data.set_index(["model_name", "dataset"])
     scale = 100 if percentage else 1
@@ -179,17 +165,11 @@ def performance_table_to_latex(
         return _escape_latex(model_labels.get(model, model))
 
     metric_values = {
-        (model, dataset): _as_number(
-            indexed.loc[(model, dataset), metric], metric, model, dataset
-        )
-        * scale
+        (model, dataset): _as_number(indexed.loc[(model, dataset), metric], metric, model, dataset) * scale
         for model in models
         for dataset in datasets
     }
-    best_metric_values = {
-        dataset: max(metric_values[(model, dataset)] for model in models)
-        for dataset in datasets
-    }
+    best_metric_values = {dataset: max(metric_values[(model, dataset)] for model in models) for dataset in datasets}
 
     def format_cell(model: str, dataset: str) -> str:
         row = indexed.loc[(model, dataset)]
@@ -215,17 +195,12 @@ def performance_table_to_latex(
             delta_values[column] = {}
             for model in models:
                 raw_values = pd.to_numeric(
-                    table_data.loc[
-                        table_data["model_name"].astype(str).eq(model), column
-                    ],
+                    table_data.loc[table_data["model_name"].astype(str).eq(model), column],
                     errors="coerce",
                 ).dropna()
                 unique_values = raw_values.unique().tolist()
                 if len(unique_values) != 1:
-                    raise ValueError(
-                        f"Expected one non-null {column} value for {model}; found "
-                        f"{unique_values}"
-                    )
+                    raise ValueError(f"Expected one non-null {column} value for {model}; found {unique_values}")
                 delta_values[column][model] = float(unique_values[0]) * scale
             best_delta_values[column] = max(delta_values[column].values())
 
@@ -238,15 +213,11 @@ def performance_table_to_latex(
 
     headers = []
     for dataset in datasets:
-        row_counts = table_data.loc[
-            table_data["dataset"].astype(str).eq(dataset), "test_row_count"
-        ].dropna()
+        row_counts = table_data.loc[table_data["dataset"].astype(str).eq(dataset), "test_row_count"].dropna()
         unique_counts = row_counts.unique().tolist()
         if len(unique_counts) > 1:
             raise ValueError(f"Inconsistent test_row_count values for {dataset}")
-        count_suffix = (
-            f" \\\\ ($N = {_format_count(unique_counts[0])}$)" if unique_counts else ""
-        )
+        count_suffix = f" \\\\ ($N = {_format_count(unique_counts[0])}$)" if unique_counts else ""
         headers.append(f"\\makecell{{{display_dataset(dataset)}{count_suffix}}}")
 
     extra_column_count = 2 if include_generalizability else 0
@@ -277,18 +248,11 @@ def performance_table_to_latex(
         ]
     )
 
-    training_sizes = pd.to_numeric(
-        table_data["training_size"], errors="coerce"
-    ).dropna()
+    training_sizes = pd.to_numeric(table_data["training_size"], errors="coerce").dropna()
     unique_training_sizes = training_sizes.unique().tolist()
     if len(unique_training_sizes) != 1:
-        raise ValueError(
-            f"Expected one training_size after filtering; found {unique_training_sizes}"
-        )
-    train_label = (
-        f"\\makecell{{{display_dataset(trained_on)} \\\\ "
-        f"($N = {_format_count(unique_training_sizes[0])}$)}}"
-    )
+        raise ValueError(f"Expected one training_size after filtering; found {unique_training_sizes}")
+    train_label = f"\\makecell{{{display_dataset(trained_on)} \\\\ ($N = {_format_count(unique_training_sizes[0])}$)}}"
     for index, model in enumerate(models):
         # offset by 1 to not fk up midrule
         train_cell = (
@@ -309,19 +273,14 @@ def performance_table_to_latex(
                     format_delta(model, comparative_loss),
                 ]
             )
-        lines.append(
-            f"    {train_cell} & {display_model(model)} & " + " & ".join(cells) + r" \\"
-        )
+        lines.append(f"    {train_cell} & {display_model(model)} & " + " & ".join(cells) + r" \\")
         if model == "xgboost":
             lines.append(r"    \midrule")
 
     metric_label = _escape_latex(metric.replace("_", " ").upper())
     if caption is None:
         interval = " with confidence intervals" if include_ci else ""
-        caption = (
-            f"{metric_label} performance{interval} for models trained on "
-            f"{display_dataset(trained_on)}."
-        )
+        caption = f"{metric_label} performance{interval} for models trained on {display_dataset(trained_on)}."
     if include_ci is False:
         caption = caption.replace(" [95\% CI]", "")
     lines.extend(

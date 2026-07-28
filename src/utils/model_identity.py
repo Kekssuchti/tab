@@ -10,7 +10,5 @@ def model_instance_ids(models: tuple[ModelConfig, ...]) -> list[str]:
     for model in models:
         index = seen[model.name]
         seen[model.name] += 1
-        model_ids.append(
-            model.name if counts[model.name] == 1 else f"{model.name}__{index}"
-        )
+        model_ids.append(model.name if counts[model.name] == 1 else f"{model.name}__{index}")
     return model_ids

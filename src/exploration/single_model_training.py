@@ -131,19 +131,14 @@ def _(
 ):
     def expand_params(params):
         keys = list(params)
-        value_lists = [
-            value if isinstance(value, list) else [value] for value in params.values()
-        ]
+        value_lists = [value if isinstance(value, list) else [value] for value in params.values()]
         return [dict(zip(keys, values)) for values in product(*value_lists)]
 
     dataset_params = DatasetConfig(
         target=TARGET,
         random_state=RANDOM_STATE,
         train_size=TRAIN_SIZE,
-        train_on=tuple(
-            DataSplitConfig(dataset=dataset_name, fraction=fraction)
-            for dataset_name, fraction in TRAIN_ON
-        ),
+        train_on=tuple(DataSplitConfig(dataset=dataset_name, fraction=fraction) for dataset_name, fraction in TRAIN_ON),
         classification=TASK_TYPE == "classification",
         force_repreprocess=FORCE_REPREPROCESS,
         imputer=ImputerConfig(**DATASET_IMPUTER),
@@ -197,9 +192,7 @@ def _(Dataset, asdict, dataset_params, mo, pd):
         [
             mo.md("## Dataset"),
             dataset_table,
-            pd.DataFrame(
-                asdict(file_summary) for file_summary in dataset_summary.data_files
-            ),
+            pd.DataFrame(asdict(file_summary) for file_summary in dataset_summary.data_files),
         ]
     )
     return (data,)
@@ -257,9 +250,7 @@ def _(
         start=1,
     ):
         if model_params.task_type != "classification":
-            raise NotImplementedError(
-                "This notebook currently evaluates classification models only"
-            )
+            raise NotImplementedError("This notebook currently evaluates classification models only")
 
         param_summary = ", ".join(f"{key}={value}" for key, value in params.items())
         trained_model = None
@@ -311,9 +302,7 @@ def _(
         values="rows_per_second_mean",
     ).reset_index()
     speed_table.columns.name = None
-    speed_table = speed_table.rename(
-        columns={dataset: f"rows_per_second_{dataset}" for dataset in TEST_SETS}
-    )
+    speed_table = speed_table.rename(columns={dataset: f"rows_per_second_{dataset}" for dataset in TEST_SETS})
     return evaluation_table, speed_table
 
 
@@ -334,12 +323,8 @@ def _(evaluation_table, mo, speed_table):
 def _(TEST_SETS, speed_table):
     for _, row in speed_table.iterrows():
         params_s = str(row["params"]).replace("_", r"\_")
-        speeds = " / ".join(
-            f"{round(row[f'rows_per_second_{dataset}']):,}" for dataset in TEST_SETS
-        )
-        latex_line = (
-            f"{row['model']} & {params_s} & {row['fit_time_s']:.2f} & {speeds} " + r"\\"
-        )
+        speeds = " / ".join(f"{round(row[f'rows_per_second_{dataset}']):,}" for dataset in TEST_SETS)
+        latex_line = f"{row['model']} & {params_s} & {row['fit_time_s']:.2f} & {speeds} " + r"\\"
         print(latex_line)
     return
 

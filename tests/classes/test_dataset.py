@@ -53,9 +53,7 @@ def _labels_by_record_id(df: pd.DataFrame, target: str) -> dict[int, int | float
     return df.set_index("record_id")[target].to_dict()
 
 
-def _assert_labels_match_rows(
-    X: pd.DataFrame, y: pd.Series, labels_by_id: dict[int, int | float]
-) -> None:
+def _assert_labels_match_rows(X: pd.DataFrame, y: pd.Series, labels_by_id: dict[int, int | float]) -> None:
     actual = dict(zip(X["record_id"], y, strict=True))
     expected = {record_id: labels_by_id[record_id] for record_id in X["record_id"]}
     assert actual == expected
@@ -71,9 +69,7 @@ def _assert_common_feature_shape(bundle) -> None:
     assert set(TARGET_LIKE_COLUMNS).isdisjoint(bundle.test_tudd.X.columns)
 
 
-def test_mortality_dataset_uses_only_normal_task_files_and_assembles_splits(
-    tmp_path, monkeypatch
-):
+def test_mortality_dataset_uses_only_normal_task_files_and_assembles_splits(tmp_path, monkeypatch):
     mimic = _make_rows("mimic", 100, 12).assign(mimic_only_feature=1.0)
     tudd = _make_rows("tudd", 200, 12).assign(tudd_only_feature=2.0)
     _write_filtered_files(
@@ -126,17 +122,12 @@ def test_mortality_dataset_uses_only_normal_task_files_and_assembles_splits(
         "mimic4_mean_100_full.csv",
         "tudd_mean_100_full.csv",
     }
-    assert all(
-        data_file.sha256 and len(data_file.sha256) == 64
-        for data_file in summary.data_files
-    )
+    assert all(data_file.sha256 and len(data_file.sha256) == 64 for data_file in summary.data_files)
     assert not (tmp_path / "filtered" / "mimic4_readmission.csv").exists()
     assert not (tmp_path / "filtered" / "tudd_readmission.csv").exists()
 
 
-def test_readmission_dataset_uses_readmission_task_policy_without_normal_files(
-    tmp_path, monkeypatch
-):
+def test_readmission_dataset_uses_readmission_task_policy_without_normal_files(tmp_path, monkeypatch):
     mimic_readmission = _make_rows("mimic", 300, 10).assign(mimic_only_feature=1.0)
     tudd_readmission = _make_rows("tudd", 400, 10).assign(tudd_only_feature=2.0)
     _write_filtered_files(
@@ -168,9 +159,7 @@ def test_readmission_dataset_uses_readmission_task_policy_without_normal_files(
     assert set(bundle.test_tudd.y.unique()) <= {0, 1}
     _assert_common_feature_shape(bundle)
 
-    labels = _labels_by_record_id(
-        pd.concat([mimic_readmission, tudd_readmission]), "hours_to_readmit"
-    )
+    labels = _labels_by_record_id(pd.concat([mimic_readmission, tudd_readmission]), "hours_to_readmit")
     _assert_labels_match_rows(bundle.train_data.X, bundle.train_data.y, labels)
     _assert_labels_match_rows(bundle.test_mimic.X, bundle.test_mimic.y, labels)
     _assert_labels_match_rows(bundle.test_tudd.X, bundle.test_tudd.y, labels)

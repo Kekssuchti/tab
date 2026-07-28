@@ -132,19 +132,14 @@ def load_evaluation_data(
 
     client = MlflowClient(tracking_uri=tracking_uri)
     experiments = _get_experiments(client, experiment_names)
-    all_pipeline_runs, all_model_runs = _get_pipeline_and_model_runs(
-        client, experiments
-    )
+    all_pipeline_runs, all_model_runs = _get_pipeline_and_model_runs(client, experiments)
     selected_pipeline_runs = _select_pipeline_runs(all_pipeline_runs, pipeline_runs)
-    selected_parent_ids = {
-        pipeline_run.run.info.run_id for pipeline_run in selected_pipeline_runs
-    }
+    selected_parent_ids = {pipeline_run.run.info.run_id for pipeline_run in selected_pipeline_runs}
     selected_models = _select_models(
         [
             model_run
             for model_run in _successful_models(all_model_runs)
-            if model_run.data.tags.get(TAG_PIPELINE_MLFLOW_RUN_ID)
-            in selected_parent_ids
+            if model_run.data.tags.get(TAG_PIPELINE_MLFLOW_RUN_ID) in selected_parent_ids
         ],
         models,
     )
@@ -161,11 +156,7 @@ def _get_experiments(
     client: MlflowClient,
     experiment_names: str | Sequence[str],
 ) -> tuple[Experiment, ...]:
-    names = (
-        (experiment_names,)
-        if isinstance(experiment_names, str)
-        else tuple(dict.fromkeys(experiment_names))
-    )
+    names = (experiment_names,) if isinstance(experiment_names, str) else tuple(dict.fromkeys(experiment_names))
     if not names:
         raise ValueError("At least one MLflow experiment name is required")
 
@@ -233,10 +224,7 @@ def _search_runs(
 def _successful_models(model_runs: list[Run]) -> list[Run]:
     finished = RunStatus.to_string(RunStatus.FINISHED)
     return [
-        run
-        for run in model_runs
-        if run.data.tags.get(TAG_STATUS) == STATUS_SUCCESS
-        and run.info.status == finished
+        run for run in model_runs if run.data.tags.get(TAG_STATUS) == STATUS_SUCCESS and run.info.status == finished
     ]
 
 
@@ -247,11 +235,7 @@ def _select_pipeline_runs(
     requested = _selectors(selectors)
     if requested is None:
         return pipeline_runs
-    selected = [
-        pipeline_run
-        for pipeline_run in pipeline_runs
-        if requested & _pipeline_selectors(pipeline_run.run)
-    ]
+    selected = [pipeline_run for pipeline_run in pipeline_runs if requested & _pipeline_selectors(pipeline_run.run)]
     available = set().union(*(_pipeline_selectors(item.run) for item in selected))
     _raise_for_unmatched("pipeline runs", requested, available)
     return selected
@@ -307,8 +291,7 @@ def _pipeline_run_row(
         run_name=_tag(run, "mlflow.runName"),
         experiment_name=pipeline_run.experiment.name,
         model_instances=tuple(_tag(model, TAG_MODEL_INSTANCE) for model in model_runs),
-        target=run.data.tags.get(TAG_TARGET)
-        or run.data.params.get(PARAM_DATASET_TARGET),
+        target=run.data.tags.get(TAG_TARGET) or run.data.params.get(PARAM_DATASET_TARGET),
         trained_on=run.data.tags.get(TAG_TRAINED_ON),
         train_sources=_csv_tag(run, TAG_TRAIN_SOURCES),
     )
@@ -327,8 +310,7 @@ def _model_measurements(
         model_mlflow_run_id=model_run.info.run_id,
         model_name=_tag(model_run, TAG_MODEL_NAME),
         model_instance=_tag(model_run, TAG_MODEL_INSTANCE),
-        target=parent.data.tags.get(TAG_TARGET)
-        or parent.data.params.get(PARAM_DATASET_TARGET),
+        target=parent.data.tags.get(TAG_TARGET) or parent.data.params.get(PARAM_DATASET_TARGET),
         trained_on=model_run.data.tags.get(TAG_TRAINED_ON),
         train_sources=_csv_tag(model_run, TAG_TRAIN_SOURCES),
         training_size=_training_size(parent),
@@ -348,9 +330,7 @@ def _test_scores(
     dataset: str,
 ) -> list[_Measurement]:
     metric_names = {
-        metric
-        for name in run.data.metrics
-        if (metric := parse_test_score_metric(name, dataset)) is not None
+        metric for name in run.data.metrics if (metric := parse_test_score_metric(name, dataset)) is not None
     }
     measurements = []
     for metric in sorted(metric_names):
@@ -424,12 +404,8 @@ def _times(
             value=run.data.metrics[mlflow_name],
             statistic="point",
             unit="seconds",
-            n_classes=_integer_param(run, test_n_classes_param(dataset))
-            if dataset is not None
-            else None,
-            test_row_count=_test_row_count(parent, dataset)
-            if dataset is not None
-            else None,
+            n_classes=_integer_param(run, test_n_classes_param(dataset)) if dataset is not None else None,
+            test_row_count=_test_row_count(parent, dataset) if dataset is not None else None,
         )
         for mlflow_name, scope, dataset, metric in specs
         if mlflow_name in run.data.metrics
@@ -487,13 +463,7 @@ def _wide_measurement_frame(measurements: list[_Measurement]) -> pd.DataFrame:
         "n_classes",
         "test_row_count",
     ]
-    score_metrics = sorted(
-        {
-            measurement.metric
-            for measurement in measurements
-            if measurement.kind == "score"
-        }
-    )
+    score_metrics = sorted({measurement.metric for measurement in measurements if measurement.kind == "score"})
     timing_columns = [
         "cv_time",
         "fit_time",
@@ -505,9 +475,7 @@ def _wide_measurement_frame(measurements: list[_Measurement]) -> pd.DataFrame:
     collisions = reserved_columns & set(score_metrics)
     if collisions:
         names = ", ".join(sorted(collisions))
-        raise ValueError(
-            f"MLflow metric names conflict with evaluation columns: {names}"
-        )
+        raise ValueError(f"MLflow metric names conflict with evaluation columns: {names}")
 
     grouped: dict[tuple[object, ...], dict[str, object]] = {}
     for measurement in measurements:
@@ -525,9 +493,7 @@ def _wide_measurement_frame(measurements: list[_Measurement]) -> pd.DataFrame:
             if value is not None:
                 existing = row.get(column)
                 if existing is not None and existing != value:
-                    raise ValueError(
-                        f"Inconsistent {column} values for evaluation row {key!r}"
-                    )
+                    raise ValueError(f"Inconsistent {column} values for evaluation row {key!r}")
                 row[column] = value
         row[measurement.metric] = measurement.value
         if measurement.scope == "test":
@@ -544,9 +510,7 @@ def _wide_measurement_frame(measurements: list[_Measurement]) -> pd.DataFrame:
     for measurement in measurements:
         if measurement.kind != "time":
             continue
-        column = timing_names.get(
-            (measurement.scope, measurement.dataset, measurement.metric)
-        )
+        column = timing_names.get((measurement.scope, measurement.dataset, measurement.metric))
         if column is not None:
             model_key = astuple(measurement)[: len(context_columns)]
             timings_by_model.setdefault(model_key, {})[column] = measurement.value
@@ -555,17 +519,11 @@ def _wide_measurement_frame(measurements: list[_Measurement]) -> pd.DataFrame:
     for key, row in grouped.items():
         timing_values = timings_by_model.get(key[: len(context_columns)], {})
         row.update(timing_values)
-        present_values = [
-            timing_values[column]
-            for column in component_columns
-            if column in timing_values
-        ]
+        present_values = [timing_values[column] for column in component_columns if column in timing_values]
         row["total_time"] = sum(present_values) if present_values else None
 
     metric_columns = [
-        column
-        for metric in score_metrics
-        for column in (metric, f"{metric}_ci_lower", f"{metric}_ci_upper")
+        column for metric in score_metrics for column in (metric, f"{metric}_ci_lower", f"{metric}_ci_upper")
     ]
     columns = row_columns + metadata_columns + metric_columns + timing_columns
     frame = pd.DataFrame.from_records(list(grouped.values()), columns=columns)
@@ -605,11 +563,7 @@ def _add_generalizability_losses(
         frame.loc[external_rows, generalizability] = external_scores - frame.loc[
             external_rows, "model_mlflow_run_id"
         ].map(training_scores)
-        best_external = (
-            frame.loc[external_rows]
-            .groupby(["target", "dataset"], dropna=False)[metric]
-            .transform("max")
-        )
+        best_external = frame.loc[external_rows].groupby(["target", "dataset"], dropna=False)[metric].transform("max")
         frame.loc[external_rows, comparative] = external_scores - best_external
     return frame
 
@@ -634,9 +588,7 @@ def _present(*values: str | None) -> set[str]:
 def _tag(run: Run, name: str) -> str:
     value = run.data.tags.get(name)
     if value is None:
-        raise ValueError(
-            f"MLflow run {run.info.run_id} is missing required tag {name!r}"
-        )
+        raise ValueError(f"MLflow run {run.info.run_id} is missing required tag {name!r}")
     return value
 
 

@@ -88,9 +88,7 @@ def _tuned_training_result(model_name: str) -> ModelTrainingResult:
 
 
 def test_pipeline_exposes_tuned_test_metrics_as_model_result():
-    result = Pipeline._model_result_from_training_result(
-        _tuned_training_result("fake-classifier")
-    )
+    result = Pipeline._model_result_from_training_result(_tuned_training_result("fake-classifier"))
 
     assert result.model_name == "fake-classifier"
     assert np.isclose(result.total_time, 0.5)

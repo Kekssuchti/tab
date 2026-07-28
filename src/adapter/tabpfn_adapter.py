@@ -20,9 +20,7 @@ class TabPFNAdapter(ModelAdapter):
         super().__init__()
         self.task_type = task_type
         self.version = version
-        self.predict_batch_size = kwargs.pop(
-            "predict_batch_size", 2048
-        )  # default no batching
+        self.predict_batch_size = kwargs.pop("predict_batch_size", 2048)  # default no batching
         default_kwargs = {
             "fit_mode": "fit_with_cache",
             "random_state": config.seed,
@@ -47,13 +45,9 @@ class TabPFNAdapter(ModelAdapter):
 
     def _load_model(self):
         if self.task_type == "classification":
-            model = TabPFNClassifier.create_default_for_version(
-                self.version, **self.kwargs
-            )
+            model = TabPFNClassifier.create_default_for_version(self.version, **self.kwargs)
         else:
-            model = TabPFNRegressor.create_default_for_version(
-                self.version, **self.kwargs
-            )
+            model = TabPFNRegressor.create_default_for_version(self.version, **self.kwargs)
         return model
 
     def fit(self, X_train, y_train):
@@ -74,9 +68,7 @@ class TabPFNAdapter(ModelAdapter):
         predictions = []
         for start in range(0, len(X_test), self.predict_batch_size):
             stop = start + self.predict_batch_size
-            predictions.append(
-                self._predict_single_batch(self._slice_rows(X_test, start, stop))
-            )
+            predictions.append(self._predict_single_batch(self._slice_rows(X_test, start, stop)))
         return np.concatenate(predictions, axis=0)
 
     def _predict_single_batch(self, X_test):

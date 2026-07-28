@@ -51,9 +51,7 @@ def descriptive_statistics_table_to_latex(
 
     The table uses the LaTeX ``booktabs`` and ``graphicx`` packages.
     """
-    data_dir = (
-        Path(filtered_dir) if filtered_dir is not None else config.dir_data / "filtered"
-    )
+    data_dir = Path(filtered_dir) if filtered_dir is not None else config.dir_data / "filtered"
     files = {
         "mimic": data_dir / "mimic4_mean_100_full.csv",
         "tudd": data_dir / "tudd_mean_100_full.csv",
@@ -66,9 +64,7 @@ def descriptive_statistics_table_to_latex(
     for dataset in ("mimic", "tudd"):
         missing = sorted(required_features - set(data[dataset].columns))
         if missing:
-            raise ValueError(
-                f"{files[dataset]} is missing required columns: {', '.join(missing)}"
-            )
+            raise ValueError(f"{files[dataset]} is missing required columns: {', '.join(missing)}")
 
     def format_number(value: float) -> str:
         return "--" if pd.isna(value) else f"{value:.2f}"
@@ -111,10 +107,7 @@ def descriptive_statistics_table_to_latex(
         ),
     )
     for label, mimic_value, tudd_value in outcomes:
-        rows.append(
-            f"        {label} & {mimic_value:.2f} & -- & 0.00"
-            f" & {tudd_value:.2f} & -- & 0.00" + r" \\"
-        )
+        rows.append(f"        {label} & {mimic_value:.2f} & -- & 0.00 & {tudd_value:.2f} & -- & 0.00" + r" \\")
 
     lines = [
         r"\begin{table}[htbp]",

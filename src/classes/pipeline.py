@@ -33,8 +33,7 @@ class Pipeline:
 
     def run(
         self,
-        on_model_complete: Callable[[PipelineRunRecord, ModelRunRecord], None]
-        | None = None,
+        on_model_complete: Callable[[PipelineRunRecord, ModelRunRecord], None] | None = None,
     ) -> PipelineRunRecord:
         start_time = perf_counter()
         target = getattr(self.pipeline_config.dataset, "target", "unknown")
@@ -64,13 +63,9 @@ class Pipeline:
             try:
                 tr = trainer.train_evaluate_model(model_config, data)
                 mr = self._model_result_from_training_result(tr)
-                logger.info(
-                    f"Model {model_instance_id} trained and evaluated successfully"
-                )
+                logger.info(f"Model {model_instance_id} trained and evaluated successfully")
             except Exception as exc:
-                logger.exception(
-                    f"Model {model_config.name} failed during {failure_stage}; continuing"
-                )
+                logger.exception(f"Model {model_config.name} failed during {failure_stage}; continuing")
                 if tr is None:
                     tr = self._failed_training_result(
                         model_config=model_config,

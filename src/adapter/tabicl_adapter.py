@@ -45,10 +45,7 @@ class TabICLAdapter(ModelAdapter):
 
     def predict(self, X_test):
         start_time = timer()
-        if (
-            self.predict_batch_size is not None
-            and len(X_test) > self.predict_batch_size
-        ):
+        if self.predict_batch_size is not None and len(X_test) > self.predict_batch_size:
             result = self._predict_batched(X_test)
             return np.asarray(result), timer() - start_time
 
@@ -59,9 +56,7 @@ class TabICLAdapter(ModelAdapter):
         predictions = []
         for start in range(0, len(X_test), self.predict_batch_size):
             stop = start + self.predict_batch_size
-            predictions.append(
-                self._predict_single_batch(self._slice_rows(X_test, start, stop))
-            )
+            predictions.append(self._predict_single_batch(self._slice_rows(X_test, start, stop)))
         return np.concatenate(predictions, axis=0)
 
     def _predict_single_batch(self, X_test):

@@ -21,16 +21,9 @@ def pipeline_result_to_dict(result: PipelineRunRecord) -> dict[str, Any]:
         "run_id": result.run_id,
         "total_time": _json_safe(result.total_time),
         "dataset_summary": _dataclass_to_dict(result.dataset_summary),
-        "model_runs": [
-            _model_run_to_dict(model_run) for model_run in result.model_runs
-        ],
-        "model_results": [
-            _dataclass_to_dict(model_result) for model_result in result.model_results
-        ],
-        "training_results": [
-            training_result_to_dict(training_result)
-            for training_result in result.training_results
-        ],
+        "model_runs": [_model_run_to_dict(model_run) for model_run in result.model_runs],
+        "model_results": [_dataclass_to_dict(model_result) for model_result in result.model_results],
+        "training_results": [training_result_to_dict(training_result) for training_result in result.training_results],
     }
 
 
@@ -62,10 +55,7 @@ def _dataclass_to_dict(value: Any) -> Any:
     if not is_dataclass(value):
         return _json_safe(value)
 
-    return {
-        field.name: _dataclass_to_dict(getattr(value, field.name))
-        for field in fields(value)
-    }
+    return {field.name: _dataclass_to_dict(getattr(value, field.name)) for field in fields(value)}
 
 
 def _json_safe(value: Any) -> Any:

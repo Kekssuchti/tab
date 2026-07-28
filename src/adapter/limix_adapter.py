@@ -106,10 +106,7 @@ class LimixAdapter(ModelAdapter):
 
     def predict(self, X_test):
         start_time = timer()
-        if (
-            self.predict_batch_size is not None
-            and len(X_test) > self.predict_batch_size
-        ):
+        if self.predict_batch_size is not None and len(X_test) > self.predict_batch_size:
             result = self._predict_batched(X_test)
             return result, timer() - start_time
 
@@ -121,24 +118,18 @@ class LimixAdapter(ModelAdapter):
         predictions = []
         for start in range(0, len(X_test), self.predict_batch_size):
             stop = start + self.predict_batch_size
-            predictions.append(
-                self._predict_single_batch(self._slice_rows(X_test, start, stop))
-            )
+            predictions.append(self._predict_single_batch(self._slice_rows(X_test, start, stop)))
         return self._concat_predictions(predictions)
 
     def _predict_single_batch(self, X_test):
-        result = self.model.predict(
-            self.X_train, self.y_train, X_test, task_type=self.task_type.capitalize()
-        )
+        result = self.model.predict(self.X_train, self.y_train, X_test, task_type=self.task_type.capitalize())
         return result
 
     @staticmethod
     def _concat_predictions(predictions):
         if torch.is_tensor(predictions[0]):
             return torch.cat(predictions, dim=0)
-        return np.concatenate(
-            [np.asarray(prediction) for prediction in predictions], axis=0
-        )
+        return np.concatenate([np.asarray(prediction) for prediction in predictions], axis=0)
 
     @staticmethod
     def _slice_rows(X, start: int, stop: int):

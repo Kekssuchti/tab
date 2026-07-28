@@ -15,22 +15,15 @@ from src.utils.config_io import load_pipeline_config
 class ExperimentSuite:
     """Expand an experiment suite config into concrete pipeline variants."""
 
-    def __init__(
-        self, experiment_suite_config: ExperimentSuiteConfig, suite_path: str | Path
-    ):
+    def __init__(self, experiment_suite_config: ExperimentSuiteConfig, suite_path: str | Path):
         self.experiment_suite_config = experiment_suite_config
         self.suite_path = Path(suite_path)
 
     def expand(self) -> tuple[ExpandedPipelineConfig, ...]:
         pipeline_config = load_pipeline_config(self._base_config_path())
         variants = []
-        override_paths = tuple(
-            override.path for override in self.experiment_suite_config.matrix
-        )
-        value_sets = tuple(
-            override.expanded_values()
-            for override in self.experiment_suite_config.matrix
-        )
+        override_paths = tuple(override.path for override in self.experiment_suite_config.matrix)
+        value_sets = tuple(override.expanded_values() for override in self.experiment_suite_config.matrix)
 
         for index, values in enumerate(product(*value_sets)):
             overrides = dict(zip(override_paths, values, strict=True))
@@ -56,9 +49,7 @@ class ExperimentSuite:
             config_count=len(variants),
             models_per_config=models_per_config,
             total_model_runs=len(variants) * models_per_config,
-            changed_parameters=tuple(
-                override.path for override in self.experiment_suite_config.matrix
-            ),
+            changed_parameters=tuple(override.path for override in self.experiment_suite_config.matrix),
             config_variants=variants,
         )
 

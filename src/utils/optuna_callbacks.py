@@ -14,17 +14,12 @@ def stop_stale_study(
         return
 
     completed_trials = [
-        completed_trial
-        for completed_trial in study.get_trials(deepcopy=False)
-        if completed_trial.value is not None
+        completed_trial for completed_trial in study.get_trials(deepcopy=False) if completed_trial.value is not None
     ]
     if len(completed_trials) < minimum_trials:
         return
 
     best_trial_number = study.best_trial.number
-    completed_since_best = sum(
-        completed_trial.number > best_trial_number
-        for completed_trial in completed_trials
-    )
+    completed_since_best = sum(completed_trial.number > best_trial_number for completed_trial in completed_trials)
     if completed_since_best >= patience:
         study.stop()

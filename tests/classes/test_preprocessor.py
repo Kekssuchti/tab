@@ -132,12 +132,8 @@ def test_missingness_flags_are_added_only_when_requested():
             "age": [70.0, 80.0],
         }
     )
-    without_flags = _preprocessor(
-        X_train, X_test, imputation_method="mean", flag_missing=False
-    ).build_pipeline()
-    with_flags = _preprocessor(
-        X_train, X_test, imputation_method="mean", flag_missing=True
-    ).build_pipeline()
+    without_flags = _preprocessor(X_train, X_test, imputation_method="mean", flag_missing=False).build_pipeline()
+    with_flags = _preprocessor(X_train, X_test, imputation_method="mean", flag_missing=True).build_pipeline()
 
     assert without_flags.fit_transform(X_train).shape == (3, 2)
     transformed_train = with_flags.fit_transform(X_train)
@@ -161,9 +157,7 @@ def test_standardization_learns_statistics_from_training_data_only():
             "age": [40.0],
         }
     )
-    pipeline = _preprocessor(
-        X_train, X_test, scaler_type="standardization"
-    ).build_pipeline()
+    pipeline = _preprocessor(X_train, X_test, scaler_type="standardization").build_pipeline()
 
     transformed_train = pipeline.fit_transform(X_train)
     transformed_test = pipeline.transform(X_test)
@@ -172,9 +166,7 @@ def test_standardization_learns_statistics_from_training_data_only():
     np.testing.assert_allclose(transformed_train.std(axis=0), [1.0, 1.0], atol=1e-12)
     np.testing.assert_allclose(
         transformed_test,
-        np.array(
-            [[(7.0 - 3.0) / np.sqrt(8.0 / 3.0), (40.0 - 20.0) / np.sqrt(200.0 / 3.0)]]
-        ),
+        np.array([[(7.0 - 3.0) / np.sqrt(8.0 / 3.0), (40.0 - 20.0) / np.sqrt(200.0 / 3.0)]]),
     )
 
 
@@ -185,9 +177,7 @@ def test_knn_imputation_outputs_complete_data_with_original_shape():
             "age": [40.0, 50.0, 42.0, 80.0],
         }
     )
-    pipeline = _preprocessor(
-        X_train, imputation_method="knn", knn_neighbors=2
-    ).build_pipeline()
+    pipeline = _preprocessor(X_train, imputation_method="knn", knn_neighbors=2).build_pipeline()
 
     transformed = pipeline.fit_transform(X_train)
 

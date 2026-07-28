@@ -74,9 +74,7 @@ DATA_FILES_NORMAL: dict[DatasetName, DataFile] = {
 }
 
 DATA_FILES_READMISSION: dict[DatasetName, DataFile] = {
-    "mimic_readmission": DataFile(
-        "mimic", "mimic4_readmission.csv", is_readmission=True
-    ),
+    "mimic_readmission": DataFile("mimic", "mimic4_readmission.csv", is_readmission=True),
     "tudd_readmission": DataFile("tudd", "tudd_readmission.csv", is_readmission=True),
 }
 

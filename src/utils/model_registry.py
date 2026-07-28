@@ -45,28 +45,18 @@ class ModelSpec:
 
     adapter_path: str
     default_params: dict[str, Any] = field(default_factory=dict)
-    search_spaces: Mapping[str, Mapping[str, SearchDomain]] = field(
-        default_factory=dict
-    )
+    search_spaces: Mapping[str, Mapping[str, SearchDomain]] = field(default_factory=dict)
 
     def create(self, task_type: TaskType, params: dict[str, Any]) -> "ModelAdapter":
         adapter_cls = _load_adapter_cls(self.adapter_path)
         return adapter_cls(task_type=task_type, **{**self.default_params, **params})
 
-    def tuning_grid(
-        self, search_space: str | None, overrides: dict[str, list[Any]] | None
-    ) -> dict[str, list[Any]]:
+    def tuning_grid(self, search_space: str | None, overrides: dict[str, list[Any]] | None) -> dict[str, list[Any]]:
         space = self.tuning_search_space(search_space, overrides)
-        distributions = [
-            key
-            for key, domain in space.items()
-            if isinstance(domain, OptunaDistribution)
-        ]
+        distributions = [key for key, domain in space.items() if isinstance(domain, OptunaDistribution)]
         if distributions:
             joined = ", ".join(distributions)
-            raise ValueError(
-                "Grid tuning cannot expand distribution domains: " + joined
-            )
+            raise ValueError("Grid tuning cannot expand distribution domains: " + joined)
         return {key: list(domain) for key, domain in space.items()}
 
     def tuning_search_space(
@@ -81,9 +71,7 @@ class ModelSpec:
             return _copy_search_space(self.search_spaces[search_space])
         except KeyError as exc:
             available = ", ".join(sorted(self.search_spaces)) or "none"
-            raise ValueError(
-                f"Unknown tuning search space '{search_space}'. Available: {available}"
-            ) from exc
+            raise ValueError(f"Unknown tuning search space '{search_space}'. Available: {available}") from exc
 
     def tuning_candidates(
         self, search_space: str | None, overrides: dict[str, list[Any]] | None
@@ -128,8 +116,7 @@ class ModelCatalog:
         except KeyError as exc:
             available = ", ".join(sorted(registry))
             raise ValueError(
-                f"Unknown {model_params.task_type} model '{model_params.name}'. "
-                f"Available models: {available}"
+                f"Unknown {model_params.task_type} model '{model_params.name}'. Available models: {available}"
             ) from exc
 
     def available_models(self, task_type: TaskType) -> tuple[str, ...]:
@@ -183,12 +170,8 @@ SEARCH_SPACES = {
             "colsample_bytree": Uniform(0.2, 1),
             "colsample_bylevel": Uniform(0.2, 1),
             "min_child_weight": LogUniform(np.e**-16, np.e**5),  # 1.125e-07 - 148.413
-            "reg_alpha": UniformChoice(
-                0, LogUniform(np.e**-16, np.e**2)
-            ),  # l1 regularization
-            "reg_lambda": UniformChoice(
-                0, LogUniform(np.e**-16, np.e**2)
-            ),  # l2 regularization
+            "reg_alpha": UniformChoice(0, LogUniform(np.e**-16, np.e**2)),  # l1 regularization
+            "reg_lambda": UniformChoice(0, LogUniform(np.e**-16, np.e**2)),  # l2 regularization
         },
     },
     "ebm": {
@@ -214,12 +197,8 @@ SEARCH_SPACES = {
             "n_estimators": [1, 4, 8, 16, 32],
             "softmax_temperature": Uniform(0.7, 1.1),
             "balance_probabilities": [True, False],
-            "inference_config.SUBSAMPLE_SAMPLES": UniformChoice(
-                None, DiscreteUniform(0.1, 0.8, 0.1)
-            ),
-            "inference_config.POLYNOMIAL_FEATURES": UniformChoice(
-                "no", DiscreteUniform(1, 20, 1)
-            ),
+            "inference_config.SUBSAMPLE_SAMPLES": UniformChoice(None, DiscreteUniform(0.1, 0.8, 0.1)),
+            "inference_config.POLYNOMIAL_FEATURES": UniformChoice("no", DiscreteUniform(1, 20, 1)),
             "inference_config.ENABLE_GPU_PREPROCESSING": [True],
         },
         "best": {
@@ -232,16 +211,12 @@ SEARCH_SPACES = {
             "n_estimators": [1, 2],  # oom else
             "softmax_temperature": Uniform(0.7, 1.1),
             "balance_probabilities": [True, False],
-            "inference_config.SUBSAMPLE_SAMPLES": UniformChoice(
-                None, DiscreteUniform(0.1, 0.8, 0.1)
-            ),
-            "inference_config.POLYNOMIAL_FEATURES": UniformChoice(
-                "no", DiscreteUniform(1, 20, 1)
-            ),
+            "inference_config.SUBSAMPLE_SAMPLES": UniformChoice(None, DiscreteUniform(0.1, 0.8, 0.1)),
+            "inference_config.POLYNOMIAL_FEATURES": UniformChoice("no", DiscreteUniform(1, 20, 1)),
             "inference_config.ENABLE_GPU_PREPROCESSING": [True],
         },
     },
-    "tabicl-2": {
+    "tabicl": {
         "default": {
             "n_estimators": [4, 8, 16],
             "softmax_temperature": [0.75, 0.8, 0.9, 0.95, 1],
@@ -348,7 +323,7 @@ MODEL_REGISTRY_CLS = {
     ),
     "tabicl-2": ModelSpec(
         TABICL_ADAPTER,
-        search_spaces=SEARCH_SPACES["tabicl-2"],
+        search_spaces=SEARCH_SPACES["tabicl"],
     ),
     "limix-2m": ModelSpec(
         LIMIX_ADAPTER,

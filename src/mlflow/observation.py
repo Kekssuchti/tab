@@ -53,7 +53,6 @@ from src.schemas.run_records import (
 )
 from src.schemas.training_schemas import ModelConfig
 from src.utils.evaluation_utils import (
-    calculate_mean_ci,
     classification_score,
     mean_classification_metrics,
 )

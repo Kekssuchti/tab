@@ -211,12 +211,7 @@ class MLflowPipelineLogger:
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
-            log_evaluations(
-                evaluations=[
-                    _make_mlflow_evaluation(evaluation)
-                    for evaluation in observation.evaluations
-                ]
-            )
+            log_evaluations(evaluations=[_make_mlflow_evaluation(evaluation) for evaluation in observation.evaluations])
         mlflow.log_table(
             data=table_rows_to_columns(observation.table_rows),
             artifact_file="evaluation_metrics.json",
@@ -234,15 +229,9 @@ class MLflowPipelineLogger:
         cv_dir = temp_dir / "cv_results"
         cv_dir.mkdir()
 
-        config_path.write_text(
-            json.dumps(pipeline_config_to_dict(params), indent=2), encoding="utf-8"
-        )
-        result_path.write_text(
-            json.dumps(pipeline_result_to_dict(result), indent=2), encoding="utf-8"
-        )
-        environment_path.write_text(
-            json.dumps(_environment_info(), indent=2), encoding="utf-8"
-        )
+        config_path.write_text(json.dumps(pipeline_config_to_dict(params), indent=2), encoding="utf-8")
+        result_path.write_text(json.dumps(pipeline_result_to_dict(result), indent=2), encoding="utf-8")
+        environment_path.write_text(json.dumps(_environment_info(), indent=2), encoding="utf-8")
 
         for model_run in result.model_runs:
             training_result = model_run.training_result
@@ -274,9 +263,7 @@ class MLflowPipelineLogger:
         mlflow.log_artifact(str(artifact_paths["environment"]))
 
         if any(artifact_paths["cv_dir"].iterdir()):
-            mlflow.log_artifacts(
-                str(artifact_paths["cv_dir"]), artifact_path="cv_results"
-            )
+            mlflow.log_artifacts(str(artifact_paths["cv_dir"]), artifact_path="cv_results")
 
         if config_path is not None and config_path.exists():
             mlflow.log_artifact(str(config_path), artifact_path="config_source")

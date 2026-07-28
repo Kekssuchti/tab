@@ -79,9 +79,7 @@ class Preprocessor:
         elif method == "none":
             return Pipeline([("imputer", "passthrough")])
         else:
-            raise ValueError(
-                f"Tried to use unknown / wrong imputation method: {method}"
-            )
+            raise ValueError(f"Tried to use unknown / wrong imputation method: {method}")
 
     def _build_scaler(self) -> Pipeline:
         scaler_type = self.scaler_config.type
@@ -90,6 +88,4 @@ class Preprocessor:
         elif scaler_type == "none":
             return Pipeline([("scaler", "passthrough")])
         else:
-            raise ValueError(
-                f"Tried to use unknown / wrong scaling method: {scaler_type}"
-            )
+            raise ValueError(f"Tried to use unknown / wrong scaling method: {scaler_type}")

@@ -60,23 +60,18 @@ def test_experiment_suite_expands_range_and_summarizes_dry_run(tmp_path):
     assert summary.models_per_config == 1
     assert summary.total_model_runs == 3
     assert summary.changed_parameters == ("dataset.train_on.0.fraction",)
-    assert [
-        variant.pipeline_config.dataset.train_on[0].fraction
-        for variant in summary.config_variants
-    ] == [500, 1000, 1500]
+    assert [variant.pipeline_config.dataset.train_on[0].fraction for variant in summary.config_variants] == [
+        500,
+        1000,
+        1500,
+    ]
     assert [variant.variant_id for variant in summary.config_variants] == [
         "fraction-500",
         "fraction-1000",
         "fraction-1500",
     ]
-    assert (
-        summary.config_variants[0].pipeline_config.run_id
-        == "base-run_training-size_fraction-500"
-    )
-    assert (
-        summary.config_variants[0].pipeline_config.mlflow.run_name
-        == "training-size/fraction-500"
-    )
+    assert summary.config_variants[0].pipeline_config.run_id == "base-run_training-size_fraction-500"
+    assert summary.config_variants[0].pipeline_config.mlflow.run_name == "training-size/fraction-500"
     assert "Configs: 3" in summary.format()
     assert "Changed parameters: dataset.train_on.0.fraction" in summary.format()
 

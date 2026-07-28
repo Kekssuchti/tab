@@ -105,19 +105,13 @@ class Dataset:
         return dfs
 
     def _runtime_preprocessing(self, df):
-        index_columns = [
-            column for column in df.columns if column.startswith("Unnamed:")
-        ]
+        index_columns = [column for column in df.columns if column.startswith("Unnamed:")]
         if index_columns:
             df = df.drop(columns=index_columns)
             logger.info(f"Dropped CSV index columns: {index_columns}")
 
-        df, removed_counts = remove_impossible_values(
-            df, self.config.data_cleaner.outlier_limits_path
-        )
-        removed_counts = {
-            column: count for column, count in removed_counts.items() if count
-        }
+        df, removed_counts = remove_impossible_values(df, self.config.data_cleaner.outlier_limits_path)
+        removed_counts = {column: count for column, count in removed_counts.items() if count}
         if removed_counts:
             logger.info(f"Runtime removed unreasonable values: {removed_counts}")
 
@@ -154,10 +148,7 @@ class Dataset:
             for dataset_origin, split in splits_dict.items():
                 # compared against all keys we have (aka mimic and tudd)
                 # skip if not in training_data_split.dataset
-                if (
-                    origin_for_dataset_name(training_data_split.dataset)
-                    != dataset_origin
-                ):
+                if origin_for_dataset_name(training_data_split.dataset) != dataset_origin:
                     continue
 
                 # if we do train on the split -> apply fraction of training data
@@ -167,9 +158,7 @@ class Dataset:
                 else:
                     n = training_data_split.fraction
 
-                sampled_indices = (
-                    split["X_train"].sample(n=n, random_state=self.seed).index
-                )
+                sampled_indices = split["X_train"].sample(n=n, random_state=self.seed).index
 
                 X_train_sampled = split["X_train"].loc[sampled_indices]
                 y_train_sampled = split["y_train"].loc[sampled_indices]
@@ -180,22 +169,16 @@ class Dataset:
         X_train_combined = pd.concat(X_train_parts, axis=0, ignore_index=True)
         y_train_combined = pd.concat(y_train_parts, axis=0, ignore_index=True)
 
-        shuffled_indices = X_train_combined.sample(
-            frac=1, random_state=self.seed * 2
-        ).index
+        shuffled_indices = X_train_combined.sample(frac=1, random_state=self.seed * 2).index
 
         train_data = XYDataset(
             X=X_train_combined.loc[shuffled_indices],
             y=y_train_combined.loc[shuffled_indices],
         )
 
-        test_mimic = XYDataset(
-            X=splits_dict["mimic"]["X_test"], y=splits_dict["mimic"]["y_test"]
-        )
+        test_mimic = XYDataset(X=splits_dict["mimic"]["X_test"], y=splits_dict["mimic"]["y_test"])
 
-        test_tudd = XYDataset(
-            X=splits_dict["tudd"]["X_test"], y=splits_dict["tudd"]["y_test"]
-        )
+        test_tudd = XYDataset(X=splits_dict["tudd"]["X_test"], y=splits_dict["tudd"]["y_test"])
 
         data_bundle = DatasetBundle(
             train_data=train_data,
@@ -205,16 +188,10 @@ class Dataset:
 
         return data_bundle
 
-    def _align_split_feature_columns(
-        self, splits_dict: dict[DatasetOrigin, _SplitResult]
-    ) -> None:
-        common_columns = set.intersection(
-            *(set(split["X_train"].columns) for split in splits_dict.values())
-        )
+    def _align_split_feature_columns(self, splits_dict: dict[DatasetOrigin, _SplitResult]) -> None:
+        common_columns = set.intersection(*(set(split["X_train"].columns) for split in splits_dict.values()))
         ordered_columns = [
-            column
-            for column in next(iter(splits_dict.values()))["X_train"].columns
-            if column in common_columns
+            column for column in next(iter(splits_dict.values()))["X_train"].columns if column in common_columns
         ]
 
         for split in splits_dict.values():
@@ -245,18 +222,12 @@ class Dataset:
             )
         return summaries
 
-    def _split_single_df(
-        self, df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    def _split_single_df(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
         y = self._task.labels_from(df)
         X = self._task.features_from(df)
 
         stratify = None
-        if (
-            self.config.classification
-            and y.nunique() > 1
-            and y.value_counts().min() >= 2
-        ):
+        if self.config.classification and y.nunique() > 1 and y.value_counts().min() >= 2:
             stratify = y
 
         X_train, X_test, y_train, y_test = train_test_split(

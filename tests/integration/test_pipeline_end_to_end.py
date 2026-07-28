@@ -38,9 +38,7 @@ def _write_filtered_data(tmp_path) -> None:
     tudd.to_csv(filtered_path / "tudd_readmission.csv", index=False)
 
 
-def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(
-    tmp_path, monkeypatch
-):
+def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(tmp_path, monkeypatch):
     _write_filtered_data(tmp_path)
     monkeypatch.setattr(dataset_module, "config", SimpleNamespace(dir_data=tmp_path))
     params = load_pipeline_config("tests/integration/pipeline_integration_config.yaml")
@@ -68,14 +66,8 @@ def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(
         assert set(model_result.metrics_by_test_set) == {"mimic", "tudd"}
         assert model_result.fit_time >= 0.0
         assert model_result.total_time >= model_result.fit_time
-        assert (
-            model_result.final_test_metrics.mimic_test
-            is model_result.metrics_by_test_set["mimic"]
-        )
-        assert (
-            model_result.final_test_metrics.tudd_test
-            is model_result.metrics_by_test_set["tudd"]
-        )
+        assert model_result.final_test_metrics.mimic_test is model_result.metrics_by_test_set["mimic"]
+        assert model_result.final_test_metrics.tudd_test is model_result.metrics_by_test_set["tudd"]
         for test_result in model_result.test_results:
             assert test_result.predict_time >= 0.0
             assert 0.0 <= test_result.metrics.accuracy <= 1.0

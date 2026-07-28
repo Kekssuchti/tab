@@ -195,16 +195,13 @@ def test_loads_multiple_experiments_into_plotting_tables(tracking_uri):
     } <= set(data.columns)
 
     logistic_accuracy = scores.loc[
-        (scores["model_name"] == "logistic-regression")
-        & (scores["dataset"] == "mimic")
-        & (scores["scope"] == "test")
+        (scores["model_name"] == "logistic-regression") & (scores["dataset"] == "mimic") & (scores["scope"] == "test")
     ].iloc[0]
     assert logistic_accuracy["accuracy"] == pytest.approx(0.9)
     assert logistic_accuracy["accuracy_ci_lower"] == pytest.approx(0.85)
 
     logistic_delta = scores.loc[
-        (scores["model_name"] == "logistic-regression")
-        & (scores["dataset"] == "mimic_minus_tudd")
+        (scores["model_name"] == "logistic-regression") & (scores["dataset"] == "mimic_minus_tudd")
     ].iloc[0]
     assert logistic_delta["accuracy"] == pytest.approx(0.2)
 
@@ -215,9 +212,7 @@ def test_loads_multiple_experiments_into_plotting_tables(tracking_uri):
     assert logistic_accuracy["total_time"] == pytest.approx(6.3)
 
     xgboost_accuracy = scores.loc[
-        (scores["model_name"] == "xgboost")
-        & (scores["dataset"] == "mimic")
-        & (scores["scope"] == "test")
+        (scores["model_name"] == "xgboost") & (scores["dataset"] == "mimic") & (scores["scope"] == "test")
     ].iloc[0]
     assert xgboost_accuracy["accuracy"] == pytest.approx(0.85)
     assert xgboost_accuracy["statistic"] == "point"
@@ -255,9 +250,7 @@ def test_filters_pipeline_runs_and_models_by_names(tracking_uri):
         tracking_uri=tracking_uri,
     )
     assert set(untuned["model_name"]) == {"xgboost"}
-    untuned_accuracy = untuned.loc[
-        (untuned["dataset"] == "mimic") & (untuned["scope"] == "test")
-    ].iloc[0]
+    untuned_accuracy = untuned.loc[(untuned["dataset"] == "mimic") & (untuned["scope"] == "test")].iloc[0]
     assert pd.isna(untuned_accuracy["accuracy_ci_lower"])
 
 
@@ -268,27 +261,17 @@ def test_calculates_comparative_generalizability_on_external_test(tracking_uri):
 
     assert set(comparison["external_dataset"]) == {"tudd"}
     assert by_model.loc["logistic-regression", "external_score"] == pytest.approx(0.75)
-    assert by_model.loc[
-        "logistic-regression", "comparative_generalizability_loss"
-    ] == pytest.approx(0.0)
+    assert by_model.loc["logistic-regression", "comparative_generalizability_loss"] == pytest.approx(0.0)
     assert by_model.loc["logistic-regression", "generalization_rank"] == 1
-    assert by_model.loc[
-        "xgboost", "comparative_generalizability_loss"
-    ] == pytest.approx(-0.04)
+    assert by_model.loc["xgboost", "comparative_generalizability_loss"] == pytest.approx(-0.04)
     assert by_model.loc["xgboost", "generalization_rank"] == 2
-    assert by_model.loc[
-        "logistic-regression", "generalizability_loss"
-    ] == pytest.approx(-0.05)
+    assert by_model.loc["logistic-regression", "generalizability_loss"] == pytest.approx(-0.05)
 
     logistic_external = results.loc[
-        (results["model_name"] == "logistic-regression")
-        & (results["scope"] == "test")
-        & (results["dataset"] == "tudd")
+        (results["model_name"] == "logistic-regression") & (results["scope"] == "test") & (results["dataset"] == "tudd")
     ].iloc[0]
     assert logistic_external["generalizability_loss_roc_auc"] == pytest.approx(-0.05)
-    assert logistic_external[
-        "comparative_generalizability_loss_roc_auc"
-    ] == pytest.approx(0.0)
+    assert logistic_external["comparative_generalizability_loss_roc_auc"] == pytest.approx(0.0)
 
 
 def test_plots_roc_auc_as_paired_test_centers(tracking_uri):
@@ -311,12 +294,8 @@ def test_plots_selected_generalization_loss_with_ranks(tracking_uri):
     comparative_ax = plot_generalization_gaps(results)
     model_specific_ax = plot_generalization_gaps(results, loss="model_specific")
 
-    assert [bar.get_width() for bar in comparative_ax.patches] == pytest.approx(
-        [0.0, -0.04]
-    )
-    assert [bar.get_width() for bar in model_specific_ax.patches] == pytest.approx(
-        [-0.05, -0.07]
-    )
+    assert [bar.get_width() for bar in comparative_ax.patches] == pytest.approx([0.0, -0.04])
+    assert [bar.get_width() for bar in model_specific_ax.patches] == pytest.approx([-0.05, -0.07])
     assert {text.get_text() for text in comparative_ax.texts} == {"#1", "#2"}
     assert "Comparative generalizability loss" in comparative_ax.get_title()
     plt.close(comparative_ax.figure)

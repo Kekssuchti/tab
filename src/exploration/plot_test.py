@@ -63,13 +63,9 @@ def _(data_readmission):
 
 @app.cell
 def _(data_mortality, data_readmission, performance_table_to_latex):
-    latex_mortality = performance_table_to_latex(
-        results=data_mortality, metric="roc_auc", include_ci=False
-    )
+    latex_mortality = performance_table_to_latex(results=data_mortality, metric="roc_auc", include_ci=False)
 
-    latex_readmission = performance_table_to_latex(
-        results=data_readmission, metric="roc_auc", include_ci=False
-    )
+    latex_readmission = performance_table_to_latex(results=data_readmission, metric="roc_auc", include_ci=False)
     return latex_mortality, latex_readmission
 
 
@@ -118,9 +114,7 @@ def _(data, plt):
             plot_df = df[(df["metric"] == metric) & (df["dataset"] == test_set)].copy()
 
             for model in df["model_name"].unique():
-                model_df = plot_df[plot_df["model_name"] == model].sort_values(
-                    "training_size"
-                )
+                model_df = plot_df[plot_df["model_name"] == model].sort_values("training_size")
 
                 (line,) = plt.plot(
                     model_df["training_size"],
@@ -164,9 +158,7 @@ def _(data, mticker, plt):
         }
 
         palette = plt.colormaps["tab10"].colors
-        model_colors = {
-            model: palette[i % len(palette)] for i, model in enumerate(models)
-        }
+        model_colors = {model: palette[i % len(palette)] for i, model in enumerate(models)}
 
         fig, axes = plt.subplots(
             nrows=len(metrics),
@@ -180,14 +172,10 @@ def _(data, mticker, plt):
             for col, test_set in enumerate(test_sets):
                 ax = axes[row, col]
 
-                plot_df = df[
-                    (df["metric"] == metric) & (df["dataset"] == test_set)
-                ].copy()
+                plot_df = df[(df["metric"] == metric) & (df["dataset"] == test_set)].copy()
 
                 for model in models:
-                    model_df = plot_df[plot_df["model_name"] == model].sort_values(
-                        "training_size"
-                    )
+                    model_df = plot_df[plot_df["model_name"] == model].sort_values("training_size")
 
                     color = model_colors[model]
 
@@ -299,29 +287,21 @@ def _(data, np, plt):
         }
 
         palette = plt.colormaps["tab10"].colors
-        model_colors = {
-            model: palette[i % len(palette)] for i, model in enumerate(models)
-        }
+        model_colors = {model: palette[i % len(palette)] for i, model in enumerate(models)}
 
         for metric in ["roc_auc", "prc_auc", "f1"]:
             for test_set in ["tudd", "mimic"]:
                 fig, ax = plt.subplots(figsize=(7, 5))
 
-                plot_df = df[
-                    (df["metric"] == metric) & (df["dataset"] == test_set)
-                ].copy()
+                plot_df = df[(df["metric"] == metric) & (df["dataset"] == test_set)].copy()
 
                 # Shared positions across all models in this panel
                 training_sizes = np.sort(plot_df["training_size"].unique())
 
-                x_positions = {
-                    size: position for position, size in enumerate(training_sizes)
-                }
+                x_positions = {size: position for position, size in enumerate(training_sizes)}
 
                 for model in plot_df["model_name"].unique():
-                    model_df = plot_df[plot_df["model_name"] == model].sort_values(
-                        "training_size"
-                    )
+                    model_df = plot_df[plot_df["model_name"] == model].sort_values("training_size")
 
                     x = model_df["training_size"].map(x_positions).to_numpy()
 
@@ -375,9 +355,7 @@ def _(data, plt):
     def run():
         df = data.copy()
 
-        times = df[
-            (df["scope"] != "cv") & (df["metric"].isin(["fit_time", "predict_time"]))
-        ].copy()
+        times = df[(df["scope"] != "cv") & (df["metric"].isin(["fit_time", "predict_time"]))].copy()
 
         times["component"] = times["dataset"].map(
             {
@@ -408,9 +386,7 @@ def _(data, plt):
         timings["Total"] = timings[components].sum(axis=1)
         timings = timings.sort_values("Total")
 
-        timings["label"] = (
-            timings["model_name"] + " (n=" + timings["training_size"].astype(str) + ")"
-        )
+        timings["label"] = timings["model_name"] + " (n=" + timings["training_size"].astype(str) + ")"
 
         ax = timings.set_index("label")[components].plot(
             kind="barh",

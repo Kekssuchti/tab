@@ -137,10 +137,7 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
             1,
         }
         assert len(result.tuning_result.fold_results) == 4
-        assert all(
-            "accuracy" in fold.metrics.scores
-            for fold in result.tuning_result.fold_results
-        )
+        assert all("accuracy" in fold.metrics.scores for fold in result.tuning_result.fold_results)
         assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
         assert result.trained_model is None
 

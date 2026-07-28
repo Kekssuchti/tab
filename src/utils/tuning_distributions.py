@@ -33,15 +33,11 @@ class DiscreteUniform(OptunaDistribution):
     def __post_init__(self) -> None:
         _validate_bounds(self.low, self.high)
         if not isfinite(self.step) or self.step <= 0:
-            raise ValueError(
-                "DiscreteUniform step must be finite and greater than zero"
-            )
+            raise ValueError("DiscreteUniform step must be finite and greater than zero")
 
         number_of_steps = (self.high - self.low) / self.step
         if not isclose(number_of_steps, round(number_of_steps)):
-            raise ValueError(
-                "DiscreteUniform range must be evenly divisible by its step"
-            )
+            raise ValueError("DiscreteUniform range must be evenly divisible by its step")
 
     def suggest(self, trial, name: str) -> float:
         return trial.suggest_float(name, self.low, self.high, step=self.step)
@@ -56,15 +52,11 @@ class IntUniform(OptunaDistribution):
     def __post_init__(self) -> None:
         _validate_bounds(self.low, self.high)
         if not isfinite(self.step) or self.step <= 0:
-            raise ValueError(
-                "DiscreteUniform step must be finite and greater than zero"
-            )
+            raise ValueError("DiscreteUniform step must be finite and greater than zero")
 
         number_of_steps = (self.high - self.low) / self.step
         if not isclose(number_of_steps, round(number_of_steps)):
-            raise ValueError(
-                "DiscreteUniform range must be evenly divisible by its step"
-            )
+            raise ValueError("DiscreteUniform range must be evenly divisible by its step")
 
     def suggest(self, trial, name: str) -> int:
         return trial.suggest_int(name, self.low, self.high, step=self.step)

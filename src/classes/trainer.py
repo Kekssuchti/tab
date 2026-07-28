@@ -54,9 +54,7 @@ class Trainer:
         self.default_imputer = default_imputer
         self.default_scaler = default_scaler
 
-    def train_evaluate_model(
-        self, model_config: ModelConfig, data: DatasetBundle
-    ) -> ModelTrainingResult:
+    def train_evaluate_model(self, model_config: ModelConfig, data: DatasetBundle) -> ModelTrainingResult:
         logger.info(f"Training model: {model_config.name}")
 
         imputer, scaler = self._resolved_preprocessing(model_config)
@@ -93,9 +91,7 @@ class Trainer:
             scaler_config=scaler,
         ).build_pipeline()
 
-    def _resolved_preprocessing(
-        self, model_config: ModelConfig
-    ) -> tuple[ImputerConfig, ScalerEncoderConfig]:
+    def _resolved_preprocessing(self, model_config: ModelConfig) -> tuple[ImputerConfig, ScalerEncoderConfig]:
         preprocessing = model_config.preprocessing
         imputer = (
             preprocessing.imputer
@@ -109,9 +105,7 @@ class Trainer:
         )
         return imputer, scaler
 
-    def _tune_model(
-        self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
-    ) -> ModelTrainingResult:
+    def _tune_model(self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle) -> ModelTrainingResult:
         tuning = model_config.tuning
         if tuning is None:
             raise ValueError("Tuning requested without tuning parameters")
@@ -241,9 +235,7 @@ class Trainer:
                 partial(
                     stop_stale_study,
                     patience=tuning.optuna.patience,
-                    minimum_trials=(
-                        tuning.optuna.n_startup_trials + tuning.optuna.patience
-                    ),
+                    minimum_trials=(tuning.optuna.n_startup_trials + tuning.optuna.patience),
                 )
             ],
             gc_after_trial=True,
@@ -293,13 +285,9 @@ class Trainer:
                     self._take_rows(X_train, train_index),
                     self._take_rows(y_train, train_index),
                 )
-                predictions, _ = fold_model.predict(
-                    self._take_rows(X_train, validation_index)
-                )
+                predictions, _ = fold_model.predict(self._take_rows(X_train, validation_index))
                 if model_config.task_type != "classification":
-                    raise NotImplementedError(
-                        "Regression tuning metrics are not implemented yet"
-                    )
+                    raise NotImplementedError("Regression tuning metrics are not implemented yet")
 
                 metrics = evaluate_classification_predictions(
                     predictions,
@@ -361,22 +349,14 @@ class Trainer:
 
         tuning_config = model_config.tuning
 
-        fold_results = [
-            fold_result
-            for evaluation in evaluations
-            for fold_result in evaluation.fold_results
-        ]
+        fold_results = [fold_result for evaluation in evaluations for fold_result in evaluation.fold_results]
 
         candidates = [evaluation.candidate_params for evaluation in evaluations]
         if len(candidates) == 1:
             best_params = candidates[0]
         else:
-            fold_scores_by_candidate = [
-                evaluation.fold_scores for evaluation in evaluations
-            ]
-            mean_scores = [
-                float(np.mean(scores)) for scores in fold_scores_by_candidate
-            ]
+            fold_scores_by_candidate = [evaluation.fold_scores for evaluation in evaluations]
+            mean_scores = [float(np.mean(scores)) for scores in fold_scores_by_candidate]
             best_index = int(np.argmax(mean_scores))
             best_params = candidates[best_index]
 
@@ -494,9 +474,7 @@ class Trainer:
 
     @staticmethod
     def _build_cv(model_config: ModelConfig, tuning):
-        cv_cls = (
-            StratifiedKFold if model_config.task_type == "classification" else KFold
-        )
+        cv_cls = StratifiedKFold if model_config.task_type == "classification" else KFold
         return cv_cls(
             n_splits=tuning.cv.n_splits,
             shuffle=tuning.cv.shuffle,
