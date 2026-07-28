@@ -45,6 +45,8 @@ from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import ClassificationTargetSummary, RegressionTargetSummary
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
+    BootstrapClassificationMetrics,
+    BootstrapRegressionMetrics,
     ClassificationMetrics,
     ClassificationMetricsAggregate,
     RegressionMetrics,
@@ -496,6 +498,13 @@ def _model_run_params(
     )
     for key, value in tuning_result.best_params.items():
         run_params[f"model.best_params.{key}"] = _param_value(value)
+
+    final_metrics = tuning_result.final_test_metrics.mimic_test
+    if isinstance(final_metrics, BootstrapClassificationMetrics | BootstrapRegressionMetrics):
+        run_params["model.final_evaluation.method"] = "bootstrap"
+        run_params["model.final_evaluation.n_bootstrap"] = _param_value(final_metrics.n_bootstrap)
+    else:
+        run_params["model.final_evaluation.method"] = "cross_validated_models"
     return run_params
 
 
@@ -606,10 +615,17 @@ def _cv_final_test_metric_logs(
 
 def _cv_aggregate_metric_logs(
     dataset: str,
-    metrics: ClassificationMetricsAggregate | RegressionMetricsAggregate,
+    metrics: (
+        ClassificationMetricsAggregate
+        | RegressionMetricsAggregate
+        | BootstrapClassificationMetrics
+        | BootstrapRegressionMetrics
+    ),
 ) -> tuple[MetricLog, ...]:
+    is_bootstrap = isinstance(metrics, BootstrapClassificationMetrics | BootstrapRegressionMetrics)
+    metric_name = test_score_metric if is_bootstrap else test_mean_score_metric
     values = [
-        (test_mean_score_metric(dataset, name.removeprefix("mean_")), value) for name, value in metrics.scores.items()
+        (metric_name(dataset, name.removeprefix("mean_")), value) for name, value in metrics.scores.items()
     ]
     for name, (lower, upper) in metrics.confidence_intervals.items():
         values.extend(

@@ -5,6 +5,8 @@ from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetSummary
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
+    BootstrapClassificationMetrics,
+    BootstrapRegressionMetrics,
     ClassificationMetricsAggregate,
     ClassificationMetrics,
     FinalTestMetrics,
@@ -15,7 +17,13 @@ from src.schemas.training_schemas import ScoringMethod, TuningMethod
 
 
 MetricT = TypeVar("MetricT", ClassificationMetrics, RegressionMetrics)
-AggregateMetricT = TypeVar("AggregateMetricT", ClassificationMetricsAggregate, RegressionMetricsAggregate)
+ConfidenceMetricT = TypeVar(
+    "ConfidenceMetricT",
+    ClassificationMetricsAggregate,
+    RegressionMetricsAggregate,
+    BootstrapClassificationMetrics,
+    BootstrapRegressionMetrics,
+)
 
 
 @dataclass
@@ -49,7 +57,7 @@ class FoldRecord(Generic[MetricT]):
 
 
 @dataclass
-class TuningRecord(Generic[MetricT, AggregateMetricT]):
+class TuningRecord(Generic[MetricT, ConfidenceMetricT]):
     """
     Result of tuning one model.
 
@@ -73,7 +81,7 @@ class TuningRecord(Generic[MetricT, AggregateMetricT]):
 
     best_params: dict[str, Any]
     scoring: ScoringMethod
-    final_test_metrics: AggregatedFinalTestMetrics[AggregateMetricT]
+    final_test_metrics: AggregatedFinalTestMetrics[ConfidenceMetricT]
     fold_results: list[FoldRecord[MetricT]] = field(default_factory=list)
     method: TuningMethod = "optuna"
 
@@ -83,7 +91,7 @@ class TuningRecord(Generic[MetricT, AggregateMetricT]):
 
 
 @dataclass
-class ModelTrainingResult(Generic[MetricT, AggregateMetricT]):
+class ModelTrainingResult(Generic[MetricT, ConfidenceMetricT]):
     """
     Result of fitting a single model, optionally after tuning.
 
@@ -115,7 +123,7 @@ class ModelTrainingResult(Generic[MetricT, AggregateMetricT]):
     task_type: TaskType
     tuned: bool
     fit_time: float
-    tuning_result: TuningRecord[MetricT, AggregateMetricT] | None = None
+    tuning_result: TuningRecord[MetricT, ConfidenceMetricT] | None = None
     error: str | None = None
     failure_stage: str | None = None
 
@@ -125,9 +133,11 @@ class ModelTrainingResult(Generic[MetricT, AggregateMetricT]):
 
 
 ClassificationModelTrainingResult: TypeAlias = ModelTrainingResult[
-    ClassificationMetrics, ClassificationMetricsAggregate
+    ClassificationMetrics, ClassificationMetricsAggregate | BootstrapClassificationMetrics
 ]
-RegressionModelTrainingResult: TypeAlias = ModelTrainingResult[RegressionMetrics, RegressionMetricsAggregate]
+RegressionModelTrainingResult: TypeAlias = ModelTrainingResult[
+    RegressionMetrics, RegressionMetricsAggregate | BootstrapRegressionMetrics
+]
 
 
 @dataclass(frozen=True)
@@ -191,7 +201,7 @@ RegressionModelEvaluationRecord: TypeAlias = ModelEvaluationRecord[RegressionMet
 
 
 @dataclass(frozen=True)
-class ModelRunRecord(Generic[MetricT, AggregateMetricT]):
+class ModelRunRecord(Generic[MetricT, ConfidenceMetricT]):
     """
     Training and evaluation record for one model instance.
 
@@ -208,7 +218,7 @@ class ModelRunRecord(Generic[MetricT, AggregateMetricT]):
     """
 
     model_instance_id: str
-    training_result: ModelTrainingResult[MetricT, AggregateMetricT]
+    training_result: ModelTrainingResult[MetricT, ConfidenceMetricT]
     evaluation: ModelEvaluationRecord[MetricT] | None
 
     @property
@@ -220,8 +230,12 @@ class ModelRunRecord(Generic[MetricT, AggregateMetricT]):
         return self.training_result.succeeded
 
 
-ClassificationModelRunRecord: TypeAlias = ModelRunRecord[ClassificationMetrics, ClassificationMetricsAggregate]
-RegressionModelRunRecord: TypeAlias = ModelRunRecord[RegressionMetrics, RegressionMetricsAggregate]
+ClassificationModelRunRecord: TypeAlias = ModelRunRecord[
+    ClassificationMetrics, ClassificationMetricsAggregate | BootstrapClassificationMetrics
+]
+RegressionModelRunRecord: TypeAlias = ModelRunRecord[
+    RegressionMetrics, RegressionMetricsAggregate | BootstrapRegressionMetrics
+]
 ModelRunFamily: TypeAlias = ClassificationModelRunRecord | RegressionModelRunRecord
 
 

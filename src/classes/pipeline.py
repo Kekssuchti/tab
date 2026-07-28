@@ -6,8 +6,6 @@ from src.classes.dataset import Dataset
 from src.classes.trainer import Trainer
 from src.schemas.base_schemas import TaskType
 from src.schemas.metrics import (
-    ClassificationMetrics,
-    ClassificationMetricsAggregate,
     FinalTestMetrics,
 )
 from src.schemas.pipeline_schemas import PipelineConfig
@@ -136,8 +134,8 @@ class Pipeline:
             return None
 
         test_metrics = tuning_result.final_test_metrics
-        mimic_metrics = _cv_metrics_to_classification_metrics(test_metrics.mimic_test)
-        tudd_metrics = _cv_metrics_to_classification_metrics(test_metrics.tudd_test)
+        mimic_metrics = test_metrics.mimic_test.metrics
+        tudd_metrics = test_metrics.tudd_test.metrics
         test_results = (
             TestSetEvaluationRecord(
                 "mimic",
@@ -165,18 +163,3 @@ class Pipeline:
 
 def _format_exception(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
-
-
-def _cv_metrics_to_classification_metrics(
-    metrics: ClassificationMetricsAggregate,
-) -> ClassificationMetrics:
-    return ClassificationMetrics(
-        roc_auc=metrics.mean_roc_auc,
-        prc_auc=metrics.mean_prc_auc,
-        f1=metrics.mean_f1,
-        accuracy=metrics.mean_accuracy,
-        sensitivity=metrics.mean_sensitivity,
-        precision=metrics.mean_precision,
-        confusion_matrix=metrics.mean_confusion_matrix,
-        n_classes=metrics.n_classes,
-    )

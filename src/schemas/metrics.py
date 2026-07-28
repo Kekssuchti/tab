@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Generic, TypeVar, cast, overload
+from typing import Generic, Protocol, TypeVar, cast, overload
 
 import numpy as np
 
@@ -86,6 +88,19 @@ class ClassificationMetricsAggregate:
     ci_95_precision_upper: float
 
     @property
+    def metrics(self) -> ClassificationMetrics:
+        return ClassificationMetrics(
+            roc_auc=self.mean_roc_auc,
+            prc_auc=self.mean_prc_auc,
+            f1=self.mean_f1,
+            accuracy=self.mean_accuracy,
+            sensitivity=self.mean_sensitivity,
+            precision=self.mean_precision,
+            n_classes=self.n_classes,
+            confusion_matrix=self.mean_confusion_matrix,
+        )
+
+    @property
     def scores(self) -> dict[str, float]:
         return {
             "mean_roc_auc": self.mean_roc_auc,
@@ -158,6 +173,15 @@ class RegressionMetricsAggregate:
     ci_95_rmse_upper: float
 
     @property
+    def metrics(self) -> RegressionMetrics:
+        return RegressionMetrics(
+            r2=self.mean_r2,
+            mae=self.mean_mae,
+            mse=self.mean_mse,
+            rmse=self.mean_rmse,
+        )
+
+    @property
     def scores(self) -> dict[str, float]:
         return {
             "mean_r2": self.mean_r2,
@@ -176,8 +200,19 @@ class RegressionMetricsAggregate:
         }
 
 
+class ConfidenceMetrics(Protocol):
+    @property
+    def metrics(self) -> ClassificationMetrics | RegressionMetrics: ...
+
+    @property
+    def scores(self) -> dict[str, float]: ...
+
+    @property
+    def confidence_intervals(self) -> dict[str, tuple[float, float]]: ...
+
+
 MetricT = TypeVar("MetricT", ClassificationMetrics, RegressionMetrics)
-AggregateMetricT = TypeVar("AggregateMetricT", ClassificationMetricsAggregate, RegressionMetricsAggregate)
+ConfidenceMetricT = TypeVar("ConfidenceMetricT", bound=ConfidenceMetrics)
 
 
 @dataclass(frozen=True)
@@ -211,28 +246,31 @@ class FinalTestMetrics(Generic[MetricT]):
 
 
 @dataclass(frozen=True)
-class AggregatedFinalTestMetrics(Generic[AggregateMetricT]):
+class AggregatedFinalTestMetrics(Generic[ConfidenceMetricT]):
     """
-    Aggregated final-test metrics for tuned cross-validation runs.
+    Final-test point metrics and confidence intervals for a tuned model.
+
+    The contained metrics may come from aggregating cross-validated models or
+    from bootstrap resampling of one model's full-test predictions.
 
     ---
     Attributes:
-        mimic_test: ClassificationMetricsAggregate | RegressionMetricsAggregate
-            Aggregated metrics on MIMIC test folds.
+        mimic_test: ConfidenceMetrics
+            Point metrics and confidence intervals on the MIMIC test set.
 
         mimic_prediction_time: float
-            Mean prediction time on MIMIC test folds, in seconds.
+            Prediction time, or mean prediction time across models, in seconds.
 
-        tudd_test: ClassificationMetricsAggregate | RegressionMetricsAggregate
-            Aggregated metrics on TUDD test folds.
+        tudd_test: ConfidenceMetrics
+            Point metrics and confidence intervals on the TUDD test set.
 
         tudd_prediction_time: float
-            Mean prediction time on TUDD test folds, in seconds.
+            Prediction time, or mean prediction time across models, in seconds.
     """
 
-    mimic_test: AggregateMetricT
+    mimic_test: ConfidenceMetricT
     mimic_prediction_time: float
-    tudd_test: AggregateMetricT
+    tudd_test: ConfidenceMetricT
     tudd_prediction_time: float
 
     @property
@@ -263,6 +301,20 @@ def calculate_metric_diff(
 
 @overload
 def calculate_metric_diff(
+    mimic_metrics: BootstrapClassificationMetrics,
+    tudd_metrics: BootstrapClassificationMetrics,
+) -> ClassificationMetrics: ...
+
+
+@overload
+def calculate_metric_diff(
+    mimic_metrics: BootstrapRegressionMetrics,
+    tudd_metrics: BootstrapRegressionMetrics,
+) -> RegressionMetrics: ...
+
+
+@overload
+def calculate_metric_diff(
     mimic_metrics: RegressionMetricsAggregate,
     tudd_metrics: RegressionMetricsAggregate,
 ) -> RegressionMetrics: ...
@@ -272,16 +324,29 @@ def calculate_metric_diff(
     mimic_metrics: ClassificationMetrics
     | ClassificationMetricsAggregate
     | RegressionMetrics
-    | RegressionMetricsAggregate,
+    | RegressionMetricsAggregate
+    | BootstrapClassificationMetrics
+    | BootstrapRegressionMetrics,
     tudd_metrics: ClassificationMetrics
     | ClassificationMetricsAggregate
     | RegressionMetrics
-    | RegressionMetricsAggregate,
+    | RegressionMetricsAggregate
+    | BootstrapClassificationMetrics
+    | BootstrapRegressionMetrics,
 ) -> ClassificationMetrics | RegressionMetrics:
     """
     Calculate the difference between two sets of metrics.
-    metrics must be of type: ClassificationMetrics, ClassificationMetricsAggregate, RegressionMetrics, or RegressionMetricsAggregate.
+
+    Both inputs must be matching classification or regression metric variants.
     """
+
+    if isinstance(mimic_metrics, BootstrapClassificationMetrics) and isinstance(
+        tudd_metrics, BootstrapClassificationMetrics
+    ):
+        return calculate_metric_diff(mimic_metrics.metrics, tudd_metrics.metrics)
+
+    if isinstance(mimic_metrics, BootstrapRegressionMetrics) and isinstance(tudd_metrics, BootstrapRegressionMetrics):
+        return calculate_metric_diff(mimic_metrics.metrics, tudd_metrics.metrics)
 
     if isinstance(mimic_metrics, RegressionMetrics) and isinstance(tudd_metrics, RegressionMetrics):
         return RegressionMetrics(
@@ -336,3 +401,107 @@ def calculate_metric_diff(
         )
 
     raise ValueError("mimic_metrics and tudd_metrics must be of the same type")
+
+
+@dataclass(frozen=True)
+class BootstrapClassificationMetrics:
+    metrics: ClassificationMetrics
+    ci_95_roc_auc_lower: float
+    ci_95_roc_auc_upper: float
+    ci_95_prc_auc_lower: float
+    ci_95_prc_auc_upper: float
+    ci_95_f1_lower: float
+    ci_95_f1_upper: float
+    ci_95_accuracy_lower: float
+    ci_95_accuracy_upper: float
+    ci_95_sensitivity_lower: float
+    ci_95_sensitivity_upper: float
+    ci_95_precision_lower: float
+    ci_95_precision_upper: float
+    n_bootstrap: int
+
+    @property
+    def roc_auc(self) -> float | None:
+        return self.metrics.roc_auc
+
+    @property
+    def prc_auc(self) -> float | None:
+        return self.metrics.prc_auc
+
+    @property
+    def f1(self) -> float:
+        return self.metrics.f1
+
+    @property
+    def accuracy(self) -> float:
+        return self.metrics.accuracy
+
+    @property
+    def sensitivity(self) -> float:
+        return self.metrics.sensitivity
+
+    @property
+    def precision(self) -> float:
+        return self.metrics.precision
+
+    @property
+    def n_classes(self) -> int:
+        return self.metrics.n_classes
+
+    @property
+    def scores(self) -> dict[str, float]:
+        return self.metrics.scores
+
+    @property
+    def confidence_intervals(self) -> dict[str, tuple[float, float]]:
+        return {
+            "roc_auc": (self.ci_95_roc_auc_lower, self.ci_95_roc_auc_upper),
+            "prc_auc": (self.ci_95_prc_auc_lower, self.ci_95_prc_auc_upper),
+            "f1": (self.ci_95_f1_lower, self.ci_95_f1_upper),
+            "accuracy": (self.ci_95_accuracy_lower, self.ci_95_accuracy_upper),
+            "sensitivity": (self.ci_95_sensitivity_lower, self.ci_95_sensitivity_upper),
+            "precision": (self.ci_95_precision_lower, self.ci_95_precision_upper),
+        }
+
+
+@dataclass(frozen=True)
+class BootstrapRegressionMetrics:
+    metrics: RegressionMetrics
+    ci_95_r2_lower: float
+    ci_95_r2_upper: float
+    ci_95_mae_lower: float
+    ci_95_mae_upper: float
+    ci_95_mse_lower: float
+    ci_95_mse_upper: float
+    ci_95_rmse_lower: float
+    ci_95_rmse_upper: float
+    n_bootstrap: int
+
+    @property
+    def r2(self) -> float:
+        return self.metrics.r2
+
+    @property
+    def mae(self) -> float:
+        return self.metrics.mae
+
+    @property
+    def mse(self) -> float:
+        return self.metrics.mse
+
+    @property
+    def rmse(self) -> float:
+        return self.metrics.rmse
+
+    @property
+    def scores(self) -> dict[str, float]:
+        return self.metrics.scores
+
+    @property
+    def confidence_intervals(self) -> dict[str, tuple[float, float]]:
+        return {
+            "r2": (self.ci_95_r2_lower, self.ci_95_r2_upper),
+            "mae": (self.ci_95_mae_lower, self.ci_95_mae_upper),
+            "mse": (self.ci_95_mse_lower, self.ci_95_mse_upper),
+            "rmse": (self.ci_95_rmse_lower, self.ci_95_rmse_upper),
+        }

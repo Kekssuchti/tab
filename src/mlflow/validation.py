@@ -9,6 +9,8 @@ from src.schemas.dataset_schemas import (
     RegressionTargetSummary,
 )
 from src.schemas.metrics import (
+    BootstrapClassificationMetrics,
+    BootstrapRegressionMetrics,
     ClassificationMetrics,
     ClassificationMetricsAggregate,
     RegressionMetrics,
@@ -118,6 +120,10 @@ def _validate_point_metrics(metrics: object, task_type: TaskType, *, path: str) 
 
 
 def _validate_aggregate_metrics(metrics: object, task_type: TaskType, *, path: str) -> None:
-    expected = ClassificationMetricsAggregate if task_type == "classification" else RegressionMetricsAggregate
+    expected = (
+        (ClassificationMetricsAggregate, BootstrapClassificationMetrics)
+        if task_type == "classification"
+        else (RegressionMetricsAggregate, BootstrapRegressionMetrics)
+    )
     if not isinstance(metrics, expected):
         raise ValueError(f"{path} does not match task type {task_type!r}")

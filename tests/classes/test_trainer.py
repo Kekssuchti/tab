@@ -2,9 +2,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from src.classes import trainer as trainer_module
 from src.classes.trainer import Trainer
 from src.interfaces.model_interface import TimedPrediction
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
+from src.schemas.metrics import (
+    AggregatedFinalTestMetrics,
+    BootstrapClassificationMetrics,
+    ClassificationMetrics,
+)
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.training_schemas import (
     CrossValidationConfig,
@@ -27,6 +33,11 @@ def _preprocess_pipeline():
         "default_imputer": ImputerConfig(imputation_method="none"),
         "default_scaler": ScalerEncoderConfig(type="none"),
     }
+
+
+@pytest.fixture(autouse=True)
+def _use_cross_validated_final_evaluation(monkeypatch):
+    monkeypatch.setattr(trainer_module.config, "eval_bootstrap", False)
 
 
 def _bundle(X, y):
@@ -74,6 +85,41 @@ class _FitFailureAdapter:
         type(self).releases += 1
 
 
+def _bootstrap_final_metrics() -> AggregatedFinalTestMetrics:
+    point_metrics = ClassificationMetrics(
+        roc_auc=0.5,
+        prc_auc=0.5,
+        f1=0.5,
+        accuracy=0.5,
+        sensitivity=0.5,
+        precision=0.5,
+        n_classes=2,
+        confusion_matrix=np.array([[1, 1], [1, 1]]),
+    )
+    bootstrap_metrics = BootstrapClassificationMetrics(
+        metrics=point_metrics,
+        ci_95_roc_auc_lower=0.4,
+        ci_95_roc_auc_upper=0.6,
+        ci_95_prc_auc_lower=0.4,
+        ci_95_prc_auc_upper=0.6,
+        ci_95_f1_lower=0.4,
+        ci_95_f1_upper=0.6,
+        ci_95_accuracy_lower=0.4,
+        ci_95_accuracy_upper=0.6,
+        ci_95_sensitivity_lower=0.4,
+        ci_95_sensitivity_upper=0.6,
+        ci_95_precision_lower=0.4,
+        ci_95_precision_upper=0.6,
+        n_bootstrap=100,
+    )
+    return AggregatedFinalTestMetrics(
+        mimic_test=bootstrap_metrics,
+        mimic_prediction_time=0.1,
+        tudd_test=bootstrap_metrics,
+        tudd_prediction_time=0.2,
+    )
+
+
 def test_trainer_records_final_metrics_after_training():
     X, y = _classification_data()
     model_params = ModelConfig(
@@ -100,6 +146,48 @@ def test_trainer_records_final_metrics_after_training():
     assert result.tuning_result is not None
     assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
     assert result.tuning_result.final_test_metrics.tudd_test.mean_accuracy >= 0.0
+
+
+def test_trainer_uses_one_full_training_fit_for_bootstrap_evaluation(monkeypatch):
+    _ReleasableFoldModel.active = 0
+    _ReleasableFoldModel.peak = 0
+    _ReleasableFoldModel.releases = 0
+    X, y = _classification_data()
+    trainer = Trainer(task_type="classification", **_preprocess_pipeline())
+    model_config = ModelConfig(
+        name="logistic-regression",
+        tuning=TuningConfig(
+            method="grid",
+            grid={"C": [1.0]},
+            scoring="accuracy",
+            cv=CrossValidationConfig(n_splits=2, random_state=1),
+        ),
+    )
+    model_spec = model_registry.get_model_spec(model_config, "classification")
+    fit_calls = 0
+
+    def _fit_model(model_params, spec, params, X_train, y_train):
+        nonlocal fit_calls
+        fit_calls += 1
+        return _ReleasableFoldModel(), 0.25
+
+    monkeypatch.setattr(trainer_module.config, "eval_bootstrap", True)
+    monkeypatch.setattr(trainer, "_fit_model", _fit_model)
+    monkeypatch.setattr(
+        trainer_module,
+        "evaluate_trained_model_bootstrap",
+        lambda trained_model, task_type, data: _bootstrap_final_metrics(),
+    )
+
+    result = trainer._tune_model(model_config, model_spec, _bundle(X, y))
+
+    assert fit_calls == 1
+    assert result.fit_time == pytest.approx(0.25)
+    assert result.tuning_result is not None
+    assert isinstance(result.tuning_result.final_test_metrics.mimic_test, BootstrapClassificationMetrics)
+    assert result.tuning_result.final_test_metrics.mimic_test.metrics.accuracy == pytest.approx(0.5)
+    assert _ReleasableFoldModel.releases == 1
+    assert _ReleasableFoldModel.active == 0
 
 
 def test_trainer_uses_tuning_grid_and_returns_best_params():

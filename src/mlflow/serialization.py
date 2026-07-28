@@ -28,6 +28,8 @@ from src.schemas.dataset_schemas import (
 )
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
+    BootstrapClassificationMetrics,
+    BootstrapRegressionMetrics,
     ClassificationMetrics,
     ClassificationMetricsAggregate,
     FinalTestMetrics,
@@ -55,6 +57,8 @@ _CLASSIFICATION_METRIC_KEYS = {field.name for field in fields(ClassificationMetr
 _REGRESSION_METRIC_KEYS = {field.name for field in fields(RegressionMetrics)}
 _CLASSIFICATION_AGGREGATE_KEYS = {field.name for field in fields(ClassificationMetricsAggregate)}
 _REGRESSION_AGGREGATE_KEYS = {field.name for field in fields(RegressionMetricsAggregate)}
+_CLASSIFICATION_BOOTSTRAP_KEYS = {field.name for field in fields(BootstrapClassificationMetrics)}
+_REGRESSION_BOOTSTRAP_KEYS = {field.name for field in fields(BootstrapRegressionMetrics)}
 
 
 @dataclass(frozen=True)
@@ -456,9 +460,31 @@ def _aggregate_metrics_from_dict(
     task_type: TaskType,
     *,
     path: str,
-) -> ClassificationMetricsAggregate | RegressionMetricsAggregate:
+) -> (
+    ClassificationMetricsAggregate
+    | RegressionMetricsAggregate
+    | BootstrapClassificationMetrics
+    | BootstrapRegressionMetrics
+):
     payload = _object(value, path=path)
     if task_type == "classification":
+        if set(payload) == _CLASSIFICATION_BOOTSTRAP_KEYS:
+            return BootstrapClassificationMetrics(
+                metrics=cast(
+                    ClassificationMetrics,
+                    _point_metrics_from_dict(payload["metrics"], task_type, path=f"{path}.metrics"),
+                ),
+                **{
+                    field.name: (
+                        _integer(payload[field.name], path=f"{path}.{field.name}")
+                        if field.name == "n_bootstrap"
+                        else _finite_float(payload[field.name], path=f"{path}.{field.name}")
+                    )
+                    for field in fields(BootstrapClassificationMetrics)
+                    if field.name != "metrics"
+                },
+            )
+
         _exact_keys(payload, _CLASSIFICATION_AGGREGATE_KEYS, path=path)
         values = {}
         for field in fields(ClassificationMetricsAggregate):
@@ -471,6 +497,23 @@ def _aggregate_metrics_from_dict(
                 parsed = _finite_float(payload[field.name], path=field_path)
             values[field.name] = parsed
         return ClassificationMetricsAggregate(**values)
+
+    if set(payload) == _REGRESSION_BOOTSTRAP_KEYS:
+        return BootstrapRegressionMetrics(
+            metrics=cast(
+                RegressionMetrics,
+                _point_metrics_from_dict(payload["metrics"], task_type, path=f"{path}.metrics"),
+            ),
+            **{
+                field.name: (
+                    _integer(payload[field.name], path=f"{path}.{field.name}")
+                    if field.name == "n_bootstrap"
+                    else _finite_float(payload[field.name], path=f"{path}.{field.name}")
+                )
+                for field in fields(BootstrapRegressionMetrics)
+                if field.name != "metrics"
+            },
+        )
 
     _exact_keys(payload, _REGRESSION_AGGREGATE_KEYS, path=path)
     return RegressionMetricsAggregate(

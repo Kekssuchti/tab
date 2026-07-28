@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.model_selection import KFold, StratifiedKFold
 
 from src.classes.preprocessor import Preprocessor
+from src.config import config
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle
@@ -14,7 +15,7 @@ from src.schemas.metrics import FinalTestMetrics
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 from src.schemas.training_schemas import ModelConfig, TuningMethod
-from src.utils.evaluation import evaluate_trained_model
+from src.utils.evaluation import evaluate_trained_model, evaluate_trained_model_bootstrap
 from src.utils.evaluation_utils import (
     aggregate_final_test_metrics,
     classification_score,
@@ -343,31 +344,50 @@ class Trainer:
         # here we use bohlens method to fit the best model on each fold
         # and predict with each the test data to get more robust evaluations
 
-        for train_indices, _ in folds:
-            trained_sub_model = None
+        if config.eval_bootstrap:
+            trained_model = None
             try:
-                fold_X_train = self._take_rows(base_X_train, train_indices)
-                fold_y_train = self._take_rows(base_y_train, train_indices)
-
-                trained_sub_model, fit_time = self._fit_model(
+                trained_model, fit_time = self._fit_model(
                     model_config,
                     model_spec,
                     best_params,
-                    fold_X_train,
-                    fold_y_train,
+                    base_X_train,
+                    base_y_train,
                 )
-                final_fit_time += fit_time
-
-                sub_model_result = evaluate_trained_model(
-                    trained_model=trained_sub_model,
+                final_fit_time = fit_time
+                test_metrics = evaluate_trained_model_bootstrap(
+                    trained_model=trained_model,
                     data=data,
                     task_type=self.task_type,
                 )
-                sub_model_results.append(sub_model_result)
             finally:
-                release_model(trained_sub_model)
+                release_model(trained_model)
+        else:
+            for train_indices, _ in folds:
+                trained_sub_model = None
+                try:
+                    fold_X_train = self._take_rows(base_X_train, train_indices)
+                    fold_y_train = self._take_rows(base_y_train, train_indices)
 
-        test_metrics = aggregate_final_test_metrics(sub_model_results)
+                    trained_sub_model, fit_time = self._fit_model(
+                        model_config,
+                        model_spec,
+                        best_params,
+                        fold_X_train,
+                        fold_y_train,
+                    )
+                    final_fit_time += fit_time
+
+                    sub_model_result = evaluate_trained_model(
+                        trained_model=trained_sub_model,
+                        data=data,
+                        task_type=self.task_type,
+                    )
+                    sub_model_results.append(sub_model_result)
+                finally:
+                    release_model(trained_sub_model)
+
+            test_metrics = aggregate_final_test_metrics(sub_model_results)
 
         tuning_result = TuningRecord(
             best_params=best_params,
@@ -377,11 +397,19 @@ class Trainer:
             method=method,
         )
 
-        logger.info(
-            f"Model tuning complete in {tuning_result.total_time:.3f}s. "
-            f"Best AUROC MIMIC: {tuning_result.final_test_metrics.mimic_test.mean_roc_auc:.4f}, "
-            f"Best AUROC TUDD: {tuning_result.final_test_metrics.tudd_test.mean_roc_auc:.4f}"
-        )
+        mimic_metrics = tuning_result.final_test_metrics.mimic_test.metrics
+        tudd_metrics = tuning_result.final_test_metrics.tudd_test.metrics
+        if self.task_type == "classification":
+            logger.info(
+                f"Model tuning complete in {tuning_result.total_time:.3f}s. "
+                f"Best AUROC MIMIC: {mimic_metrics.roc_auc:.4f}, "
+                f"Best AUROC TUDD: {tudd_metrics.roc_auc:.4f}"
+            )
+        else:
+            logger.info(
+                f"Model tuning complete in {tuning_result.total_time:.3f}s. "
+                f"Best R2 MIMIC: {mimic_metrics.r2:.4f}, Best R2 TUDD: {tudd_metrics.r2:.4f}"
+            )
 
         return ModelTrainingResult(
             model_name=model_config.name,

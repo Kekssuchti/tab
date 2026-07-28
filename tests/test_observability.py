@@ -31,6 +31,7 @@ from src.schemas.dataset_schemas import (
 from src.schemas.pipeline_schemas import MLflowConfig, PipelineConfig
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
+    BootstrapClassificationMetrics,
     ClassificationMetrics,
     ClassificationMetricsAggregate,
     FinalTestMetrics,
@@ -84,6 +85,42 @@ def _tuning_result() -> TuningRecord:
             FoldRecord(1, 1, cv1_fold1, 0.04, {"C": 1.0}),
         ],
     )
+
+
+def _bootstrap_result() -> PipelineRunRecord:
+    result = _result(tuned=True)
+    point_metrics = _metrics(0.85)
+    bootstrap_metrics = BootstrapClassificationMetrics(
+        metrics=point_metrics,
+        ci_95_roc_auc_lower=0.75,
+        ci_95_roc_auc_upper=0.95,
+        ci_95_prc_auc_lower=0.75,
+        ci_95_prc_auc_upper=0.95,
+        ci_95_f1_lower=0.75,
+        ci_95_f1_upper=0.95,
+        ci_95_accuracy_lower=0.75,
+        ci_95_accuracy_upper=0.95,
+        ci_95_sensitivity_lower=0.75,
+        ci_95_sensitivity_upper=0.95,
+        ci_95_precision_lower=0.75,
+        ci_95_precision_upper=0.95,
+        n_bootstrap=5000,
+    )
+    training_result = result.model_runs[0].training_result
+    tuning_result = replace(
+        training_result.tuning_result,
+        final_test_metrics=AggregatedFinalTestMetrics(
+            mimic_test=bootstrap_metrics,
+            mimic_prediction_time=0.03,
+            tudd_test=bootstrap_metrics,
+            tudd_prediction_time=0.04,
+        ),
+    )
+    model_run = replace(
+        result.model_runs[0],
+        training_result=replace(training_result, tuning_result=tuning_result),
+    )
+    return replace(result, model_runs=(model_run,))
 
 
 def _params(
@@ -456,6 +493,17 @@ def test_cv_result_envelope_round_trips_and_rejects_task_mismatch():
     assert isinstance(regression.tuning_result.fold_results[0].metrics, RegressionMetrics)
 
 
+def test_bootstrap_final_metrics_round_trip_as_typed_results():
+    source = _bootstrap_result()
+
+    restored = pipeline_result_from_json(canonical_json(pipeline_result_to_dict(source))).pipeline_result
+    metrics = restored.model_runs[0].training_result.tuning_result.final_test_metrics.mimic_test
+
+    assert isinstance(metrics, BootstrapClassificationMetrics)
+    assert metrics.metrics.accuracy == pytest.approx(0.85)
+    assert metrics.n_bootstrap == 5000
+
+
 def test_observation_assembly_describes_parent_model_and_cv_runs():
     observation = assemble_pipeline_observation(
         _params("sqlite:///unused", run_name="friendly-run"),
@@ -514,6 +562,20 @@ def test_observation_assembly_marks_failed_model_without_evaluations():
     assert _metric_value(model_run.metrics, "train.fit_time") == 0.1
     assert model_run.evaluations == ()
     assert model_run.children == ()
+
+
+def test_observation_logs_bootstrap_point_metrics_and_method():
+    observation = assemble_pipeline_observation(
+        _params("sqlite:///unused", run_name="bootstrap-run"),
+        _bootstrap_result(),
+    )
+    model_run = observation.children[0]
+
+    assert model_run.params["model.final_evaluation.method"] == "bootstrap"
+    assert model_run.params["model.final_evaluation.n_bootstrap"] == "5000"
+    assert _metric_value(model_run.metrics, "test.mimic.accuracy") == pytest.approx(0.85)
+    assert _metric_value(model_run.metrics, "test.mimic.ci_95_accuracy_lower") == pytest.approx(0.75)
+    assert all(metric.name != "test.mimic.mean_accuracy" for metric in model_run.metrics)
 
 
 def test_observation_only_logs_class_count_for_classification_metrics():
