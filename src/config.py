@@ -18,7 +18,6 @@ class Config(BaseSettings):
     # paths
     dir_root: Path = Path(__file__).parents[1]
     dir_cache: Path = dir_root / "cache"
-    dir_run_results: Path = dir_root / "run_results"
     dir_plots: Path = dir_root / "plots"
     dir_log: Path = dir_root / "logs"
     dir_mlflow_artifacts: Path = dir_root / "mlartifacts"
@@ -30,27 +29,8 @@ class Config(BaseSettings):
     dir_data: Path = dir_root / "data"
     dir_data_toy: Path = dir_data / "toy"
 
-    dir_src: Path = dir_root / "src"
-    dir_mlflow: Path = dir_src / "mlflow"
-    dir_evaluation: Path = dir_src / "evaluation"
-    dir_external_dep: Path = dir_root / "external"
-    dir_external_limix: Path = dir_external_dep / "limix"
-    dir_external_tabfm: Path = dir_external_dep / "tabfm"
-
-    tabpfn_token: str = Field(default="", alias="TABPFN_TOKEN")
-
-    train_size: float = 0.8
-    test_size: float = 0.2
-
-    tfm_names: tuple[str, ...] = (
-        "tabpfn-3",
-        "tabicl-2",
-        "limix-2m",
-        "limix-16m",
-        "mitra",
-        "orion-bix",
-        "orion-msp",
-    )
+    dir_external_limix: Path = dir_root / "external" / "limix"
+    dir_external_tabfm: Path = dir_root / "external" / "tabfm"
 
 
 @lru_cache

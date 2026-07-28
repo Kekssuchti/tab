@@ -1,19 +1,13 @@
-import sys
-
-from src.config import config
-
-sys.path.insert(0, str(config.dir_external_limix))
-
 from timeit import default_timer as timer
 
 from external.TabSwift.TALENT.model.lib.tabswift.classifier import TabSwiftClassifier
 from external.TabSwift.TALENT.model.lib.tabswift.regressor import TabSwiftRegressor
 from src.config import config
-from src.interfaces.model_interface import ModelAdapter, PredictionValues, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction
 from src.schemas.base_schemas import TaskType
 
 
-class TabSwiftAdapter(ModelAdapter[PredictionValues]):
+class TabSwiftAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "classification",
@@ -39,7 +33,7 @@ class TabSwiftAdapter(ModelAdapter[PredictionValues]):
         self.model.fit(X_train, y_train)
         return timer() - start_time
 
-    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
+    def predict(self, X_test) -> TimedPrediction:
         start_time = timer()
         result = self.predict_from_estimator(X_test)
 

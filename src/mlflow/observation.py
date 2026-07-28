@@ -5,7 +5,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from statistics import pstdev
-from typing import Literal
+from typing import Literal, cast
 
 from src.classes.data_registry import dataset_task_for_target
 from src.mlflow.serialization import canonical_json
@@ -164,8 +164,6 @@ class RunObservation:
         children: tuple of RunObservation, default=()
             Nested child runs.
 
-        cv_artifact_model_id: str or None, default=None
-            Model identifier used for CV artifact logging.
     """
 
     run_name: str
@@ -175,7 +173,6 @@ class RunObservation:
     evaluations: tuple[EvaluationLog, ...] = ()
     table_rows: tuple[EvaluationTableRow, ...] = ()
     children: tuple[RunObservation, ...] = ()
-    cv_artifact_model_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -204,7 +201,14 @@ def assemble_pipeline_observation(
 ) -> RunObservation:
     validate_pipeline_projection(pipeline_config, pipeline_result)
     model_params_by_id = _model_params_by_instance_id(pipeline_config.training)
-    evaluation_bundle = _evaluation_bundle(pipeline_config, pipeline_result.model_runs)
+    children = tuple(
+        _model_run_observation(
+            pipeline_config,
+            run_record,
+            model_params_by_id[run_record.model_instance_id],
+        )
+        for run_record in pipeline_result.model_runs
+    )
 
     return RunObservation(
         run_name=_run_name(pipeline_config),
@@ -215,16 +219,9 @@ def assemble_pipeline_observation(
             **_pipeline_model_config_params(pipeline_config),
         },
         metrics=_metric_logs_from_values(((METRIC_PIPELINE_TOTAL_TIME, pipeline_result.total_time),)),
-        evaluations=evaluation_bundle.evaluations,
-        table_rows=evaluation_bundle.table_rows,
-        children=tuple(
-            _model_run_observation(
-                pipeline_config,
-                run_record,
-                model_params_by_id[run_record.model_instance_id],
-            )
-            for run_record in pipeline_result.model_runs
-        ),
+        evaluations=tuple(evaluation for child in children for evaluation in child.evaluations),
+        table_rows=tuple(row for child in children for row in child.table_rows),
+        children=children,
     )
 
 
@@ -260,7 +257,7 @@ def _model_run_observation(
 
     run_params = {
         **_model_run_params(model_config, training_result),
-        **_model_metric_params(training_result, model_result),
+        **_model_metric_params(model_result),
     }
     if model_result is None:
         metrics = list(_metric_logs_from_values(((METRIC_TRAIN_FIT_TIME, training_result.fit_time),)))
@@ -283,7 +280,6 @@ def _model_run_observation(
         evaluations=evaluation_bundle.evaluations,
         table_rows=evaluation_bundle.table_rows,
         children=children,
-        cv_artifact_model_id=run_record.model_instance_id if training_result.tuning_result is not None else None,
     )
 
 
@@ -315,7 +311,7 @@ def _cv_candidate_observations(
             ),
             *_metric_logs("cv.mean", candidate.mean_metrics),
         ]
-        for name, value in _metric_stds(list(candidate.folds)).items():
+        for name, value in _metric_stds(candidate.folds).items():
             metric = _metric_log(f"cv.std.{name}", value)
             if metric is not None:
                 metrics.append(metric)
@@ -353,19 +349,17 @@ def _cv_candidate_observations(
 
 
 def _pipeline_tags(pipeline_config: PipelineConfig) -> dict[str, str]:
-    return _drop_none(
-        {
-            TAG_RUN_TYPE: RUN_TYPE_PIPELINE,
-            TAG_TRACKING_SCHEMA_VERSION: TRACKING_SCHEMA_VERSION,
-            TAG_PIPELINE_ID: pipeline_config.run_id,
-            "run_id": pipeline_config.run_id,
-            TAG_TARGET: pipeline_config.dataset.target,
-            TAG_TASK_TYPE: dataset_task_for_target(pipeline_config.dataset.target).task_type,
-            TAG_TRAINED_ON: _trained_on(pipeline_config),
-            TAG_TRAIN_SOURCES: _train_sources(pipeline_config),
-            "trained_models": ",".join(model_params.name for model_params in pipeline_config.training),
-        }
-    )
+    return {
+        TAG_RUN_TYPE: RUN_TYPE_PIPELINE,
+        TAG_TRACKING_SCHEMA_VERSION: TRACKING_SCHEMA_VERSION,
+        TAG_PIPELINE_ID: pipeline_config.run_id,
+        "run_id": pipeline_config.run_id,
+        TAG_TARGET: pipeline_config.dataset.target,
+        TAG_TASK_TYPE: dataset_task_for_target(pipeline_config.dataset.target).task_type,
+        TAG_TRAINED_ON: _trained_on(pipeline_config),
+        TAG_TRAIN_SOURCES: _train_sources(pipeline_config),
+        "trained_models": ",".join(model_params.name for model_params in pipeline_config.training),
+    }
 
 
 def _model_tags(
@@ -474,7 +468,7 @@ def _dataset_summary_params(pipeline_result: PipelineRunRecord) -> dict[str, str
 def _pipeline_model_config_params(pipeline_config: PipelineConfig) -> dict[str, str]:
     run_params = {}
     model_ids = model_instance_ids(pipeline_config.training)
-    for model_id, model_params in zip(model_ids, pipeline_config.training, strict=False):
+    for model_id, model_params in zip(model_ids, pipeline_config.training, strict=True):
         run_params.update(_model_config_params(model_id, model_params))
     return run_params
 
@@ -568,7 +562,6 @@ def _model_metric_logs(
 
 
 def _model_metric_params(
-    training_result: ModelTrainingResult,
     model_result: ModelEvaluationRecord | None,
 ) -> dict[str, str]:
     if model_result is None:
@@ -686,48 +679,28 @@ def _evaluation_bundle(
                 **test_result.metrics.scores,
                 "predict_time": test_result.predict_time,
             }
-            evaluations.append(
-                _make_evaluation(
-                    pipeline_config,
-                    model_id,
-                    model_result.model_name,
-                    test_result.dataset_name,
-                    "test",
-                    metrics,
-                )
+            evaluation = _make_evaluation(
+                pipeline_config,
+                model_id,
+                model_result.model_name,
+                test_result.dataset_name,
+                "test",
+                metrics,
             )
-            table_rows.extend(
-                _evaluation_metric_rows(
-                    pipeline_config,
-                    model_id,
-                    model_result.model_name,
-                    test_result.dataset_name,
-                    "test",
-                    metrics,
-                )
-            )
+            evaluations.append(evaluation)
+            table_rows.extend(_evaluation_metric_rows(evaluation))
 
         delta_metrics = model_result.final_test_metrics.mimic_minus_tudd.scores
-        evaluations.append(
-            _make_evaluation(
-                pipeline_config,
-                model_id,
-                model_result.model_name,
-                "mimic_minus_tudd",
-                "test_delta",
-                delta_metrics,
-            )
+        evaluation = _make_evaluation(
+            pipeline_config,
+            model_id,
+            model_result.model_name,
+            "mimic_minus_tudd",
+            "test_delta",
+            delta_metrics,
         )
-        table_rows.extend(
-            _evaluation_metric_rows(
-                pipeline_config,
-                model_id,
-                model_result.model_name,
-                "mimic_minus_tudd",
-                "test_delta",
-                delta_metrics,
-            )
-        )
+        evaluations.append(evaluation)
+        table_rows.extend(_evaluation_metric_rows(evaluation))
 
     return _EvaluationBundle(tuple(evaluations), tuple(table_rows))
 
@@ -761,28 +734,23 @@ def _make_evaluation(
 
 
 def _evaluation_metric_rows(
-    pipeline_config: PipelineConfig,
-    model_id: str,
-    model_name: str,
-    dataset_name: str,
-    scope: Literal["test", "test_delta"],
-    metrics: dict[str, float | int],
+    evaluation: EvaluationLog,
 ) -> list[EvaluationTableRow]:
     rows = []
-    for metric_name, metric_value in metrics.items():
+    for metric_name, metric_value in evaluation.metrics.items():
         value = float(metric_value)
         if not math.isfinite(value):
             continue
         rows.append(
             EvaluationTableRow(
                 tracking_schema_version=TRACKING_SCHEMA_VERSION,
-                pipeline_run_id=pipeline_config.run_id,
-                target=pipeline_config.dataset.target,
-                trained_on=_trained_on(pipeline_config),
-                model_name=model_name,
-                model_instance=model_id,
-                dataset=dataset_name,
-                scope=scope,
+                pipeline_run_id=evaluation.tags[TAG_PIPELINE_ID],
+                target=evaluation.targets[TAG_TARGET],
+                trained_on=evaluation.tags[TAG_TRAINED_ON],
+                model_name=evaluation.tags[TAG_MODEL_NAME],
+                model_instance=evaluation.tags[TAG_MODEL_INSTANCE],
+                dataset=evaluation.tags["dataset"],
+                scope=cast(Literal["test", "test_delta"], evaluation.tags["scope"]),
                 metric=metric_name,
                 value=value,
             )
@@ -805,19 +773,11 @@ def _train_sources(pipeline_config: PipelineConfig) -> str:
 
 
 def _trained_on(pipeline_config: PipelineConfig) -> str:
-    origins = {_dataset_origin(split.dataset) for split in pipeline_config.dataset.train_on}
+    origins = {split.dataset for split in pipeline_config.dataset.train_on}
     if len(origins) == 1:
         return next(iter(origins))
 
     return "combination"
-
-
-def _dataset_origin(dataset_name: str) -> str:
-    if dataset_name.startswith("mimic"):
-        return "mimic"
-    if dataset_name.startswith("tudd"):
-        return "tudd"
-    return dataset_name
 
 
 def _candidate_ranks(scores: list[float], *, maximize: bool = True) -> list[int]:
@@ -871,17 +831,13 @@ def _candidate_summaries(
     return tuple(summaries)
 
 
-def _metric_stds(folds: list[FoldRecord]) -> dict[str, float]:
+def _metric_stds(folds: Iterable[FoldRecord]) -> dict[str, float]:
     values_by_metric: defaultdict[str, list[float]] = defaultdict(list)
     for fold in folds:
         for name, value in fold.metrics.scores.items():
             values_by_metric[name].append(float(value))
 
     return {name: float(pstdev(values)) for name, values in values_by_metric.items() if values}
-
-
-def _drop_none(values: dict[str, str | None]) -> dict[str, str]:
-    return {key: value for key, value in values.items() if value is not None}
 
 
 def _string_params(values: dict[str, object]) -> dict[str, str]:

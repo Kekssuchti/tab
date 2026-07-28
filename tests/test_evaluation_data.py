@@ -5,14 +5,13 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 
-from src.plot_results import (
-    list_pipeline_runs,
-    load_evaluation_data,
+from src.mlflow.evaluation_data import list_pipeline_runs, load_evaluation_data
+from src.utils.evaluation_plot import (
+    calculate_comparative_generalizability,
     plot_generalization_gaps,
     plot_performance_vs_runtime,
     plot_roc_auc,
 )
-from src.utils.evaluation_plot import calculate_comparative_generalizability
 from src.mlflow.tracking_contract import TRACKING_SCHEMA_VERSION
 
 

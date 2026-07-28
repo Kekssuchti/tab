@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from functools import partial
 from timeit import default_timer as timer
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 from sklearn.model_selection import KFold, StratifiedKFold
@@ -10,16 +10,13 @@ from src.classes.preprocessor import Preprocessor
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle
-from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics
+from src.schemas.metrics import FinalTestMetrics
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
-from src.schemas.training_schemas import (
-    ModelConfig,
-)
-from src.utils.databundle_utils import _databundle_to_xy_train
+from src.schemas.training_schemas import ModelConfig, TuningMethod
 from src.utils.evaluation import evaluate_trained_model
 from src.utils.evaluation_utils import (
-    _format_metrics,
+    aggregate_final_test_metrics,
     classification_score,
     evaluate_classification_predictions,
 )
@@ -37,8 +34,6 @@ class _CandidateEvaluation:
 
     candidate_params: dict[str, Any]
     fold_scores: list[float]
-    fold_metrics: list[ClassificationMetrics]
-    fold_times: list[float]
     fold_results: list[FoldRecord]
 
 
@@ -120,7 +115,7 @@ class Trainer:
         self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
     ) -> ModelTrainingResult:
         tuning = model_config.tuning
-        X_train, y_train = _databundle_to_xy_train(data)
+        X_train, y_train = _training_data(data)
 
         candidates = model_spec.tuning_candidates(tuning.search_space, tuning.grid)
         folds = list(self._build_cv(tuning).split(X_train, y_train))
@@ -139,8 +134,6 @@ class Trainer:
             evaluation = _CandidateEvaluation(
                 candidate_params=best_params,
                 fold_scores=[],
-                fold_metrics=[],
-                fold_times=[0.0] * len(folds),
                 fold_results=[],
             )
             evaluations.append(evaluation)
@@ -182,7 +175,7 @@ class Trainer:
         search_space = model_spec.tuning_search_space(tuning.search_space, tuning.grid)
         if not search_space:
             raise ValueError("Tuning requires a non-empty search space")
-        X_train, y_train = _databundle_to_xy_train(data)
+        X_train, y_train = _training_data(data)
 
         folds = list(self._build_cv(tuning).split(X_train, y_train))
 
@@ -258,8 +251,6 @@ class Trainer:
     ) -> _CandidateEvaluation:
         tuning = model_config.tuning
         candidate_scores: list[float] = []
-        candidate_metrics: list[ClassificationMetrics] = []
-        candidate_times: list[float] = []
         fold_results: list[FoldRecord] = []
 
         for fold_index, (train_index, validation_index) in enumerate(folds):
@@ -284,15 +275,13 @@ class Trainer:
                 )
 
                 candidate_scores.append(classification_score(metrics, tuning.scoring))
-                candidate_metrics.append(metrics)
-                candidate_times.append(timer() - fold_start)
 
                 fold_results.append(
                     FoldRecord(
                         candidate_index=candidate_index,
                         fold_index=fold_index,
                         metrics=metrics,
-                        time=candidate_times[-1],
+                        time=timer() - fold_start,
                         model_params=candidate_params,
                     )
                 )
@@ -303,8 +292,6 @@ class Trainer:
         return _CandidateEvaluation(
             candidate_params=candidate_params,
             fold_scores=candidate_scores,
-            fold_metrics=candidate_metrics,
-            fold_times=candidate_times,
             fold_results=fold_results,
         )
 
@@ -316,7 +303,7 @@ class Trainer:
         evaluations: list[_CandidateEvaluation],
         folds,
         *,
-        method: Literal["grid", "optuna"],
+        method: TuningMethod,
     ) -> ModelTrainingResult:
         """
         Fits the best found params for a model to each fold and evaluates it against the common test sets.
@@ -350,63 +337,59 @@ class Trainer:
             best_params = candidates[best_index]
 
         logger.info(f"CV Done. Best params: {best_params}")
-        base_X_train, base_y_train = _databundle_to_xy_train(data)
+        base_X_train, base_y_train = _training_data(data)
         sub_model_results: list[FinalTestMetrics] = []
         final_fit_time = 0.0
         # here we use bohlens method to fit the best model on each fold
         # and predict with each the test data to get more robust evaluations
 
-        try:
-            for train_indices, _ in folds:
-                trained_sub_model = None
-                try:
-                    fold_X_train = self._take_rows(base_X_train, train_indices)
-                    fold_y_train = self._take_rows(base_y_train, train_indices)
+        for train_indices, _ in folds:
+            trained_sub_model = None
+            try:
+                fold_X_train = self._take_rows(base_X_train, train_indices)
+                fold_y_train = self._take_rows(base_y_train, train_indices)
 
-                    trained_sub_model, fit_time = self._fit_model(
-                        model_config,
-                        model_spec,
-                        best_params,
-                        fold_X_train,
-                        fold_y_train,
-                    )
-                    final_fit_time += fit_time
+                trained_sub_model, fit_time = self._fit_model(
+                    model_config,
+                    model_spec,
+                    best_params,
+                    fold_X_train,
+                    fold_y_train,
+                )
+                final_fit_time += fit_time
 
-                    sub_model_result = evaluate_trained_model(
-                        trained_model=trained_sub_model,
-                        data=data,
-                        task_type=self.task_type,
-                    )
-                    sub_model_results.append(sub_model_result)
-                finally:
-                    release_model(trained_sub_model)
+                sub_model_result = evaluate_trained_model(
+                    trained_model=trained_sub_model,
+                    data=data,
+                    task_type=self.task_type,
+                )
+                sub_model_results.append(sub_model_result)
+            finally:
+                release_model(trained_sub_model)
 
-            test_metrics = _format_metrics(sub_model_results)
+        test_metrics = aggregate_final_test_metrics(sub_model_results)
 
-            tuning_result = TuningRecord(
-                best_params=best_params,
-                scoring=tuning_config.scoring,
-                final_test_metrics=test_metrics,
-                fold_results=fold_results,
-                method=method,
-            )
+        tuning_result = TuningRecord(
+            best_params=best_params,
+            scoring=tuning_config.scoring,
+            final_test_metrics=test_metrics,
+            fold_results=fold_results,
+            method=method,
+        )
 
-            logger.info(
-                f"Model tuning complete in {tuning_result.total_time:.3f}s. "
-                f"Best AUROC MIMIC: {tuning_result.final_test_metrics.mimic_test.mean_roc_auc:.4f}, "
-                f"Best AUROC TUDD: {tuning_result.final_test_metrics.tudd_test.mean_roc_auc:.4f}"
-            )
+        logger.info(
+            f"Model tuning complete in {tuning_result.total_time:.3f}s. "
+            f"Best AUROC MIMIC: {tuning_result.final_test_metrics.mimic_test.mean_roc_auc:.4f}, "
+            f"Best AUROC TUDD: {tuning_result.final_test_metrics.tudd_test.mean_roc_auc:.4f}"
+        )
 
-            return ModelTrainingResult(
-                model_name=model_config.name,
-                task_type=self.task_type,
-                tuned=True,
-                fit_time=final_fit_time,
-                tuning_result=tuning_result,
-            )
-
-        except Exception:
-            raise
+        return ModelTrainingResult(
+            model_name=model_config.name,
+            task_type=self.task_type,
+            tuned=True,
+            fit_time=final_fit_time,
+            tuning_result=tuning_result,
+        )
 
     @staticmethod
     def _build_optuna_sampler(tuning):
@@ -442,3 +425,7 @@ class Trainer:
             shuffle=tuning.cv.shuffle,
             random_state=tuning.cv.random_state,
         )
+
+
+def _training_data(data: DatasetBundle):
+    return data.train_data.X, data.train_data.y.to_numpy()

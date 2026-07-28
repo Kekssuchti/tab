@@ -29,7 +29,6 @@ def _(config, pd):
 
     df_mimic_read = pd.read_csv(config.dir_data / "extracted" / "mimic4_readmission.csv")
 
-    df_tudd_fil_file = pd.read_csv(config.dir_data / "filtered" / "tudd_mean_100_full.csv")
     return df_mimic, df_mimic_read, df_tudd, df_tudd_read
 
 

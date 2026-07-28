@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Generic, TypeAlias, TypeVar, cast, overload
+from typing import Generic, TypeVar, cast, overload
 
 import numpy as np
 
@@ -62,14 +62,7 @@ class ClassificationMetrics:
 
 @dataclass
 class ClassificationMetricsAggregate:
-    """
-    Mean classification metrics with 95% confidence intervals.
-
-    ---
-    Attributes:
-        metrics: list of ClassificationMetrics
-            Per-run metrics to aggregate.
-    """
+    """Mean classification metrics with 95% confidence intervals."""
 
     mean_roc_auc: float
     mean_prc_auc: float
@@ -92,30 +85,6 @@ class ClassificationMetricsAggregate:
     ci_95_precision_lower: float
     ci_95_precision_upper: float
 
-    def __init__(self, metrics: list[ClassificationMetrics]) -> None:
-        from src.utils.evaluation_utils import calculate_mean_ci
-
-        self.mean_roc_auc, self.ci_95_roc_auc_lower, self.ci_95_roc_auc_upper = calculate_mean_ci(
-            [m.roc_auc for m in metrics if m.roc_auc is not None], 0.95
-        )
-        self.mean_prc_auc, self.ci_95_prc_auc_lower, self.ci_95_prc_auc_upper = calculate_mean_ci(
-            [m.prc_auc for m in metrics if m.prc_auc is not None], 0.95
-        )
-        self.mean_f1, self.ci_95_f1_lower, self.ci_95_f1_upper = calculate_mean_ci([m.f1 for m in metrics], 0.95)
-        self.mean_accuracy, self.ci_95_accuracy_lower, self.ci_95_accuracy_upper = calculate_mean_ci(
-            [m.accuracy for m in metrics], 0.95
-        )
-        (
-            self.mean_sensitivity,
-            self.ci_95_sensitivity_lower,
-            self.ci_95_sensitivity_upper,
-        ) = calculate_mean_ci([m.sensitivity for m in metrics], 0.95)
-        self.mean_precision, self.ci_95_precision_lower, self.ci_95_precision_upper = calculate_mean_ci(
-            [m.precision for m in metrics], 0.95
-        )
-        self.mean_confusion_matrix = np.mean(np.stack([m.confusion_matrix for m in metrics]), axis=0)
-        self.n_classes = metrics[0].n_classes
-
     @property
     def scores(self) -> dict[str, float]:
         return {
@@ -137,32 +106,6 @@ class ClassificationMetricsAggregate:
             "sensitivity": (self.ci_95_sensitivity_lower, self.ci_95_sensitivity_upper),
             "precision": (self.ci_95_precision_lower, self.ci_95_precision_upper),
         }
-
-
-@dataclass(frozen=True)
-class ClassificationPredictionBatch:
-    """
-    Classification predictions and probabilities for one batch.
-
-    ---
-    Attributes:
-        probabilities: numpy.ndarray
-            Predicted class probabilities.
-
-        y_true: numpy.ndarray
-            Ground-truth labels.
-
-        y_pred: numpy.ndarray
-            Predicted labels.
-
-        n_classes: int
-            Number of classes represented in the batch.
-    """
-
-    probabilities: np.ndarray
-    y_true: np.ndarray
-    y_pred: np.ndarray
-    n_classes: int
 
 
 @dataclass
@@ -199,14 +142,7 @@ class RegressionMetrics:
 
 @dataclass
 class RegressionMetricsAggregate:
-    """
-    Mean regression metrics with 95% confidence intervals.
-
-    ---
-    Attributes:
-        metrics: list of RegressionMetrics
-            Per-run metrics to aggregate.
-    """
+    """Mean regression metrics with 95% confidence intervals."""
 
     mean_r2: float
     mean_mae: float
@@ -220,14 +156,6 @@ class RegressionMetricsAggregate:
     ci_95_mse_upper: float
     ci_95_rmse_lower: float
     ci_95_rmse_upper: float
-
-    def __init__(self, metrics: list[RegressionMetrics]) -> None:
-        from src.utils.evaluation_utils import calculate_mean_ci
-
-        self.mean_r2, self.ci_95_r2_lower, self.ci_95_r2_upper = calculate_mean_ci([m.r2 for m in metrics])
-        self.mean_mae, self.ci_95_mae_lower, self.ci_95_mae_upper = calculate_mean_ci([m.mae for m in metrics])
-        self.mean_mse, self.ci_95_mse_lower, self.ci_95_mse_upper = calculate_mean_ci([m.mse for m in metrics])
-        self.mean_rmse, self.ci_95_rmse_lower, self.ci_95_rmse_upper = calculate_mean_ci([m.rmse for m in metrics])
 
     @property
     def scores(self) -> dict[str, float]:
@@ -282,10 +210,6 @@ class FinalTestMetrics(Generic[MetricT]):
         return cast(MetricT, calculate_metric_diff(self.mimic_test, self.tudd_test))
 
 
-ClassificationFinalTestMetrics: TypeAlias = FinalTestMetrics[ClassificationMetrics]
-RegressionFinalTestMetrics: TypeAlias = FinalTestMetrics[RegressionMetrics]
-
-
 @dataclass(frozen=True)
 class AggregatedFinalTestMetrics(Generic[AggregateMetricT]):
     """
@@ -314,10 +238,6 @@ class AggregatedFinalTestMetrics(Generic[AggregateMetricT]):
     @property
     def mimic_minus_tudd(self) -> ClassificationMetrics | RegressionMetrics:
         return calculate_metric_diff(self.mimic_test, self.tudd_test)
-
-
-ClassificationAggregatedFinalTestMetrics: TypeAlias = AggregatedFinalTestMetrics[ClassificationMetricsAggregate]
-RegressionAggregatedFinalTestMetrics: TypeAlias = AggregatedFinalTestMetrics[RegressionMetricsAggregate]
 
 
 @overload

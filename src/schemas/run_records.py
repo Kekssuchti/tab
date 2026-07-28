@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Generic, Literal, TypeAlias, TypeVar
+from typing import Any, Generic, TypeAlias, TypeVar
 
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetSummary
@@ -11,7 +11,7 @@ from src.schemas.metrics import (
     RegressionMetricsAggregate,
     RegressionMetrics,
 )
-from src.utils.evaluation_utils import ScoringMethodCLS, ScoringMethodREG
+from src.schemas.training_schemas import ScoringMethod, TuningMethod
 
 
 MetricT = TypeVar("MetricT", ClassificationMetrics, RegressionMetrics)
@@ -48,10 +48,6 @@ class FoldRecord(Generic[MetricT]):
     model_params: dict[str, Any]
 
 
-ClassificationFoldRecord: TypeAlias = FoldRecord[ClassificationMetrics]
-RegressionFoldRecord: TypeAlias = FoldRecord[RegressionMetrics]
-
-
 @dataclass
 class TuningRecord(Generic[MetricT, AggregateMetricT]):
     """
@@ -76,18 +72,14 @@ class TuningRecord(Generic[MetricT, AggregateMetricT]):
     """
 
     best_params: dict[str, Any]
-    scoring: ScoringMethodCLS | ScoringMethodREG
+    scoring: ScoringMethod
     final_test_metrics: AggregatedFinalTestMetrics[AggregateMetricT]
     fold_results: list[FoldRecord[MetricT]] = field(default_factory=list)
-    method: Literal["grid", "optuna"] = "optuna"
+    method: TuningMethod = "optuna"
 
     @property
     def total_time(self) -> float:
         return sum(fold.time for fold in self.fold_results)
-
-
-ClassificationTuningRecord: TypeAlias = TuningRecord[ClassificationMetrics, ClassificationMetricsAggregate]
-RegressionTuningRecord: TypeAlias = TuningRecord[RegressionMetrics, RegressionMetricsAggregate]
 
 
 @dataclass
@@ -158,10 +150,6 @@ class TestSetEvaluationRecord(Generic[MetricT]):
     dataset_name: str
     metrics: MetricT
     predict_time: float
-
-
-ClassificationTestSetEvaluationRecord: TypeAlias = TestSetEvaluationRecord[ClassificationMetrics]
-RegressionTestSetEvaluationRecord: TypeAlias = TestSetEvaluationRecord[RegressionMetrics]
 
 
 @dataclass(frozen=True)

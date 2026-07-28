@@ -4,7 +4,7 @@ import json
 import math
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
-from typing import Literal, TypeAlias, cast, get_args
+from typing import TypeAlias, cast, get_args
 
 import numpy as np
 
@@ -44,8 +44,8 @@ from src.schemas.run_records import (
     TestSetEvaluationRecord,
     TuningRecord,
 )
-from src.utils.evaluation_utils import ScoringMethodCLS, ScoringMethodREG
-from src.mlflow.validation import validate_pipeline_result, validate_tuning_record
+from src.schemas.training_schemas import ScoringMethod, TuningMethod
+from src.mlflow.validation import validate_pipeline_result, validate_tuning_record, validate_tuning_settings
 
 JsonScalar: TypeAlias = None | bool | int | float | str
 JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
@@ -128,13 +128,8 @@ def pipeline_config_to_dict(params: PipelineConfig) -> JsonObject:
     return _json_object(params.model_dump(mode="json"), path="config")
 
 
-def pipeline_result_to_record(result: PipelineRunRecord) -> PipelineResultEnvelope:
-    validate_pipeline_result(result)
-    return PipelineResultEnvelope(TRACKING_SCHEMA_VERSION, result)
-
-
 def pipeline_result_to_dict(result: PipelineRunRecord) -> JsonObject:
-    return pipeline_result_to_record(result).to_dict()
+    return PipelineResultEnvelope(TRACKING_SCHEMA_VERSION, result).to_dict()
 
 
 def pipeline_result_from_dict(value: object) -> PipelineResultEnvelope:
@@ -154,21 +149,12 @@ def pipeline_result_from_json(value: str) -> PipelineResultEnvelope:
     return pipeline_result_from_dict(json.loads(value, parse_constant=_reject_json_constant))
 
 
-def cv_result_to_record(
-    model_instance_id: str,
-    task_type: TaskType,
-    tuning_result: TuningRecord,
-) -> CVResultEnvelope:
-    validate_tuning_record(tuning_result, task_type)
-    return CVResultEnvelope(TRACKING_SCHEMA_VERSION, model_instance_id, task_type, tuning_result)
-
-
 def cv_result_to_dict(
     model_instance_id: str,
     task_type: TaskType,
     tuning_result: TuningRecord,
 ) -> JsonObject:
-    return cv_result_to_record(model_instance_id, task_type, tuning_result).to_dict()
+    return CVResultEnvelope(TRACKING_SCHEMA_VERSION, model_instance_id, task_type, tuning_result).to_dict()
 
 
 def cv_result_from_dict(value: object) -> CVResultEnvelope:
@@ -316,8 +302,6 @@ def _model_run_from_dict(value: object, *, path: str) -> ModelRunRecord:
         if evaluation_value is not None
         else None
     )
-    if evaluation is not None and evaluation.model_name != training_result.model_name:
-        raise ValueError(f"{path} has inconsistent training and evaluation model names")
     return ModelRunRecord(
         model_instance_id=_string(payload["model_instance_id"], path=f"{path}.model_instance_id"),
         training_result=training_result,
@@ -353,23 +337,19 @@ def _tuning_result_from_dict(value: object, task_type: TaskType, *, path: str) -
     payload = _object(value, path=path)
     _exact_keys(payload, {"best_params", "scoring", "final_test_metrics", "fold_results", "method"}, path=path)
     scoring = _string(payload["scoring"], path=f"{path}.scoring")
-    valid_scoring = {"roc_auc", "f1", "accuracy"} if task_type == "classification" else {"r2", "mae", "mse", "rmse"}
-    if scoring not in valid_scoring:
-        raise ValueError(f"{path}.scoring {scoring!r} is invalid for {task_type}")
     method = _string(payload["method"], path=f"{path}.method")
-    if method not in {"grid", "optuna"}:
-        raise ValueError(f"{path}.method has unsupported value {method!r}")
+    validate_tuning_settings(scoring, method, task_type, path=path)
     folds = _list(payload["fold_results"], path=f"{path}.fold_results")
     return TuningRecord(
         best_params=_json_object(payload["best_params"], path=f"{path}.best_params"),
-        scoring=cast(ScoringMethodCLS | ScoringMethodREG, scoring),
+        scoring=cast(ScoringMethod, scoring),
         final_test_metrics=_aggregated_final_metrics_from_dict(
             payload["final_test_metrics"], task_type, path=f"{path}.final_test_metrics"
         ),
         fold_results=[
             _fold_from_dict(item, task_type, path=f"{path}.fold_results[{index}]") for index, item in enumerate(folds)
         ],
-        method=cast(Literal["grid", "optuna"], method),
+        method=cast(TuningMethod, method),
     )
 
 
@@ -480,7 +460,7 @@ def _aggregate_metrics_from_dict(
     payload = _object(value, path=path)
     if task_type == "classification":
         _exact_keys(payload, _CLASSIFICATION_AGGREGATE_KEYS, path=path)
-        aggregate = ClassificationMetricsAggregate.__new__(ClassificationMetricsAggregate)
+        values = {}
         for field in fields(ClassificationMetricsAggregate):
             field_path = f"{path}.{field.name}"
             if field.name == "mean_confusion_matrix":
@@ -489,14 +469,16 @@ def _aggregate_metrics_from_dict(
                 parsed = _integer(payload[field.name], path=field_path)
             else:
                 parsed = _finite_float(payload[field.name], path=field_path)
-            setattr(aggregate, field.name, parsed)
-        return aggregate
+            values[field.name] = parsed
+        return ClassificationMetricsAggregate(**values)
 
     _exact_keys(payload, _REGRESSION_AGGREGATE_KEYS, path=path)
-    aggregate = RegressionMetricsAggregate.__new__(RegressionMetricsAggregate)
-    for field in fields(RegressionMetricsAggregate):
-        setattr(aggregate, field.name, _finite_float(payload[field.name], path=f"{path}.{field.name}"))
-    return aggregate
+    return RegressionMetricsAggregate(
+        **{
+            field.name: _finite_float(payload[field.name], path=f"{path}.{field.name}")
+            for field in fields(RegressionMetricsAggregate)
+        }
+    )
 
 
 def _dataclass_to_object(value: object, *, path: str) -> JsonObject:

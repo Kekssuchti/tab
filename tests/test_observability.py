@@ -47,7 +47,7 @@ from src.schemas.run_records import (
     TuningRecord,
 )
 from src.schemas.training_schemas import ModelConfig
-from src.utils.evaluation_utils import final_test_metrics
+from src.utils.evaluation_utils import aggregate_classification_metrics, aggregate_regression_metrics
 
 
 def _metrics(value: float = 1.0) -> ClassificationMetrics:
@@ -72,9 +72,9 @@ def _tuning_result() -> TuningRecord:
         best_params={"C": 1.0},
         scoring="accuracy",
         final_test_metrics=AggregatedFinalTestMetrics(
-            mimic_test=ClassificationMetricsAggregate([_metrics(0.9), _metrics(1.0)]),
+            mimic_test=aggregate_classification_metrics([_metrics(0.9), _metrics(1.0)]),
             mimic_prediction_time=0.03,
-            tudd_test=ClassificationMetricsAggregate([_metrics(0.9), _metrics(1.0)]),
+            tudd_test=aggregate_classification_metrics([_metrics(0.9), _metrics(1.0)]),
             tudd_prediction_time=0.04,
         ),
         fold_results=[
@@ -138,7 +138,12 @@ def _result(*, tuned: bool = False) -> PipelineRunRecord:
             EvaluationRecord("mimic", metrics, 0.03),
             EvaluationRecord("tudd", metrics, 0.04),
         ),
-        final_test_metrics=final_test_metrics(metrics, metrics),
+        final_test_metrics=FinalTestMetrics(
+            mimic_test=metrics,
+            mimic_prediction_time=0.0,
+            tudd_test=metrics,
+            tudd_prediction_time=0.0,
+        ),
     )
     dataset_summary = DatasetSummary(
         target="mortality",
@@ -218,11 +223,11 @@ def _regression_result(*, tuned: bool = True) -> PipelineRunRecord:
             best_params={"alpha": 0.5},
             scoring="rmse",
             final_test_metrics=AggregatedFinalTestMetrics(
-                mimic_test=RegressionMetricsAggregate(
+                mimic_test=aggregate_regression_metrics(
                     [mimic_metrics, RegressionMetrics(r2=0.7, mae=0.3, mse=0.2, rmse=0.4)]
                 ),
                 mimic_prediction_time=0.03,
-                tudd_test=RegressionMetricsAggregate(
+                tudd_test=aggregate_regression_metrics(
                     [tudd_metrics, RegressionMetrics(r2=0.5, mae=0.5, mse=0.4, rmse=0.6)]
                 ),
                 tudd_prediction_time=0.04,
@@ -591,11 +596,10 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text("run_number: 7\n", encoding="utf-8")
 
-    MLflowPipelineLogger().log_pipeline_run(
-        params,
-        _result(tuned=True),
-        config_path=config_path,
-    )
+    result = _result(tuned=True)
+    logger = MLflowPipelineLogger()
+    logger.log_model_run(params, result, result.model_runs[0], config_path=config_path)
+    logger.log_pipeline_summary(params, result, config_path=config_path)
 
     mlflow.set_tracking_uri(tracking_uri)
     runs = mlflow.search_runs(
@@ -721,7 +725,10 @@ def test_mlflow_logger_writes_failed_nested_model_run(tmp_path):
     artifact_location = str(tmp_path / "mlartifacts")
     params = _params(tracking_uri, artifact_location, run_name="failed-run")
 
-    MLflowPipelineLogger().log_pipeline_run(params, _failed_result())
+    result = _failed_result()
+    logger = MLflowPipelineLogger()
+    logger.log_model_run(params, result, result.model_runs[0])
+    logger.log_pipeline_summary(params, result)
 
     mlflow.set_tracking_uri(tracking_uri)
     runs = mlflow.search_runs(

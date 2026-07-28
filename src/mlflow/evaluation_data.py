@@ -9,7 +9,6 @@ from mlflow import MlflowClient
 from mlflow.entities import Experiment, Run, RunStatus
 from src.mlflow.tracking_contract import (
     METRIC_CV_TOTAL_TIME,
-    METRIC_MODEL_TOTAL_TIME,
     METRIC_TRAIN_FIT_TIME,
     PARAM_DATASET_TARGET,
     RUN_TYPE_MODEL,
@@ -80,25 +79,13 @@ class _ModelContext:
 
 @dataclass(frozen=True)
 class _Measurement:
-    pipeline_mlflow_run_id: str
-    pipeline_id: str
-    pipeline_run_name: str
-    experiment_name: str
-    model_mlflow_run_id: str
-    model_name: str
-    model_instance: str
-    target: str | None
-    task_type: str
-    trained_on: str | None
-    train_sources: tuple[str, ...]
-    training_size: int | None
+    context: _ModelContext
     kind: Literal["score", "time"]
     scope: Literal["test", "test_delta", "train", "model", "cv"]
     dataset: str | None
     metric: str
     value: float
     statistic: Literal["point", "mean", "difference"]
-    unit: Literal["score", "seconds"]
     ci_level: float | None = None
     ci_lower: float | None = None
     ci_upper: float | None = None
@@ -327,7 +314,7 @@ def _model_measurements(
         task_type=_tag(model_run, TAG_TASK_TYPE),
         trained_on=model_run.data.tags.get(TAG_TRAINED_ON),
         train_sources=_csv_tag(model_run, TAG_TRAIN_SOURCES),
-        training_size=_training_size(parent),
+        training_size=_integer_param(parent, dataset_row_count_param("train")),
     )
     measurements = []
     for dataset in TEST_DATASETS:
@@ -365,7 +352,6 @@ def _test_scores(
                 metric=metric,
                 value=value,
                 statistic="mean" if mean_value is not None else "point",
-                unit="score",
                 ci_level=0.95 if lower is not None and upper is not None else None,
                 ci_lower=lower,
                 ci_upper=upper,
@@ -389,7 +375,6 @@ def _test_differences(
             metric=metric,
             value=value,
             statistic="difference",
-            unit="score",
         )
         for name, value in run.data.metrics.items()
         if (metric := parse_test_delta_metric(name)) is not None
@@ -405,7 +390,6 @@ def _times(
         (METRIC_TRAIN_FIT_TIME, "train", None, "fit_time"),
         (test_predict_time_metric("mimic"), "test", "mimic", "predict_time"),
         (test_predict_time_metric("tudd"), "test", "tudd", "predict_time"),
-        (METRIC_MODEL_TOTAL_TIME, "model", None, "total_time"),
         (METRIC_CV_TOTAL_TIME, "cv", None, "total_time"),
     )
     return [
@@ -417,7 +401,6 @@ def _times(
             metric=metric,
             value=run.data.metrics[mlflow_name],
             statistic="point",
-            unit="seconds",
             n_classes=_integer_param(run, test_n_classes_param(dataset)) if dataset is not None else None,
             test_row_count=_test_row_count(parent, dataset) if dataset is not None else None,
         )
@@ -435,7 +418,6 @@ def _measurement(
     metric: str,
     value: float,
     statistic: Literal["point", "mean", "difference"],
-    unit: Literal["score", "seconds"],
     ci_level: float | None = None,
     ci_lower: float | None = None,
     ci_upper: float | None = None,
@@ -443,14 +425,13 @@ def _measurement(
     test_row_count: int | None = None,
 ) -> _Measurement:
     return _Measurement(
-        *astuple(context),
+        context=context,
         kind=kind,
         scope=scope,
         dataset=dataset,
         metric=metric,
         value=value,
         statistic=statistic,
-        unit=unit,
         ci_level=ci_level,
         ci_lower=ci_lower,
         ci_upper=ci_upper,
@@ -495,8 +476,7 @@ def _wide_measurement_frame(measurements: list[_Measurement]) -> pd.DataFrame:
     for measurement in measurements:
         if measurement.kind != "score":
             continue
-        values = astuple(measurement)
-        context_values = values[: len(context_columns)]
+        context_values = astuple(measurement.context)
         key = (*context_values, measurement.scope, measurement.dataset)
         row = grouped.setdefault(
             key,
@@ -526,7 +506,7 @@ def _wide_measurement_frame(measurements: list[_Measurement]) -> pd.DataFrame:
             continue
         column = timing_names.get((measurement.scope, measurement.dataset, measurement.metric))
         if column is not None:
-            model_key = astuple(measurement)[: len(context_columns)]
+            model_key = astuple(measurement.context)
             timings_by_model.setdefault(model_key, {})[column] = measurement.value
 
     component_columns = timing_columns[:-1]
@@ -626,12 +606,6 @@ def _csv_tag(run: Run, name: str) -> tuple[str, ...]:
 
 def _test_row_count(run: Run, dataset: str) -> int | None:
     return _integer_param(run, dataset_row_count_param(f"test.{dataset}"))
-
-
-def _training_size(run: Run) -> int | None:
-    name = dataset_row_count_param("train")
-    value = _integer_param(run, name)
-    return value
 
 
 def _integer_param(run: Run, name: str) -> int | None:

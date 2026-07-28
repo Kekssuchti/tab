@@ -6,11 +6,11 @@ from autogluon.tabular.models.mitra.sklearn_interface import (
 )
 
 from src.config import config
-from src.interfaces.model_interface import ModelAdapter, PredictionValues, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction
 from src.schemas.base_schemas import TaskType
 
 
-class MitraAdapter(ModelAdapter[PredictionValues]):
+class MitraAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "classification",
@@ -39,7 +39,7 @@ class MitraAdapter(ModelAdapter[PredictionValues]):
         self.model.fit(X_train, y_train)
         return timer() - start_time
 
-    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
+    def predict(self, X_test) -> TimedPrediction:
         start_time = timer()
         result = self.predict_from_estimator(X_test)
 

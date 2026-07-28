@@ -8,7 +8,6 @@ from pydantic import ValidationError
 
 from src.schemas.training_schemas import ModelConfig
 from src.utils import model_registry
-from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
 from src.utils.model_lifecycle import release_model
 from src.utils.tuning_distributions import (
     DiscreteUniform,
@@ -16,6 +15,7 @@ from src.utils.tuning_distributions import (
     Uniform,
     UniformChoice,
 )
+from tests.toy_data import load_toy_classification_data, load_toy_regression_data
 
 ADAPTER_MODULES = {
     "src.adapter.sklearn_adapter",
@@ -66,7 +66,7 @@ def _assert_valid_fit_and_predict(model_name, model, X, y, task_type):
 
 
 def _load_regression_data_for_model_smoke_test():
-    X, y = load_toy_data_reg()
+    X, y = load_toy_regression_data()
     y = ((y - y.mean()) / y.std()).astype(np.float32)
 
     return X, y
@@ -257,7 +257,7 @@ def test_tuning_distributions_reject_invalid_domains(distribution, message):
 
 @pytest.mark.parametrize("model_name", CLASSIFICATION_MODELS)
 def test_registered_classification_models_fit_and_predict(model_name):
-    X, y = load_toy_data_cls()
+    X, y = load_toy_classification_data()
     model = _make_model(model_name, "classification")
 
     try:

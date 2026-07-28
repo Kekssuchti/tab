@@ -36,21 +36,14 @@ def _evaluate_test_set(
     task_type: TaskType,
     test_set: XYDataset,
 ) -> TestSetEvaluationRecord:
+    prediction = trained_model.predict(test_set.X)
     if task_type == "classification":
-        prediction = trained_model.predict(test_set.X)
         metrics = evaluate_classification_predictions(prediction.values, test_set.y.to_numpy())
-
-        return TestSetEvaluationRecord(
-            dataset_name=dataset_name,
-            metrics=metrics,
-            predict_time=prediction.seconds,
-        )
     else:
-        prediction = trained_model.predict(test_set.X)
         metrics = evaluate_regression_predictions(prediction.values, test_set.y.to_numpy())
 
-        return TestSetEvaluationRecord(
-            dataset_name=dataset_name,
-            metrics=metrics,
-            predict_time=prediction.seconds,
-        )
+    return TestSetEvaluationRecord(
+        dataset_name=dataset_name,
+        metrics=metrics,
+        predict_time=prediction.seconds,
+    )

@@ -5,7 +5,11 @@ from pydantic import Field
 from src.config import config
 from src.schemas.base_schemas import StrictConfig
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
-from src.utils.evaluation_utils import ScoringMethodCLS
+
+ClassificationScoring = Literal["roc_auc", "f1", "accuracy"]
+RegressionScoring = Literal["r2", "mae", "mse", "rmse"]
+ScoringMethod = ClassificationScoring | RegressionScoring
+TuningMethod = Literal["grid", "optuna"]
 
 
 class CrossValidationConfig(StrictConfig):
@@ -83,10 +87,10 @@ class TuningConfig(StrictConfig):
             Optuna-specific search settings.
     """
 
-    method: Literal["grid", "optuna"] = "optuna"
+    method: TuningMethod = "optuna"
     search_space: str | None = "default"
     grid: dict[str, list[Any]] | None = None
-    scoring: ScoringMethodCLS = "roc_auc"
+    scoring: ClassificationScoring = "roc_auc"
     cv: CrossValidationConfig = Field(default_factory=CrossValidationConfig)
     optuna: OptunaConfig = Field(default_factory=OptunaConfig)
 

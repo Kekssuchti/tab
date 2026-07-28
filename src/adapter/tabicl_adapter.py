@@ -4,11 +4,11 @@ import numpy as np
 from tabicl import TabICLClassifier, TabICLRegressor
 
 from src.config import config
-from src.interfaces.model_interface import ModelAdapter, PredictionValues, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction
 from src.schemas.base_schemas import TaskType
 
 
-class TabICLAdapter(ModelAdapter[PredictionValues]):
+class TabICLAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "classification",
@@ -43,7 +43,7 @@ class TabICLAdapter(ModelAdapter[PredictionValues]):
         self.model.fit(X_train, y_train)
         return timer() - start_time
 
-    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
+    def predict(self, X_test) -> TimedPrediction:
         start_time = timer()
         if self.predict_batch_size is not None and len(X_test) > self.predict_batch_size:
             result = self._predict_batched(X_test)

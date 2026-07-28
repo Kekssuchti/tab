@@ -5,6 +5,7 @@ from pydantic import Field, model_validator
 
 from src.schemas.base_schemas import StrictConfig
 from src.schemas.pipeline_schemas import PipelineConfig
+from src.schemas.run_records import PipelineRunRecord
 
 
 class OverrideRangeConfig(StrictConfig):
@@ -179,7 +180,7 @@ class SuiteRunResult:
         suite_name: str
             Suite name.
 
-        results: tuple
+        results: tuple of PipelineRunRecord
             Pipeline results produced by suite execution.
 
         summary: SuiteDryRunSummary
@@ -187,5 +188,5 @@ class SuiteRunResult:
     """
 
     suite_name: str
-    results: tuple[Any, ...]
+    results: tuple[PipelineRunRecord, ...]
     summary: SuiteDryRunSummary

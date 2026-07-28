@@ -44,11 +44,10 @@ from src.mlflow.tracking_contract import (
     TRACKING_SCHEMA_VERSION,
 )
 from src.schemas.pipeline_schemas import PipelineConfig
-from src.mlflow.validation import validate_pipeline_projection
 
 
 @dataclass(frozen=True)
-class ArtifactPaths:
+class _ArtifactPaths:
     config: Path
     pipeline_result: Path
     environment: Path
@@ -57,35 +56,6 @@ class ArtifactPaths:
 
 
 class MLflowPipelineLogger:
-    def log_pipeline_run(
-        self,
-        params: PipelineConfig,
-        result: PipelineRunRecord,
-        *,
-        config_path: Path | None = None,
-    ) -> None:
-        mlflow.set_tracking_uri(params.mlflow.tracking_uri)
-        _set_experiment(params)
-
-        observation = assemble_pipeline_observation(params, result)
-        with TemporaryDirectory() as temp_dir_name:
-            temp_dir = Path(temp_dir_name)
-            artifact_paths = self._write_artifacts(
-                params,
-                result,
-                temp_dir,
-                include_evaluation_table=bool(observation.evaluations),
-            )
-
-            with mlflow.start_run(run_name=observation.run_name) as pipeline_run:
-                self._log_observation(observation)
-                self._log_artifacts(artifact_paths, config_path)
-                self._log_model_runs(
-                    observation.children,
-                    artifact_paths.cv_dir,
-                    pipeline_mlflow_run_id=pipeline_run.info.run_id,
-                )
-
     def log_model_run(
         self,
         params: PipelineConfig,
@@ -120,7 +90,6 @@ class MLflowPipelineLogger:
             ) as pipeline_run:
                 self._log_model_runs(
                     (model_observation,),
-                    artifact_paths.cv_dir,
                     pipeline_mlflow_run_id=pipeline_run.info.run_id,
                 )
 
@@ -157,7 +126,7 @@ class MLflowPipelineLogger:
         self,
         params: PipelineConfig,
         observation: RunObservation,
-        artifact_paths: ArtifactPaths,
+        artifact_paths: _ArtifactPaths,
         config_path: Path | None,
         *,
         include_evaluations: bool = False,
@@ -171,9 +140,7 @@ class MLflowPipelineLogger:
         with run_context as pipeline_run:
             parent_observation = replace(
                 observation,
-                children=(),
                 evaluations=observation.evaluations if include_evaluations else (),
-                table_rows=observation.table_rows if include_evaluations else (),
             )
             self._log_observation(parent_observation)
             self._log_artifacts(artifact_paths, config_path)
@@ -182,7 +149,6 @@ class MLflowPipelineLogger:
     def _log_model_runs(
         self,
         model_runs: tuple[RunObservation, ...],
-        cv_dir: Path,
         *,
         pipeline_mlflow_run_id: str,
     ) -> None:
@@ -199,7 +165,6 @@ class MLflowPipelineLogger:
                         TAG_MODEL_MLFLOW_RUN_ID: model_mlflow_run_id,
                     },
                 )
-                self._log_cv_artifact(model_run, cv_dir)
                 self._log_cv_candidate_runs(
                     model_run.children,
                     pipeline_mlflow_run_id=pipeline_mlflow_run_id,
@@ -258,8 +223,7 @@ class MLflowPipelineLogger:
         temp_dir: Path,
         *,
         include_evaluation_table: bool,
-    ) -> ArtifactPaths:
-        validate_pipeline_projection(params, result)
+    ) -> _ArtifactPaths:
         config_path = temp_dir / ARTIFACT_CONFIG
         result_path = temp_dir / ARTIFACT_PIPELINE_RESULT
         environment_path = temp_dir / ARTIFACT_ENVIRONMENT
@@ -297,11 +261,11 @@ class MLflowPipelineLogger:
             ),
             encoding="utf-8",
         )
-        return ArtifactPaths(config_path, result_path, environment_path, manifest_path, cv_dir)
+        return _ArtifactPaths(config_path, result_path, environment_path, manifest_path, cv_dir)
 
     def _log_artifacts(
         self,
-        artifact_paths: ArtifactPaths,
+        artifact_paths: _ArtifactPaths,
         config_path: Path | None,
     ) -> None:
         mlflow.log_artifact(str(artifact_paths.config))
@@ -323,25 +287,15 @@ class MLflowPipelineLogger:
         if log_path.exists():
             mlflow.log_artifact(str(log_path), artifact_path="environment")
 
-    def _log_cv_artifact(self, observation: RunObservation, cv_dir: Path) -> None:
-        if observation.cv_artifact_model_id is None:
-            return
-
-        cv_path = cv_dir / f"{observation.cv_artifact_model_id}.json"
-        if cv_path.exists():
-            mlflow.log_artifact(str(cv_path), artifact_path=ARTIFACT_CV_RESULTS)
-
 
 def _make_mlflow_evaluation(evaluation: EvaluationLog) -> Evaluation:
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        return Evaluation(
-            inputs=evaluation.inputs,
-            outputs=evaluation.outputs,
-            targets=evaluation.targets,
-            metrics=evaluation.metrics,
-            tags=evaluation.tags,
-        )
+    return Evaluation(
+        inputs=evaluation.inputs,
+        outputs=evaluation.outputs,
+        targets=evaluation.targets,
+        metrics=evaluation.metrics,
+        tags=evaluation.tags,
+    )
 
 
 def _find_child_observation(

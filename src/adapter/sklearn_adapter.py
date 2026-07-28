@@ -9,16 +9,11 @@ from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier, XGBRegressor
 
 from src.config import config
-from src.interfaces.model_interface import (
-    ClassificationPredictions,
-    ModelAdapter,
-    PredictionValues,
-    TimedPrediction,
-)
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction
 from src.schemas.base_schemas import TaskType
 
 
-class LinearModelAdapter(ModelAdapter[ClassificationPredictions]):
+class LinearModelAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "regression",
@@ -42,12 +37,12 @@ class LinearModelAdapter(ModelAdapter[ClassificationPredictions]):
         self.model.fit(X_train, y_train)
         return timer() - start
 
-    def predict(self, X_test) -> TimedPrediction[ClassificationPredictions]:
+    def predict(self, X_test) -> TimedPrediction:
         start = timer()
         return self.timed_prediction(self.predict_from_estimator(X_test), start)
 
 
-class XGBoostAdapter(ModelAdapter[PredictionValues]):
+class XGBoostAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",
@@ -69,12 +64,12 @@ class XGBoostAdapter(ModelAdapter[PredictionValues]):
         self.model.fit(X_train, y_train)
         return timer() - start
 
-    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
+    def predict(self, X_test) -> TimedPrediction:
         start = timer()
         return self.timed_prediction(self.predict_from_estimator(X_test), start)
 
 
-class EBMAdapter(ModelAdapter[PredictionValues]):
+class EBMAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",
@@ -99,6 +94,6 @@ class EBMAdapter(ModelAdapter[PredictionValues]):
         self.model.fit(X_train, y_train)
         return timer() - start
 
-    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
+    def predict(self, X_test) -> TimedPrediction:
         start = timer()
         return self.timed_prediction(self.predict_from_estimator(X_test), start)

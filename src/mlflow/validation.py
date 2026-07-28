@@ -1,4 +1,5 @@
 import math
+from typing import get_args
 
 from src.classes.data_registry import dataset_task_for_target
 from src.schemas.base_schemas import TaskType
@@ -15,6 +16,7 @@ from src.schemas.metrics import (
 )
 from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.run_records import PipelineRunRecord, TuningRecord
+from src.schemas.training_schemas import ClassificationScoring, RegressionScoring, TuningMethod
 from src.utils.model_identity import model_instance_ids
 
 
@@ -69,14 +71,20 @@ def validate_pipeline_result(result: PipelineRunRecord) -> None:
 
 
 def validate_tuning_record(tuning: TuningRecord, task_type: TaskType, *, path: str = "tuning_result") -> None:
-    valid_scoring = {"roc_auc", "f1", "accuracy"} if task_type == "classification" else {"r2", "mae", "mse", "rmse"}
-    if tuning.scoring not in valid_scoring:
-        raise ValueError(f"{path}.scoring {tuning.scoring!r} is invalid for {task_type}")
+    validate_tuning_settings(tuning.scoring, tuning.method, task_type, path=path)
     for index, fold in enumerate(tuning.fold_results):
         _validate_point_metrics(fold.metrics, task_type, path=f"{path}.fold_results[{index}].metrics")
     final = tuning.final_test_metrics
     _validate_aggregate_metrics(final.mimic_test, task_type, path=f"{path}.final_test_metrics.mimic_test")
     _validate_aggregate_metrics(final.tudd_test, task_type, path=f"{path}.final_test_metrics.tudd_test")
+
+
+def validate_tuning_settings(scoring: str, method: str, task_type: TaskType, *, path: str) -> None:
+    valid_scoring = get_args(ClassificationScoring) if task_type == "classification" else get_args(RegressionScoring)
+    if scoring not in valid_scoring:
+        raise ValueError(f"{path}.scoring {scoring!r} is invalid for {task_type}")
+    if method not in get_args(TuningMethod):
+        raise ValueError(f"{path}.method has unsupported value {method!r}")
 
 
 def _validate_target_summary(part: DatasetPartSummary, task_type: TaskType, *, path: str) -> None:

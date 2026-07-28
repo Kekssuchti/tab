@@ -1,4 +1,4 @@
-from typing import Literal, overload
+from dataclasses import dataclass
 
 import numpy as np
 from scipy.stats import norm
@@ -19,26 +19,26 @@ from sklearn.preprocessing import LabelEncoder, label_binarize
 
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
-    ClassificationAggregatedFinalTestMetrics,
-    ClassificationFinalTestMetrics,
     ClassificationMetrics,
     ClassificationMetricsAggregate,
-    ClassificationPredictionBatch,
     FinalTestMetrics,
     RegressionMetrics,
     RegressionMetricsAggregate,
-    RegressionAggregatedFinalTestMetrics,
-    RegressionFinalTestMetrics,
 )
-from src.interfaces.model_interface import ClassificationPredictions, RegressionPredictions
+from src.schemas.training_schemas import ClassificationScoring, RegressionScoring
 from src.utils.logger import logger
 
-ScoringMethodCLS = Literal["roc_auc", "f1", "accuracy"]
-ScoringMethodREG = Literal["r2", "mae", "mse", "rmse"]
+
+@dataclass(frozen=True)
+class _ClassificationPredictionBatch:
+    probabilities: np.ndarray
+    y_true: np.ndarray
+    y_pred: np.ndarray
+    n_classes: int
 
 
 def evaluate_classification_predictions(
-    predictions: ClassificationPredictions,
+    predictions: np.ndarray,
     y_true,
 ) -> ClassificationMetrics:
     batch = classification_prediction_batch(predictions, y_true)
@@ -72,7 +72,7 @@ def evaluate_classification_predictions(
 
 
 def evaluate_regression_predictions(
-    predictions: RegressionPredictions,
+    predictions: np.ndarray,
     true_values: np.ndarray,
 ) -> RegressionMetrics:
     rmse = float(root_mean_squared_error(true_values, predictions))
@@ -89,9 +89,9 @@ def evaluate_regression_predictions(
 
 
 def classification_prediction_batch(
-    predictions: ClassificationPredictions,
+    predictions: np.ndarray,
     y_true,
-) -> ClassificationPredictionBatch:
+) -> _ClassificationPredictionBatch:
     y_true = np.asarray(y_true).ravel()
     probabilities = np.asarray(predictions)
 
@@ -110,7 +110,7 @@ def classification_prediction_batch(
         raise ValueError("Classification probabilities must be finite")
 
     y_true = LabelEncoder().fit_transform(y_true)
-    return ClassificationPredictionBatch(
+    return _ClassificationPredictionBatch(
         probabilities=probabilities,
         y_true=y_true,
         y_pred=probabilities.argmax(axis=1),
@@ -120,7 +120,7 @@ def classification_prediction_batch(
 
 def classification_score(
     metrics: ClassificationMetrics | ClassificationMetricsAggregate,
-    scoring: ScoringMethodCLS,
+    scoring: ClassificationScoring,
 ) -> float:
     scoring_name = f"mean_{scoring}" if isinstance(metrics, ClassificationMetricsAggregate) else scoring
     score = metrics.scores.get(scoring_name)
@@ -131,7 +131,7 @@ def classification_score(
 
 def regression_score(
     metrics: RegressionMetrics | RegressionMetricsAggregate,
-    scoring: ScoringMethodREG,
+    scoring: RegressionScoring,
 ) -> float:
     scoring_name = f"mean_{scoring}" if isinstance(metrics, RegressionMetricsAggregate) else scoring
     score = metrics.scores.get(scoring_name)
@@ -172,38 +172,6 @@ def mean_regression_metrics(
     )
 
 
-@overload
-def final_test_metrics(
-    mimic_test: ClassificationMetrics,
-    tudd_test: ClassificationMetrics,
-    mimic_prediction_time: float = 0.0,
-    tudd_prediction_time: float = 0.0,
-) -> ClassificationFinalTestMetrics: ...
-
-
-@overload
-def final_test_metrics(
-    mimic_test: RegressionMetrics,
-    tudd_test: RegressionMetrics,
-    mimic_prediction_time: float = 0.0,
-    tudd_prediction_time: float = 0.0,
-) -> RegressionFinalTestMetrics: ...
-
-
-def final_test_metrics(
-    mimic_test: ClassificationMetrics | RegressionMetrics,
-    tudd_test: ClassificationMetrics | RegressionMetrics,
-    mimic_prediction_time: float = 0.0,
-    tudd_prediction_time: float = 0.0,
-) -> ClassificationFinalTestMetrics | RegressionFinalTestMetrics:
-    return FinalTestMetrics(
-        mimic_test=mimic_test,
-        mimic_prediction_time=mimic_prediction_time,
-        tudd_test=tudd_test,
-        tudd_prediction_time=tudd_prediction_time,
-    )
-
-
 def _classification_average(n_classes: int) -> str:
     return "binary" if n_classes == 2 else "macro"
 
@@ -227,27 +195,80 @@ def calculate_mean_ci(values: list[float], confidence: float = 0.95) -> tuple[fl
     return float(mean), ci_lower, ci_upper
 
 
-@overload
-def _format_metrics(
-    cv_results: list[ClassificationFinalTestMetrics],
-) -> ClassificationAggregatedFinalTestMetrics: ...
+def aggregate_classification_metrics(metrics: list[ClassificationMetrics]) -> ClassificationMetricsAggregate:
+    if not metrics:
+        raise ValueError("Cannot aggregate empty metric list")
+
+    mean_roc_auc, roc_auc_lower, roc_auc_upper = calculate_mean_ci(
+        [metric.roc_auc for metric in metrics if metric.roc_auc is not None]
+    )
+    mean_prc_auc, prc_auc_lower, prc_auc_upper = calculate_mean_ci(
+        [metric.prc_auc for metric in metrics if metric.prc_auc is not None]
+    )
+    mean_f1, f1_lower, f1_upper = calculate_mean_ci([metric.f1 for metric in metrics])
+    mean_accuracy, accuracy_lower, accuracy_upper = calculate_mean_ci([metric.accuracy for metric in metrics])
+    mean_sensitivity, sensitivity_lower, sensitivity_upper = calculate_mean_ci(
+        [metric.sensitivity for metric in metrics]
+    )
+    mean_precision, precision_lower, precision_upper = calculate_mean_ci([metric.precision for metric in metrics])
+    return ClassificationMetricsAggregate(
+        mean_roc_auc=mean_roc_auc,
+        mean_prc_auc=mean_prc_auc,
+        mean_f1=mean_f1,
+        mean_accuracy=mean_accuracy,
+        mean_sensitivity=mean_sensitivity,
+        mean_precision=mean_precision,
+        mean_confusion_matrix=np.mean(np.stack([metric.confusion_matrix for metric in metrics]), axis=0),
+        n_classes=metrics[0].n_classes,
+        ci_95_roc_auc_lower=roc_auc_lower,
+        ci_95_roc_auc_upper=roc_auc_upper,
+        ci_95_prc_auc_lower=prc_auc_lower,
+        ci_95_prc_auc_upper=prc_auc_upper,
+        ci_95_f1_lower=f1_lower,
+        ci_95_f1_upper=f1_upper,
+        ci_95_accuracy_lower=accuracy_lower,
+        ci_95_accuracy_upper=accuracy_upper,
+        ci_95_sensitivity_lower=sensitivity_lower,
+        ci_95_sensitivity_upper=sensitivity_upper,
+        ci_95_precision_lower=precision_lower,
+        ci_95_precision_upper=precision_upper,
+    )
 
 
-@overload
-def _format_metrics(
-    cv_results: list[RegressionFinalTestMetrics],
-) -> RegressionAggregatedFinalTestMetrics: ...
+def aggregate_regression_metrics(metrics: list[RegressionMetrics]) -> RegressionMetricsAggregate:
+    if not metrics:
+        raise ValueError("Cannot aggregate empty metric list")
+
+    mean_r2, r2_lower, r2_upper = calculate_mean_ci([metric.r2 for metric in metrics])
+    mean_mae, mae_lower, mae_upper = calculate_mean_ci([metric.mae for metric in metrics])
+    mean_mse, mse_lower, mse_upper = calculate_mean_ci([metric.mse for metric in metrics])
+    mean_rmse, rmse_lower, rmse_upper = calculate_mean_ci([metric.rmse for metric in metrics])
+    return RegressionMetricsAggregate(
+        mean_r2=mean_r2,
+        mean_mae=mean_mae,
+        mean_mse=mean_mse,
+        mean_rmse=mean_rmse,
+        ci_95_r2_lower=r2_lower,
+        ci_95_r2_upper=r2_upper,
+        ci_95_mae_lower=mae_lower,
+        ci_95_mae_upper=mae_upper,
+        ci_95_mse_lower=mse_lower,
+        ci_95_mse_upper=mse_upper,
+        ci_95_rmse_lower=rmse_lower,
+        ci_95_rmse_upper=rmse_upper,
+    )
 
 
-def _format_metrics(
-    cv_results: list[ClassificationFinalTestMetrics] | list[RegressionFinalTestMetrics],
-) -> ClassificationAggregatedFinalTestMetrics | RegressionAggregatedFinalTestMetrics:
+def aggregate_final_test_metrics(cv_results: list[FinalTestMetrics]) -> AggregatedFinalTestMetrics:
+    if not cv_results:
+        raise ValueError("Cannot aggregate empty final-test result list")
+
     if isinstance(cv_results[0].mimic_test, RegressionMetrics):
-        mimic_test = RegressionMetricsAggregate([result.mimic_test for result in cv_results])
-        tudd_test = RegressionMetricsAggregate([result.tudd_test for result in cv_results])
+        mimic_test = aggregate_regression_metrics([result.mimic_test for result in cv_results])
+        tudd_test = aggregate_regression_metrics([result.tudd_test for result in cv_results])
     else:
-        mimic_test = ClassificationMetricsAggregate([result.mimic_test for result in cv_results])
-        tudd_test = ClassificationMetricsAggregate([result.tudd_test for result in cv_results])
+        mimic_test = aggregate_classification_metrics([result.mimic_test for result in cv_results])
+        tudd_test = aggregate_classification_metrics([result.tudd_test for result in cv_results])
 
     return AggregatedFinalTestMetrics(
         mimic_test=mimic_test,

@@ -9,9 +9,9 @@ from src.classes.pipeline import Pipeline
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
     ClassificationMetrics,
-    ClassificationMetricsAggregate,
 )
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
+from src.utils.evaluation_utils import aggregate_classification_metrics
 
 
 def _test_set(labels, signal=None):
@@ -34,8 +34,8 @@ def _metrics(value: float) -> ClassificationMetrics:
 
 
 def _tuned_training_result(model_name: str) -> ModelTrainingResult:
-    mimic = ClassificationMetricsAggregate([_metrics(1.0), _metrics(1.0)])
-    tudd = ClassificationMetricsAggregate([_metrics(0.0), _metrics(0.0)])
+    mimic = aggregate_classification_metrics([_metrics(1.0), _metrics(1.0)])
+    tudd = aggregate_classification_metrics([_metrics(0.0), _metrics(0.0)])
     mean_metrics = _metrics(1.0)
     return ModelTrainingResult(
         model_name=model_name,

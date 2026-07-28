@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from src.classes.trainer import Trainer
-from src.interfaces.model_interface import ClassificationPredictions, TimedPrediction
+from src.interfaces.model_interface import TimedPrediction
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.training_schemas import (
@@ -13,19 +13,12 @@ from src.schemas.training_schemas import (
     TuningConfig,
 )
 from src.utils import model_registry
-from src.utils.load_data import load_toy_data_cls, load_toy_data_reg
 from src.utils.tuning_distributions import LogUniform
+from tests.toy_data import load_toy_classification_data
 
 
 def _classification_data():
-    X, y = load_toy_data_cls()
-    return X, y
-
-
-def _regression_data():
-    X, y = load_toy_data_reg()
-    y = ((y - y.mean()) / y.std()).astype(np.float32)
-
+    X, y = load_toy_classification_data()
     return X, y
 
 
@@ -53,7 +46,7 @@ class _ReleasableFoldModel:
 
     def predict(self, X_test):
         probabilities = np.tile([0.4, 0.6], (len(X_test), 1))
-        return TimedPrediction(ClassificationPredictions(probabilities), 0.0)
+        return TimedPrediction(probabilities, 0.0)
 
     def release(self):
         if self.released:
