@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from statistics import pstdev
 from typing import Any
 
-from src.schemas.pipeline_schemas import PipelineConfig
 from src.mlflow.tracking_contract import (
     METRIC_CV_TOTAL_TIME,
     METRIC_MODEL_TOTAL_TIME,
@@ -28,16 +27,23 @@ from src.mlflow.tracking_contract import (
     TAG_STATUS,
     TAG_TARGET,
     TAG_TASK_TYPE,
-    TAG_TRAINED_ON,
     TAG_TRAIN_SOURCES,
+    TAG_TRAINED_ON,
     dataset_row_count_param,
     test_delta_metric,
     test_mean_score_metric,
     test_n_classes_param,
     test_predict_time_metric,
-    test_score_metric,
     test_score_ci_metric,
+    test_score_metric,
 )
+from src.schemas.metrics import (
+    AggregatedFinalTestMetrics,
+    ClassificationMetrics,
+    ClassificationMetricsAggregate,
+    RegressionMetrics,
+)
+from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.run_records import (
     FoldRecord,
     ModelEvaluationRecord,
@@ -46,14 +52,8 @@ from src.schemas.run_records import (
     PipelineRunRecord,
 )
 from src.schemas.training_schemas import ModelConfig
-from src.schemas.metrics import (
-    AggregatedFinalTestMetrics,
-    ClassificationMetricDeltas,
-    ClassificationMetrics,
-    ClassificationMetricsAggregate,
-    RegressionMetrics,
-)
 from src.utils.evaluation_utils import (
+    calculate_mean_ci,
     classification_score,
     mean_classification_metrics,
 )
@@ -189,9 +189,7 @@ def assemble_pipeline_observation(
             **_dataset_summary_params(pipeline_result),
             **_pipeline_model_config_params(pipeline_config),
         },
-        metrics=_metric_logs_from_values(
-            ((METRIC_PIPELINE_TOTAL_TIME, pipeline_result.total_time),)
-        ),
+        metrics=_metric_logs_from_values(((METRIC_PIPELINE_TOTAL_TIME, pipeline_result.total_time),)),
         evaluations=evaluation_bundle.evaluations,
         table_rows=evaluation_bundle.table_rows,
         children=tuple(
@@ -239,20 +237,12 @@ def _model_run_observation(
         **_model_metric_params(training_result, model_result),
     }
     if model_result is None:
-        metrics = list(
-            _metric_logs_from_values(
-                ((METRIC_TRAIN_FIT_TIME, training_result.fit_time),)
-            )
-        )
+        metrics = list(_metric_logs_from_values(((METRIC_TRAIN_FIT_TIME, training_result.fit_time),)))
         if training_result.tuning_result is not None:
             metrics.extend(
-                _metric_logs_from_values(
-                    ((METRIC_CV_TOTAL_TIME, training_result.tuning_result.total_time),)
-                )
+                _metric_logs_from_values(((METRIC_CV_TOTAL_TIME, training_result.tuning_result.total_time),))
             )
-            children = _cv_candidate_observations(
-                pipeline_config, run_record, model_config
-            )
+            children = _cv_candidate_observations(pipeline_config, run_record, model_config)
         else:
             children = ()
     else:
@@ -267,9 +257,7 @@ def _model_run_observation(
         evaluations=evaluation_bundle.evaluations,
         table_rows=evaluation_bundle.table_rows,
         children=children,
-        cv_artifact_model_id=run_record.model_instance_id
-        if training_result.tuning_result is not None
-        else None,
+        cv_artifact_model_id=run_record.model_instance_id if training_result.tuning_result is not None else None,
     )
 
 
@@ -283,9 +271,7 @@ def _cv_candidate_observations(
         return ()
 
     candidate_summaries = _candidate_summaries(tuning_result)
-    ranks = _candidate_ranks(
-        [candidate.mean_score for candidate in candidate_summaries]
-    )
+    ranks = _candidate_ranks([candidate.mean_score for candidate in candidate_summaries])
     observations = []
     for position, candidate in enumerate(candidate_summaries):
         candidate_label = f"cv{candidate.candidate_index:02d}"
@@ -325,10 +311,7 @@ def _cv_candidate_observations(
                     "cv.method": _param_value(tuning_result.method),
                     "cv.candidate": candidate_label,
                     "cv.candidate_index": _param_value(candidate.candidate_index),
-                    **{
-                        f"cv.params.{key}": _param_value(value)
-                        for key, value in candidate.model_params.items()
-                    },
+                    **{f"cv.params.{key}": _param_value(value) for key, value in candidate.model_params.items()},
                     **_classification_metric_params("cv.mean", candidate.mean_metrics),
                 },
                 metrics=tuple(metrics),
@@ -345,14 +328,10 @@ def _pipeline_tags(pipeline_config: PipelineConfig) -> dict[str, str]:
             TAG_PIPELINE_ID: pipeline_config.run_id,
             "run_id": pipeline_config.run_id,
             TAG_TARGET: pipeline_config.dataset.target,
-            TAG_TASK_TYPE: "classification"
-            if pipeline_config.dataset.classification
-            else "regression",
+            TAG_TASK_TYPE: "classification" if pipeline_config.dataset.classification else "regression",
             TAG_TRAINED_ON: _trained_on(pipeline_config),
             TAG_TRAIN_SOURCES: _train_sources(pipeline_config),
-            "trained_models": ",".join(
-                model_params.name for model_params in pipeline_config.training
-            ),
+            "trained_models": ",".join(model_params.name for model_params in pipeline_config.training),
         }
     )
 
@@ -415,9 +394,7 @@ def _pipeline_params(pipeline_config: PipelineConfig) -> dict[str, str]:
         "dataset.train_size": pipeline_config.dataset.train_size,
         "dataset.classification": pipeline_config.dataset.classification,
         "dataset.trained_on": _trained_on(pipeline_config),
-        "training.model_names": ",".join(
-            model.name for model in pipeline_config.training
-        ),
+        "training.model_names": ",".join(model.name for model in pipeline_config.training),
         "plotting.enabled": pipeline_config.plotting.enabled,
         "plotting.formats": ",".join(pipeline_config.plotting.formats),
     }
@@ -453,9 +430,7 @@ def _dataset_summary_params(pipeline_result: PipelineRunRecord) -> dict[str, str
 def _pipeline_model_config_params(pipeline_config: PipelineConfig) -> dict[str, str]:
     run_params = {}
     model_ids = model_instance_ids(pipeline_config.training)
-    for model_id, model_params in zip(
-        model_ids, pipeline_config.training, strict=False
-    ):
+    for model_id, model_params in zip(model_ids, pipeline_config.training, strict=False):
         run_params.update(_model_config_params(model_id, model_params))
     return run_params
 
@@ -499,12 +474,10 @@ def _model_config_params(model_id: str, model_config: ModelConfig) -> dict[str, 
     else:
         run_params[f"{prefix}.preprocessing.override"] = True
         if model_config.preprocessing.imputer is not None:
-            run_params[f"{prefix}.preprocessing.imputer"] = (
-                model_config.preprocessing.imputer.model_dump(mode="json")
-            )
+            run_params[f"{prefix}.preprocessing.imputer"] = model_config.preprocessing.imputer.model_dump(mode="json")
         if model_config.preprocessing.scaler_encoder is not None:
-            run_params[f"{prefix}.preprocessing.scaler_encoder"] = (
-                model_config.preprocessing.scaler_encoder.model_dump(mode="json")
+            run_params[f"{prefix}.preprocessing.scaler_encoder"] = model_config.preprocessing.scaler_encoder.model_dump(
+                mode="json"
             )
 
     if model_config.tuning is None:
@@ -521,18 +494,10 @@ def _model_config_params(model_id: str, model_config: ModelConfig) -> dict[str, 
     if model_config.tuning.grid is not None:
         run_params[f"{prefix}.tuning.grid"] = model_config.tuning.grid
     if model_config.tuning.method == "optuna":
-        run_params[f"{prefix}.tuning.optuna.n_trials"] = (
-            model_config.tuning.optuna.n_trials
-        )
-        run_params[f"{prefix}.tuning.optuna.sampler"] = (
-            model_config.tuning.optuna.sampler
-        )
-        run_params[f"{prefix}.tuning.optuna.n_startup_trials"] = (
-            model_config.tuning.optuna.n_startup_trials
-        )
-        run_params[f"{prefix}.tuning.optuna.timeout"] = (
-            model_config.tuning.optuna.timeout
-        )
+        run_params[f"{prefix}.tuning.optuna.n_trials"] = model_config.tuning.optuna.n_trials
+        run_params[f"{prefix}.tuning.optuna.sampler"] = model_config.tuning.optuna.sampler
+        run_params[f"{prefix}.tuning.optuna.n_startup_trials"] = model_config.tuning.optuna.n_startup_trials
+        run_params[f"{prefix}.tuning.optuna.timeout"] = model_config.tuning.optuna.timeout
 
     return _string_params(run_params)
 
@@ -551,20 +516,12 @@ def _model_metric_logs(
     ]
     tuning_result = training_result.tuning_result
     if tuning_result is not None:
-        metrics.extend(
-            _metric_logs_from_values(
-                ((METRIC_CV_TOTAL_TIME, tuning_result.total_time),)
-            )
-        )
+        metrics.extend(_metric_logs_from_values(((METRIC_CV_TOTAL_TIME, tuning_result.total_time),)))
         metrics.extend(_cv_final_test_metric_logs(tuning_result.final_test_metrics))
 
     for test_result in model_result.test_results:
         dataset_name = test_result.dataset_name
-        metrics.extend(
-            _metric_logs_from_values(
-                ((test_predict_time_metric(dataset_name), test_result.predict_time),)
-            )
-        )
+        metrics.extend(_metric_logs_from_values(((test_predict_time_metric(dataset_name), test_result.predict_time),)))
         if tuning_result is None:
             metrics.extend(_test_metric_logs(dataset_name, test_result.metrics))
 
@@ -581,9 +538,7 @@ def _model_metric_params(
 
     params = {}
     for test_result in model_result.test_results:
-        params[test_n_classes_param(test_result.dataset_name)] = _param_value(
-            test_result.metrics.n_classes
-        )
+        params[test_n_classes_param(test_result.dataset_name)] = _param_value(test_result.metrics.n_classes)
     return params
 
 
@@ -604,10 +559,7 @@ def _test_metric_logs(
     metrics: ClassificationMetrics | RegressionMetrics,
 ) -> tuple[MetricLog, ...]:
     return _metric_logs_from_values(
-        (
-            (test_score_metric(dataset, name), value)
-            for name, value in metrics.scores.items()
-        )
+        ((test_score_metric(dataset, name), value) for name, value in metrics.scores.items())
     )
 
 
@@ -656,11 +608,9 @@ def _cv_classification_metric_logs(
 
 
 def _metric_delta_logs(
-    deltas: ClassificationMetricDeltas,
+    deltas: ClassificationMetrics,
 ) -> tuple[MetricLog, ...]:
-    return _metric_logs_from_values(
-        ((test_delta_metric(name), value) for name, value in deltas.scores.items())
-    )
+    return _metric_logs_from_values(((test_delta_metric(name), value) for name, value in deltas.scores.items()))
 
 
 def _metric_logs_from_values(
@@ -833,9 +783,7 @@ def _train_sources(pipeline_config: PipelineConfig) -> str:
 
 
 def _trained_on(pipeline_config: PipelineConfig) -> str:
-    origins = {
-        _dataset_origin(split.dataset) for split in pipeline_config.dataset.train_on
-    }
+    origins = {_dataset_origin(split.dataset) for split in pipeline_config.dataset.train_on}
     if len(origins) == 1:
         return next(iter(origins))
 
@@ -851,9 +799,7 @@ def _dataset_origin(dataset_name: str) -> str:
 
 
 def _candidate_ranks(scores: list[float]) -> list[int]:
-    ranked_indices = sorted(
-        range(len(scores)), key=lambda index: scores[index], reverse=True
-    )
+    ranked_indices = sorted(range(len(scores)), key=lambda index: scores[index], reverse=True)
     ranks = [0] * len(scores)
     for rank, index in enumerate(ranked_indices, start=1):
         ranks[index] = rank
@@ -874,13 +820,10 @@ def _candidate_summaries(tuning_result: Any) -> tuple[_CandidateSummary, ...]:
             )
         )
         if not isinstance(folds[0].metrics, ClassificationMetrics):
-            raise NotImplementedError(
-                "Regression tuning metrics are not implemented yet"
-            )
+            raise NotImplementedError("Regression tuning metrics are not implemented yet")
 
-        scores = [
-            classification_score(fold.metrics, tuning_result.scoring) for fold in folds
-        ]
+        scores = [classification_score(fold.metrics, tuning_result.scoring) for fold in folds]
+
         summaries.append(
             _CandidateSummary(
                 candidate_index=candidate_index,
@@ -888,9 +831,7 @@ def _candidate_summaries(tuning_result: Any) -> tuple[_CandidateSummary, ...]:
                 folds=folds,
                 mean_score=float(sum(scores) / len(scores)),
                 std_score=float(pstdev(scores)),
-                mean_metrics=mean_classification_metrics(
-                    [fold.metrics for fold in folds]
-                ),
+                mean_metrics=mean_classification_metrics([fold.metrics for fold in folds]),
             )
         )
 
@@ -903,11 +844,7 @@ def _metric_stds(folds: list[FoldRecord]) -> dict[str, float]:
         for name, value in fold.metrics.scores.items():
             values_by_metric[name].append(float(value))
 
-    return {
-        name: float(pstdev(values))
-        for name, values in values_by_metric.items()
-        if values
-    }
+    return {name: float(pstdev(values)) for name, values in values_by_metric.items() if values}
 
 
 def _drop_none(values: dict[str, str | None]) -> dict[str, str]:

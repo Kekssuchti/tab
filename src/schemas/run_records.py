@@ -140,7 +140,7 @@ class TestSetEvaluationRecord:
     """
 
     dataset_name: str
-    metrics: ClassificationMetrics
+    metrics: ClassificationMetrics | RegressionMetrics
     predict_time: float
 
 
@@ -174,7 +174,7 @@ class ModelEvaluationRecord:
         return self.fit_time + sum(result.predict_time for result in self.test_results)
 
     @property
-    def metrics_by_test_set(self) -> dict[str, ClassificationMetrics]:
+    def metrics_by_test_set(self) -> dict[str, ClassificationMetrics | RegressionMetrics]:
         return {result.dataset_name: result.metrics for result in self.test_results}
 
 
@@ -235,9 +235,7 @@ class PipelineRunRecord:
 
     @property
     def model_results(self) -> tuple[ModelEvaluationRecord, ...]:
-        return tuple(
-            run.evaluation for run in self.model_runs if run.evaluation is not None
-        )
+        return tuple(run.evaluation for run in self.model_runs if run.evaluation is not None)
 
     @property
     def training_results(self) -> tuple[ModelTrainingResult, ...]:

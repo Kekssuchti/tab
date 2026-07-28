@@ -7,6 +7,7 @@ app = marimo.App(width="full")
 @app.cell
 def _():
     import sys
+
     sys.path.append("/var/home/keks/projects/tab")
 
     import dtale
@@ -18,7 +19,9 @@ def _():
     df_tudd = pd.read_csv(config.dir_data / "extracted" / "tudd_mean_100_full.csv")
     df_mimic = pd.read_csv(config.dir_data / "extracted" / "mimic4_mean_100_full.csv")
 
-    df_tudd_fil_file = pd.read_csv(config.dir_data / "filtered" / "tudd_mean_100_full.csv")
+    df_tudd_fil_file = pd.read_csv(
+        config.dir_data / "filtered" / "tudd_mean_100_full.csv"
+    )
     return df_mimic, df_tudd, dtale
 
 
@@ -45,7 +48,7 @@ def _():
     # convert mimic to metric system
 
     # height measures in inch
-    # 
+    #
 
     return
 

@@ -151,7 +151,7 @@ TABFM_ADAPTER = "src.adapter.tabfm_adapter:TabfmAdapter"
 TABSWIFT_ADAPTER = "src.adapter.tabswift_adapter:TabSwiftAdapter"
 
 
-CLASSIFICATION_SEARCH_SPACES = {
+SEARCH_SPACES = {
     "logistic-regression": {
         "default": {
             "C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0],
@@ -227,8 +227,6 @@ CLASSIFICATION_SEARCH_SPACES = {
         },
         "best_2_6": {
             "n_estimators": [4],
-            "fit_mode": ["fit_preprocessors"],
-            "predict_batch_size": [8192],
         },
         "tabpfn2.5": {
             "n_estimators": [1, 2],  # oom else
@@ -314,83 +312,59 @@ CLASSIFICATION_SEARCH_SPACES = {
     },
 }
 
-REGRESSION_SEARCH_SPACES = {
-    "xgboost": {
-        "default": {
-            "n_estimators": [100, 300],
-            "max_depth": [3, 5],
-            "learning_rate": [0.03, 0.1],
-            "subsample": [0.8, 1.0],
-        }
-    },
-    "ebm": {
-        "default": {
-            "max_bins": [128, 256],
-            "learning_rate": [0.01, 0.05],
-            "interactions": [0, 5],
-        }
-    },
-}
-
 # Note that search spaces with parameters that have only 1 value are still worth it
 # since we use the 1 value as the "default" for the hyperparameter
 # While adjusting the other hyperparameters with multiple values
 MODEL_REGISTRY_CLS = {
     "logistic-regression": ModelSpec(
         f"{SKLEARN_ADAPTER}:LinearModelAdapter",
-        search_spaces=CLASSIFICATION_SEARCH_SPACES["logistic-regression"],
+        search_spaces=SEARCH_SPACES["logistic-regression"],
     ),
     "xgboost": ModelSpec(
         f"{SKLEARN_ADAPTER}:XGBoostAdapter",
-        search_spaces=CLASSIFICATION_SEARCH_SPACES["xgboost"],
+        search_spaces=SEARCH_SPACES["xgboost"],
     ),
     "ebm": ModelSpec(
         f"{SKLEARN_ADAPTER}:EBMAdapter",
-        search_spaces=CLASSIFICATION_SEARCH_SPACES["ebm"],
+        search_spaces=SEARCH_SPACES["ebm"],
     ),
     "tabpfn-3": ModelSpec(
         TABPFN_ADAPTER,
-        search_spaces=CLASSIFICATION_SEARCH_SPACES["tabpfn"],
+        search_spaces=SEARCH_SPACES["tabpfn"],
     ),
     "tabpfn-2.5": ModelSpec(
         TABPFN_ADAPTER,
         default_params={"version": "v2.5"},
-        search_spaces=CLASSIFICATION_SEARCH_SPACES["tabpfn"],
+        search_spaces=SEARCH_SPACES["tabpfn"],
     ),
     "tabpfn-2.6": ModelSpec(
         TABPFN_ADAPTER,
-        default_params={"version": "v2.6", "predict_batch_size": 8192},
-        search_spaces=CLASSIFICATION_SEARCH_SPACES["tabpfn"],
+        default_params={
+            "version": "v2.6",
+            "predict_batch_size": 8192,
+            "fit_mode": "fit_preprocessors",
+        },
+        search_spaces=SEARCH_SPACES["tabpfn"],
     ),
     "tabicl-2": ModelSpec(
         TABICL_ADAPTER,
-        search_spaces=CLASSIFICATION_SEARCH_SPACES["tabicl-2"],
+        search_spaces=SEARCH_SPACES["tabicl-2"],
     ),
     "limix-2m": ModelSpec(
         LIMIX_ADAPTER,
         default_params={"size": "2M"},
-        search_spaces=CLASSIFICATION_SEARCH_SPACES["limix"],
+        search_spaces=SEARCH_SPACES["limix"],
     ),
     "limix-16m": ModelSpec(
         LIMIX_ADAPTER,
         default_params={"size": "16M"},
-        search_spaces=CLASSIFICATION_SEARCH_SPACES["limix"],
+        search_spaces=SEARCH_SPACES["limix"],
     ),
-    "mitra": ModelSpec(
-        MITRA_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["mitra"]
-    ),
-    "orion-msp": ModelSpec(
-        ORION_MSP_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["orion"]
-    ),
-    "orion-bix": ModelSpec(
-        ORION_BIX_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["orion"]
-    ),
-    "tabfm": ModelSpec(
-        TABFM_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["tabfm"]
-    ),
-    "tabswift": ModelSpec(
-        TABSWIFT_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["tabswift"]
-    ),
+    "mitra": ModelSpec(MITRA_ADAPTER, search_spaces=SEARCH_SPACES["mitra"]),
+    "orion-msp": ModelSpec(ORION_MSP_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
+    "orion-bix": ModelSpec(ORION_BIX_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
+    "tabfm": ModelSpec(TABFM_ADAPTER, search_spaces=SEARCH_SPACES["tabfm"]),
+    "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=SEARCH_SPACES["tabswift"]),
 }
 
 
@@ -398,20 +372,35 @@ MODEL_REGISTRY_REG = {
     # "linear-regression": ModelSpec(f"{SKLEARN_ADAPTER}:LinearModelAdapter"),
     "xgboost": ModelSpec(
         f"{SKLEARN_ADAPTER}:XGBoostAdapter",
-        search_spaces=REGRESSION_SEARCH_SPACES["xgboost"],
+        search_spaces=SEARCH_SPACES["xgboost"],
     ),
     "ebm": ModelSpec(
         f"{SKLEARN_ADAPTER}:EBMAdapter",
-        search_spaces=REGRESSION_SEARCH_SPACES["ebm"],
+        search_spaces=SEARCH_SPACES["ebm"],
     ),
-    "tabpfn-3": ModelSpec(TABPFN_ADAPTER),
-    "tabicl-2": ModelSpec(TABICL_ADAPTER),
-    # "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
-    # "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
-    # "mitra": ModelSpec(MITRA_ADAPTER),
-    "tabswift": ModelSpec(
-        TABSWIFT_ADAPTER, search_spaces=CLASSIFICATION_SEARCH_SPACES["tabswift"]
+    "tabpfn-3": ModelSpec(TABPFN_ADAPTER, search_spaces=SEARCH_SPACES["tabpfn"]),
+    "tabpfn-2.5": ModelSpec(
+        TABPFN_ADAPTER,
+        default_params={"version": "v2.5"},
+        search_spaces=SEARCH_SPACES["tabpfn"],
     ),
+    "tabpfn-2.6": ModelSpec(
+        TABPFN_ADAPTER,
+        default_params={
+            "version": "v2.6",
+            "predict_batch_size": 8192,
+            "fit_mode": "fit_preprocessors",
+        },
+        search_spaces=SEARCH_SPACES["tabpfn"],
+    ),
+    "tabicl-2": ModelSpec(TABICL_ADAPTER, search_spaces=SEARCH_SPACES["tabicl"]),
+    "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
+    "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
+    "mitra": ModelSpec(MITRA_ADAPTER, search_spaces=SEARCH_SPACES["mitra"]),
+    "orion-msp": ModelSpec(ORION_MSP_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
+    "orion-bix": ModelSpec(ORION_BIX_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
+    "tabfm": ModelSpec(TABFM_ADAPTER, search_spaces=SEARCH_SPACES["tabfm"]),
+    "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=SEARCH_SPACES["tabswift"]),
 }
 
 MODEL_CATALOG = ModelCatalog(

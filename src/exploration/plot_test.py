@@ -64,15 +64,11 @@ def _(data_readmission):
 @app.cell
 def _(data_mortality, data_readmission, performance_table_to_latex):
     latex_mortality = performance_table_to_latex(
-        results=data_mortality,
-        metric="roc_auc",
-        include_ci=False
+        results=data_mortality, metric="roc_auc", include_ci=False
     )
 
     latex_readmission = performance_table_to_latex(
-        results=data_readmission,
-        metric="roc_auc",
-        include_ci=False
+        results=data_readmission, metric="roc_auc", include_ci=False
     )
     return latex_mortality, latex_readmission
 

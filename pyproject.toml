@@ -76,3 +76,5 @@ filterwarnings = [
 
 [tool.ruff]
 exclude = ["external"]
+fix = true
+line-length = 120

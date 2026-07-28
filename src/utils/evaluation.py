@@ -4,6 +4,7 @@ from src.schemas.metrics import FinalTestMetrics
 from src.schemas.run_records import TestSetEvaluationRecord
 from src.utils.evaluation_utils import (
     evaluate_classification_predictions,
+    evaluate_regression_predictions,
 )
 
 
@@ -37,14 +38,21 @@ def _evaluate_test_set(
     task_type: TaskType,
     test_set: XYDataset,
 ) -> TestSetEvaluationRecord:
-    if task_type != "classification":
-        raise NotImplementedError("Regression evaluation is not implemented yet")
+    if task_type == "classification":
+        predictions, predict_time = trained_model.predict(test_set.X)
+        metrics = evaluate_classification_predictions(predictions, test_set.y.to_numpy())
 
-    predictions, predict_time = trained_model.predict(test_set.X)
-    metrics = evaluate_classification_predictions(predictions, test_set.y.to_numpy())
+        return TestSetEvaluationRecord(
+            dataset_name=dataset_name,
+            metrics=metrics,
+            predict_time=predict_time,
+        )
+    else:
+        predictions, predict_time = trained_model.predict(test_set.X)
+        metrics = evaluate_regression_predictions(predictions, test_set.y.to_numpy())
 
-    return TestSetEvaluationRecord(
-        dataset_name=dataset_name,
-        metrics=metrics,
-        predict_time=predict_time,
-    )
+        return TestSetEvaluationRecord(
+            dataset_name=dataset_name,
+            metrics=metrics,
+            predict_time=predict_time,
+        )
