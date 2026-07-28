@@ -14,25 +14,37 @@ from src.schemas.preprocessing_schemas import (
 
 DatasetName = Literal["mimic", "tudd", "mimic_readmission", "tudd_readmission"]
 DatasetOrigin = Literal["mimic", "tudd"]
-Target = Literal["mortality", "LOS7", "hours_to_readmit"]
+DatasetKind = Literal["normal", "readmission"]
+Target = Literal["mortality", "LOS7", "hours_to_readmit", "LOS"]
+
+
+@dataclass(frozen=True)
+class ClassificationTargetSummary:
+    """Label counts for a classification target."""
+
+    class_balance: dict[str, int]
+
+
+@dataclass(frozen=True)
+class RegressionTargetSummary:
+    """Finite descriptive statistics for a regression target."""
+
+    count: int
+    mean: float
+    std: float
+    min: float
+    max: float
+
+
+TargetSummary = ClassificationTargetSummary | RegressionTargetSummary
 
 
 @dataclass(frozen=True)
 class DatasetPartSummary:
-    """
-    Row and label summary for one dataset split.
-
-    ---
-    Attributes:
-        row_count: int
-            Number of rows in the split.
-
-        class_balance: dict
-            Label counts keyed by class value.
-    """
+    """Row and target summary for one dataset split."""
 
     row_count: int
-    class_balance: dict[str, int]
+    target_summary: TargetSummary
 
 
 @dataclass(frozen=True)
@@ -72,7 +84,7 @@ class DatasetSummary:
 
     ---
     Attributes:
-        target: {"mortality", "LOS7", "hours_to_readmit"}
+        target: {"mortality", "LOS7", "hours_to_readmit", "LOS"}
             Prediction target used by the run.
 
         train: DatasetPartSummary
@@ -142,7 +154,7 @@ class DatasetConfig(StrictConfig):
 
     ---
     Attributes:
-        target: {"mortality", "LOS7", "hours_to_readmit"}
+        target: {"mortality", "LOS7", "hours_to_readmit", "LOS"}
             Prediction target.
 
         random_state: int, default=config.seed
@@ -153,9 +165,6 @@ class DatasetConfig(StrictConfig):
 
         train_on: tuple of DataSplitConfig
             Dataset sources combined into the training set.
-
-        classification: bool, default=True
-            Whether the task is treated as classification.
 
         data_cleaner: DataCleanerConfig, default=DataCleanerConfig()
             Cleaning settings for filtered data generation.
@@ -174,7 +183,6 @@ class DatasetConfig(StrictConfig):
     random_state: int = Field(default=config.seed)
     train_size: float = Field(default=0.8, gt=0, lt=1)
     train_on: tuple[DataSplitConfig, ...]
-    classification: bool = Field(default=True)
     data_cleaner: DataCleanerConfig = Field(default_factory=DataCleanerConfig)
     force_repreprocess: bool = Field(
         default=False,
@@ -183,17 +191,13 @@ class DatasetConfig(StrictConfig):
     scaler_encoder: ScalerEncoderConfig = Field(default_factory=ScalerEncoderConfig)
     imputer: ImputerConfig = Field(default_factory=ImputerConfig)
 
-    def post_init(self):
-        # training on multiple datasets is allowed and explored
-        # but we cannot allow to train on the same dataset multiple times
-        # as this could introduce data leakage
-
-        origins = []
-        for origin in self.train_on:
-            origins.append(origin.dataset)
-
+    @field_validator("train_on")
+    @classmethod
+    def unique_origins(cls, train_on: tuple[DataSplitConfig, ...]) -> tuple[DataSplitConfig, ...]:
+        origins = [split.dataset for split in train_on]
         if len(origins) != len(set(origins)):
             raise ValueError("Duplicate dataset origins detected")
+        return train_on
 
 
 @dataclass

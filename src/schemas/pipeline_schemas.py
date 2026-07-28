@@ -5,7 +5,6 @@ from pydantic import Field
 
 from src.schemas.base_schemas import StrictConfig
 from src.schemas.dataset_schemas import DatasetConfig
-from src.schemas.plotting_schemas import PlottingConfig
 from src.schemas.training_schemas import ModelConfig
 
 
@@ -57,9 +56,6 @@ class PipelineConfig(StrictConfig):
         training: tuple of ModelConfig, default=(ModelConfig(name="tabpfn-3"),)
             Models to train and evaluate.
 
-        plotting: PlottingConfig
-            Plotting settings.
-
         mlflow: MLflowConfig, default=MLflowConfig()
             MLflow logging settings.
     """
@@ -67,5 +63,4 @@ class PipelineConfig(StrictConfig):
     run_id: str = Field(default_factory=_default_run_id)
     dataset: DatasetConfig = Field()
     training: tuple[ModelConfig, ...] = (ModelConfig(name="tabpfn-3"),)
-    plotting: PlottingConfig = Field()
     mlflow: MLflowConfig = Field(default_factory=MLflowConfig)

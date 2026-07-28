@@ -19,16 +19,14 @@ def evaluate_trained_model(
     Returns:
         FinalTestMetrics: metrics of tested model
     """
-    test_results = (
-        _evaluate_test_set("mimic", trained_model, task_type, data.test_mimic),
-        _evaluate_test_set("tudd", trained_model, task_type, data.test_tudd),
-    )
+    mimic_test_results = _evaluate_test_set("mimic", trained_model, task_type, data.test_mimic)
+    tudd_test_results = _evaluate_test_set("tudd", trained_model, task_type, data.test_tudd)
 
     return FinalTestMetrics(
-        mimic_test=test_results[0].metrics,
-        mimic_prediction_time=test_results[0].predict_time,
-        tudd_test=test_results[1].metrics,
-        tudd_prediction_time=test_results[1].predict_time,
+        mimic_test=mimic_test_results.metrics,
+        mimic_prediction_time=mimic_test_results.predict_time,
+        tudd_test=tudd_test_results.metrics,
+        tudd_prediction_time=tudd_test_results.predict_time,
     )
 
 
@@ -39,20 +37,20 @@ def _evaluate_test_set(
     test_set: XYDataset,
 ) -> TestSetEvaluationRecord:
     if task_type == "classification":
-        predictions, predict_time = trained_model.predict(test_set.X)
-        metrics = evaluate_classification_predictions(predictions, test_set.y.to_numpy())
+        prediction = trained_model.predict(test_set.X)
+        metrics = evaluate_classification_predictions(prediction.values, test_set.y.to_numpy())
 
         return TestSetEvaluationRecord(
             dataset_name=dataset_name,
             metrics=metrics,
-            predict_time=predict_time,
+            predict_time=prediction.seconds,
         )
     else:
-        predictions, predict_time = trained_model.predict(test_set.X)
-        metrics = evaluate_regression_predictions(predictions, test_set.y.to_numpy())
+        prediction = trained_model.predict(test_set.X)
+        metrics = evaluate_regression_predictions(prediction.values, test_set.y.to_numpy())
 
         return TestSetEvaluationRecord(
             dataset_name=dataset_name,
             metrics=metrics,
-            predict_time=predict_time,
+            predict_time=prediction.seconds,
         )

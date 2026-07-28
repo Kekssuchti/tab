@@ -4,11 +4,11 @@ from typing import Literal
 from orion_msp import OrionMSPClassifier
 
 from src.config import config
-from src.interfaces.model_interface import ModelAdapter
+from src.interfaces.model_interface import ClassificationPredictions, ModelAdapter, TimedPrediction
 from src.utils.logger import logger
 
 
-class OrionMSPAdapter(ModelAdapter):
+class OrionMSPAdapter(ModelAdapter[ClassificationPredictions]):
     def __init__(self, task_type: Literal["classification"] = "classification", **kwargs) -> None:
         super().__init__()
         if task_type != "classification":
@@ -32,8 +32,8 @@ class OrionMSPAdapter(ModelAdapter):
         self.model.fit(X_train, y_train)
         return timer() - start_time
 
-    def predict(self, X_test):
+    def predict(self, X_test) -> TimedPrediction[ClassificationPredictions]:
         start_time = timer()
         result = self.model.predict_proba(X_test)
 
-        return result, timer() - start_time
+        return self.timed_prediction(result, start_time)

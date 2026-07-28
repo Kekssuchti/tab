@@ -5,7 +5,6 @@ dataset:
   train_on:
     - dataset: tudd
       fraction: 1.0
-  classification: true
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
@@ -18,8 +17,6 @@ dataset:
 
 training:
   - name: tabpfn-3
-    task_type: classification
-    params: {}
     tuning:
       scoring: roc_auc
       cv:
@@ -28,19 +25,12 @@ training:
         random_state: 1337
 
   - name: tabicl-2
-    task_type: classification
-    params: {}
     tuning:
       scoring: roc_auc
       cv:
         n_splits: 5
         shuffle: true
         random_state: 1337
-
-plotting:
-  enabled: true
-  formats:
-    - png
 
 mlflow:
   enabled: true

@@ -7,7 +7,6 @@ dataset:
       fraction: 1.0
     - dataset: tudd
       fraction: 1.0
-  classification: true
   data_cleaner:
     missing_threshold_row: 0.5
   scaler_encoder:
@@ -18,41 +17,30 @@ dataset:
 
 training:
   - name: xgboost
-    task_type: classification
-    params:
-      n_estimators: 2
-      max_depth: 1
-      learning_rate: 0.3
-      subsample: 1.0
-      n_jobs: 1
-      random_state: 11
     tuning:
       method: grid
       scoring: accuracy
       grid:
         n_estimators: [2, 3]
         max_depth: [1]
+        learning_rate: [0.3]
+        subsample: [1.0]
+        n_jobs: [1]
+        random_state: [11]
       cv:
         n_splits: 2
         shuffle: true
         random_state: 11
   - name: tabpfn-3
-    task_type: classification
-    params:
-      device: cpu
-      random_state: 11
-      show_progress_bar: false
     tuning:
       method: grid
       scoring: accuracy
       grid:
         n_estimators: [2]
+        device: [cpu]
+        random_state: [11]
+        show_progress_bar: [false]
       cv:
         n_splits: 2
         shuffle: true
         random_state: 11
-
-plotting:
-  enabled: false
-  formats:
-    - png

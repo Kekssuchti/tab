@@ -19,11 +19,6 @@ dataset:
       fraction: 1.0
 training:
   - name: logistic-regression
-    task_type: classification
-    params:
-      max_iter: 100
-plotting:
-  enabled: false
 mlflow:
   enabled: false
 """.strip(),

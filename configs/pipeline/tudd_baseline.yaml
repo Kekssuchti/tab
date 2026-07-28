@@ -5,7 +5,6 @@ dataset:
   train_on:
     - dataset: tudd
       fraction: 1.0
-  classification: true
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
@@ -18,8 +17,6 @@ dataset:
 
 training:
   - name: tabswift
-    task_type: classification
-    params: {}
     preprocessing:
       imputer:
         imputation_method: mean
@@ -33,8 +30,6 @@ training:
         random_state: 1337
 
   - name: tabpfn-2.6
-    task_type: classification
-    params: {}
     tuning:
       method: grid
       search_space: best_2_6
@@ -45,8 +40,6 @@ training:
         random_state: 1337
 
   - name: logistic-regression
-    task_type: classification
-    params: {}
     preprocessing:
       imputer:
         imputation_method: mean
@@ -67,8 +60,6 @@ training:
         random_state: 1337
 
   - name: xgboost
-    task_type: classification
-    params: {}
     tuning:
       method: optuna
       search_space: good
@@ -84,8 +75,6 @@ training:
         random_state: 1337
 
   - name: ebm
-    task_type: classification
-    params: {}
     tuning:
       method: optuna
       search_space: default
@@ -101,8 +90,6 @@ training:
         random_state: 1337
 
   - name: tabpfn-3
-    task_type: classification
-    params: {}
     tuning:
       method: grid
       search_space: best
@@ -113,8 +100,6 @@ training:
         random_state: 1337
 
   - name: tabicl-2
-    task_type: classification
-    params: {}
     tuning:
       method: grid
       search_space: best
@@ -125,8 +110,6 @@ training:
         random_state: 1337
 
   - name: limix-16m
-    task_type: classification
-    params: {}
     tuning:
       method: grid
       search_space: best
@@ -137,8 +120,6 @@ training:
         random_state: 1337
 
   - name: orion-msp
-    task_type: classification
-    params: {}
     preprocessing:
       imputer:
         imputation_method: mean
@@ -152,8 +133,6 @@ training:
         random_state: 1337
 
   - name: tabfm
-    task_type: classification
-    params: {}
     preprocessing:
       imputer:
         imputation_method: mean
@@ -165,11 +144,6 @@ training:
         n_splits: 5
         shuffle: true
         random_state: 1337
-
-plotting:
-  enabled: true
-  formats:
-    - png
 
 mlflow:
   enabled: true

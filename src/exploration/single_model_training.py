@@ -23,6 +23,7 @@ def _():
         sys.path.insert(0, str(project_root))
 
     from src.classes.dataset import Dataset
+    from src.classes.data_registry import dataset_task_for_target
     from src.classes.trainer import Trainer
     from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig
     from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
@@ -35,6 +36,7 @@ def _():
         DataSplitConfig,
         Dataset,
         DatasetConfig,
+        dataset_task_for_target,
         ImputerConfig,
         ModelConfig,
         ScalerEncoderConfig,
@@ -56,8 +58,7 @@ def _():
     # Model timing notebook. Edit this cell, then set RUN_TRAINING = True.
     # This uses Dataset and Trainer directly, without run_pipeline or MLflow.
 
-    # Dataset variables. Use mimic/tudd for mortality or LOS7; use
-    # mimic_readmission/tudd_readmission for hours_to_readmit.
+    # Training sources are always origins; the target selects normal/readmission files.
     TARGET = "mortality"
     TRAIN_ON = (
         ("mimic", 1.0),
@@ -83,10 +84,7 @@ def _():
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None
-    TASK_TYPE = "classification"
-
     # Execution controls.
-    RUN_PREFLIGHT_VALIDATION = False
     RUN_TRAINING = True
     PREDICTION_REPEATS = 1
     return (
@@ -98,10 +96,8 @@ def _():
         MODEL_PREPROCESSING,
         PREDICTION_REPEATS,
         RANDOM_STATE,
-        RUN_PREFLIGHT_VALIDATION,
         RUN_TRAINING,
         TARGET,
-        TASK_TYPE,
         TEST_SETS,
         TRAIN_ON,
         TRAIN_SIZE,
@@ -114,6 +110,7 @@ def _(
     DATASET_SCALER,
     DataSplitConfig,
     DatasetConfig,
+    dataset_task_for_target,
     FORCE_REPREPROCESS,
     ImputerConfig,
     MODEL_NAME,
@@ -123,7 +120,6 @@ def _(
     RANDOM_STATE,
     ScalerEncoderConfig,
     TARGET,
-    TASK_TYPE,
     TRAIN_ON,
     TRAIN_SIZE,
     TuningConfig,
@@ -139,24 +135,19 @@ def _(
         random_state=RANDOM_STATE,
         train_size=TRAIN_SIZE,
         train_on=tuple(DataSplitConfig(dataset=dataset_name, fraction=fraction) for dataset_name, fraction in TRAIN_ON),
-        classification=TASK_TYPE == "classification",
         force_repreprocess=FORCE_REPREPROCESS,
         imputer=ImputerConfig(**DATASET_IMPUTER),
         scaler_encoder=ScalerEncoderConfig(**DATASET_SCALER),
     )
 
     model_param_sets = expand_params(MODEL_PARAMS)
-    model_params_list = tuple(
-        ModelConfig(
-            name=MODEL_NAME,
-            task_type=TASK_TYPE,
-            params=params,
-            preprocessing=MODEL_PREPROCESSING,
-            tuning=TuningConfig(method="grid"),
-        )
-        for params in model_param_sets
+    model_config = ModelConfig(
+        name=MODEL_NAME,
+        preprocessing=MODEL_PREPROCESSING,
+        tuning=TuningConfig(method="grid"),
     )
-    return dataset_params, model_param_sets, model_params_list
+    task_type = dataset_task_for_target(TARGET).task_type
+    return dataset_params, model_config, model_param_sets, task_type
 
 
 @app.cell
@@ -171,19 +162,19 @@ def _(Dataset, asdict, dataset_params, mo, pd):
                 "part": "train",
                 "rows": dataset_summary.train.row_count,
                 "features": data.train_data.X.shape[1],
-                "class_balance": dataset_summary.train.class_balance,
+                "target_summary": asdict(dataset_summary.train.target_summary),
             },
             {
                 "part": "test_mimic",
                 "rows": dataset_summary.test_mimic.row_count,
                 "features": data.test_mimic.X.shape[1],
-                "class_balance": dataset_summary.test_mimic.class_balance,
+                "target_summary": asdict(dataset_summary.test_mimic.target_summary),
             },
             {
                 "part": "test_tudd",
                 "rows": dataset_summary.test_tudd.row_count,
                 "features": data.test_tudd.X.shape[1],
-                "class_balance": dataset_summary.test_tudd.class_balance,
+                "target_summary": asdict(dataset_summary.test_tudd.target_summary),
             },
         ]
     )
@@ -199,16 +190,13 @@ def _(Dataset, asdict, dataset_params, mo, pd):
 
 
 @app.cell
-def _(RUN_PREFLIGHT_VALIDATION, Trainer, dataset_params, model_params_list):
+def _(Trainer, dataset_params, model_config, task_type):
     trainer = Trainer(
-        configs=model_params_list,
+        task_type=task_type,
         default_imputer=dataset_params.imputer,
         default_scaler=dataset_params.scaler_encoder,
     )
-    if RUN_PREFLIGHT_VALIDATION:
-        trainer.validate_model_configs()
-    model_config_checked = True
-    return model_config_checked, trainer
+    return (trainer,)
 
 
 @app.cell
@@ -221,19 +209,18 @@ def _(
     evaluate_classification_predictions,
     get_model_spec,
     mo,
-    model_config_checked,
+    model_config,
     model_param_sets,
-    model_params_list,
     np,
     pd,
     release_model,
+    task_type,
     trainer,
 ):
     mo.stop(
         not RUN_TRAINING,
         mo.md("Set `RUN_TRAINING = True` in the variables cell to fit the models."),
     )
-    _ = model_config_checked
     if PREDICTION_REPEATS < 1:
         raise ValueError("PREDICTION_REPEATS must be at least 1")
 
@@ -245,21 +232,18 @@ def _(
     evaluation_rows = []
     y_train = data.train_data.y.to_numpy()
 
-    for config_index, (model_params, params) in enumerate(
-        zip(model_params_list, model_param_sets),
-        start=1,
-    ):
-        if model_params.task_type != "classification":
+    for config_index, params in enumerate(model_param_sets, start=1):
+        if task_type != "classification":
             raise NotImplementedError("This notebook currently evaluates classification models only")
 
         param_summary = ", ".join(f"{key}={value}" for key, value in params.items())
         trained_model = None
         try:
-            spec = get_model_spec(model_params)
+            spec = get_model_spec(model_config, task_type)
             trained_model, fit_time = trainer._fit_model(
-                model_params,
+                model_config,
                 spec,
-                model_params.params,
+                params,
                 data.train_data.X,
                 y_train,
             )
@@ -267,20 +251,20 @@ def _(
             for dataset_name in TEST_SETS:
                 test_set = available_test_sets[dataset_name]
                 timings = []
-                predictions = None
+                prediction = None
                 for _ in range(PREDICTION_REPEATS):
-                    predictions, predict_time = trained_model.predict(test_set.X)
-                    timings.append(predict_time)
+                    prediction = trained_model.predict(test_set.X)
+                    timings.append(prediction.seconds)
 
                 metrics = evaluate_classification_predictions(
-                    predictions,
+                    prediction.values,
                     test_set.y.to_numpy(),
                 )
                 mean_predict_time = float(np.mean(timings))
                 evaluation_rows.append(
                     {
                         "config": config_index,
-                        "model": model_params.name,
+                        "model": model_config.name,
                         "params": param_summary,
                         "fit_time_s": fit_time,
                         "dataset": dataset_name,

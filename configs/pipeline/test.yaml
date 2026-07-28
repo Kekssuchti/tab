@@ -5,7 +5,6 @@ dataset:
   train_on:
     - dataset: tudd
       fraction: 200
-  classification: true
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
@@ -16,9 +15,6 @@ dataset:
 
 training:
   - name: tabicl-2
-    task_type: classification
-    params:
-      random_state: 1337
     tuning:
       method: grid
       search_space: best
@@ -27,11 +23,6 @@ training:
         n_splits: 5
         shuffle: true
         random_state: 1337
-
-plotting:
-  enabled: true
-  formats:
-    - png
 
 mlflow:
   enabled: true

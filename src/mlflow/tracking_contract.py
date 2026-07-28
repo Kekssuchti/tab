@@ -2,7 +2,10 @@
 
 import re
 
+TRACKING_SCHEMA_VERSION = "1"
+
 TAG_RUN_TYPE = "run_type"
+TAG_TRACKING_SCHEMA_VERSION = "tracking_schema_version"
 TAG_PIPELINE_ID = "pipeline_id"
 TAG_PIPELINE_MLFLOW_RUN_ID = "pipeline_mlflow_run_id"
 TAG_MODEL_MLFLOW_RUN_ID = "model_mlflow_run_id"
@@ -20,6 +23,13 @@ RUN_TYPE_CV_CANDIDATE = "cv_candidate"
 
 STATUS_SUCCESS = "success"
 STATUS_FAILED = "failed"
+
+ARTIFACT_CONFIG = "config.json"
+ARTIFACT_PIPELINE_RESULT = "pipeline_result.json"
+ARTIFACT_ENVIRONMENT = "environment.json"
+ARTIFACT_MANIFEST = "tracking_manifest.json"
+ARTIFACT_EVALUATION_TABLE = "evaluation_metrics.json"
+ARTIFACT_CV_RESULTS = "cv_results"
 
 TEST_DATASETS = ("mimic", "tudd")
 TEST_DELTA_DATASET = "mimic_minus_tudd"

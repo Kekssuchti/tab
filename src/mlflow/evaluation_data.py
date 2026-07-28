@@ -22,10 +22,13 @@ from src.mlflow.tracking_contract import (
     TAG_RUN_TYPE,
     TAG_STATUS,
     TAG_TARGET,
+    TAG_TASK_TYPE,
+    TAG_TRACKING_SCHEMA_VERSION,
     TAG_TRAIN_SOURCES,
     TAG_TRAINED_ON,
     TEST_DATASETS,
     TEST_DELTA_DATASET,
+    TRACKING_SCHEMA_VERSION,
     dataset_row_count_param,
     parse_test_delta_metric,
     parse_test_score_metric,
@@ -54,6 +57,7 @@ class _PipelineRunRow:
     experiment_name: str
     model_instances: tuple[str, ...]
     target: str | None
+    task_type: str
     trained_on: str | None
     train_sources: tuple[str, ...]
 
@@ -68,6 +72,7 @@ class _ModelContext:
     model_name: str
     model_instance: str
     target: str | None
+    task_type: str
     trained_on: str | None
     train_sources: tuple[str, ...]
     training_size: int | None
@@ -83,6 +88,7 @@ class _Measurement:
     model_name: str
     model_instance: str
     target: str | None
+    task_type: str
     trained_on: str | None
     train_sources: tuple[str, ...]
     training_size: int | None
@@ -185,14 +191,20 @@ def _get_pipeline_and_model_runs(
             for run in _search_runs(
                 client,
                 experiment.experiment_id,
-                f"tags.{TAG_RUN_TYPE} = '{RUN_TYPE_PIPELINE}'",
+                (
+                    f"tags.{TAG_RUN_TYPE} = '{RUN_TYPE_PIPELINE}' "
+                    f"and tags.{TAG_TRACKING_SCHEMA_VERSION} = '{TRACKING_SCHEMA_VERSION}'"
+                ),
             )
         )
         model_runs.extend(
             _search_runs(
                 client,
                 experiment.experiment_id,
-                f"tags.{TAG_RUN_TYPE} = '{RUN_TYPE_MODEL}'",
+                (
+                    f"tags.{TAG_RUN_TYPE} = '{RUN_TYPE_MODEL}' "
+                    f"and tags.{TAG_TRACKING_SCHEMA_VERSION} = '{TRACKING_SCHEMA_VERSION}'"
+                ),
             )
         )
     pipeline_runs.sort(key=lambda item: item.run.info.start_time or 0)
@@ -292,6 +304,7 @@ def _pipeline_run_row(
         experiment_name=pipeline_run.experiment.name,
         model_instances=tuple(_tag(model, TAG_MODEL_INSTANCE) for model in model_runs),
         target=run.data.tags.get(TAG_TARGET) or run.data.params.get(PARAM_DATASET_TARGET),
+        task_type=_tag(run, TAG_TASK_TYPE),
         trained_on=run.data.tags.get(TAG_TRAINED_ON),
         train_sources=_csv_tag(run, TAG_TRAIN_SOURCES),
     )
@@ -311,6 +324,7 @@ def _model_measurements(
         model_name=_tag(model_run, TAG_MODEL_NAME),
         model_instance=_tag(model_run, TAG_MODEL_INSTANCE),
         target=parent.data.tags.get(TAG_TARGET) or parent.data.params.get(PARAM_DATASET_TARGET),
+        task_type=_tag(model_run, TAG_TASK_TYPE),
         trained_on=model_run.data.tags.get(TAG_TRAINED_ON),
         train_sources=_csv_tag(model_run, TAG_TRAIN_SOURCES),
         training_size=_training_size(parent),
@@ -560,11 +574,24 @@ def _add_generalizability_losses(
             .set_index("model_mlflow_run_id")[metric]
         )
         external_scores = frame.loc[external_rows, metric]
-        frame.loc[external_rows, generalizability] = external_scores - frame.loc[
-            external_rows, "model_mlflow_run_id"
-        ].map(training_scores)
-        best_external = frame.loc[external_rows].groupby(["target", "dataset"], dropna=False)[metric].transform("max")
-        frame.loc[external_rows, comparative] = external_scores - best_external
+        training_for_external = frame.loc[external_rows, "model_mlflow_run_id"].map(training_scores)
+        lower_is_better = metric in {"mae", "mse", "rmse"}
+        if lower_is_better:
+            frame.loc[external_rows, generalizability] = training_for_external - external_scores
+            best_external = (
+                frame.loc[external_rows]
+                .groupby(["target", "task_type", "dataset"], dropna=False)[metric]
+                .transform("min")
+            )
+            frame.loc[external_rows, comparative] = best_external - external_scores
+        else:
+            frame.loc[external_rows, generalizability] = external_scores - training_for_external
+            best_external = (
+                frame.loc[external_rows]
+                .groupby(["target", "task_type", "dataset"], dropna=False)[metric]
+                .transform("max")
+            )
+            frame.loc[external_rows, comparative] = external_scores - best_external
     return frame
 
 

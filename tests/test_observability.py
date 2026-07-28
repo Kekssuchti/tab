@@ -1,21 +1,41 @@
+import json
+from dataclasses import replace
+from pathlib import Path
+
 import mlflow
 import numpy as np
+import pytest
 from src.mlflow.mlflow_logger import MLflowPipelineLogger
 from src.mlflow.evaluation_data import load_evaluation_data
 from src.mlflow.observation import MetricLog, assemble_pipeline_observation
-from src.mlflow.serialization import pipeline_result_to_dict
+from src.mlflow.serialization import (
+    artifact_manifest_from_json,
+    canonical_json,
+    cv_result_from_dict,
+    cv_result_from_json,
+    cv_result_to_dict,
+    pipeline_result_from_dict,
+    pipeline_result_from_json,
+    pipeline_result_to_dict,
+)
+from src.mlflow.tracking_contract import TRACKING_SCHEMA_VERSION
 from src.schemas.dataset_schemas import (
+    ClassificationTargetSummary,
     DatasetFileSummary,
     DatasetPartSummary,
     DatasetSummary,
     DataSplitConfig,
+    RegressionTargetSummary,
+    Target,
 )
 from src.schemas.pipeline_schemas import MLflowConfig, PipelineConfig
-from src.schemas.plotting_schemas import PlottingConfig
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
     ClassificationMetrics,
     ClassificationMetricsAggregate,
+    FinalTestMetrics,
+    RegressionMetrics,
+    RegressionMetricsAggregate,
 )
 from src.schemas.run_records import (
     FoldRecord,
@@ -28,10 +48,6 @@ from src.schemas.run_records import (
 )
 from src.schemas.training_schemas import ModelConfig
 from src.utils.evaluation_utils import final_test_metrics
-
-
-class _FakeModel:
-    pass
 
 
 def _metrics(value: float = 1.0) -> ClassificationMetrics:
@@ -74,27 +90,27 @@ def _params(
     tracking_uri: str,
     artifact_location: str | None = None,
     run_name: str | None = None,
+    target: Target = "mortality",
+    model_name: str = "logistic-regression",
+    run_id: str = "test-pipeline-id",
 ) -> PipelineConfig:
     return PipelineConfig(
-        run_id="test-pipeline-id",
+        run_id=run_id,
         dataset={
-            "target": "mortality",
+            "target": target,
             "random_state": 42,
             "train_size": 0.75,
             "train_on": (DataSplitConfig(dataset="mimic", fraction=1.0),),
         },
         training=(
             ModelConfig(
-                name="logistic-regression",
-                task_type="classification",
-                params={"max_iter": 100},
+                name=model_name,
                 preprocessing={
                     "imputer": {"imputation_method": "mean"},
                     "scaler_encoder": {"type": "standardization"},
                 },
             ),
         ),
-        plotting=PlottingConfig(enabled=False),
         mlflow=MLflowConfig(
             enabled=True,
             tracking_uri=tracking_uri,
@@ -111,7 +127,6 @@ def _result(*, tuned: bool = False) -> PipelineRunRecord:
     training_result = ModelTrainingResult(
         model_name="logistic-regression",
         task_type="classification",
-        trained_model=_FakeModel(),
         tuned=tuned,
         fit_time=0.2,
         tuning_result=tuning_result,
@@ -127,9 +142,18 @@ def _result(*, tuned: bool = False) -> PipelineRunRecord:
     )
     dataset_summary = DatasetSummary(
         target="mortality",
-        train=DatasetPartSummary(row_count=8, class_balance={"0": 4, "1": 4}),
-        test_mimic=DatasetPartSummary(row_count=4, class_balance={"0": 2, "1": 2}),
-        test_tudd=DatasetPartSummary(row_count=4, class_balance={"0": 2, "1": 2}),
+        train=DatasetPartSummary(
+            row_count=8,
+            target_summary=ClassificationTargetSummary(class_balance={"0": 4, "1": 4}),
+        ),
+        test_mimic=DatasetPartSummary(
+            row_count=4,
+            target_summary=ClassificationTargetSummary(class_balance={"0": 2, "1": 2}),
+        ),
+        test_tudd=DatasetPartSummary(
+            row_count=4,
+            target_summary=ClassificationTargetSummary(class_balance={"0": 2, "1": 2}),
+        ),
         data_files=(
             DatasetFileSummary(
                 dataset_name="mimic",
@@ -166,7 +190,6 @@ def _failed_result() -> PipelineRunRecord:
     failed_training_result = ModelTrainingResult(
         model_name="logistic-regression",
         task_type="classification",
-        trained_model=None,
         tuned=False,
         fit_time=0.1,
         error="ValueError: bad params",
@@ -186,25 +209,246 @@ def _failed_result() -> PipelineRunRecord:
     )
 
 
+def _regression_result(*, tuned: bool = True) -> PipelineRunRecord:
+    mimic_metrics = RegressionMetrics(r2=0.8, mae=0.2, mse=0.1, rmse=0.3)
+    tudd_metrics = RegressionMetrics(r2=0.6, mae=0.4, mse=0.3, rmse=0.5)
+    tuning_result = None
+    if tuned:
+        tuning_result = TuningRecord(
+            best_params={"alpha": 0.5},
+            scoring="rmse",
+            final_test_metrics=AggregatedFinalTestMetrics(
+                mimic_test=RegressionMetricsAggregate(
+                    [mimic_metrics, RegressionMetrics(r2=0.7, mae=0.3, mse=0.2, rmse=0.4)]
+                ),
+                mimic_prediction_time=0.03,
+                tudd_test=RegressionMetricsAggregate(
+                    [tudd_metrics, RegressionMetrics(r2=0.5, mae=0.5, mse=0.4, rmse=0.6)]
+                ),
+                tudd_prediction_time=0.04,
+            ),
+            fold_results=[FoldRecord(0, 0, mimic_metrics, 0.01, {"alpha": 0.5})],
+            method="grid",
+        )
+    training_result = ModelTrainingResult(
+        model_name="linear-regression",
+        task_type="regression",
+        tuned=tuned,
+        fit_time=0.2,
+        tuning_result=tuning_result,
+    )
+    evaluation = ModelEvaluationRecord(
+        model_name="linear-regression",
+        fit_time=0.2,
+        test_results=(
+            EvaluationRecord("mimic", mimic_metrics, 0.03),
+            EvaluationRecord("tudd", tudd_metrics, 0.04),
+        ),
+        final_test_metrics=FinalTestMetrics(
+            mimic_test=mimic_metrics,
+            mimic_prediction_time=0.03,
+            tudd_test=tudd_metrics,
+            tudd_prediction_time=0.04,
+        ),
+    )
+    base = _result()
+    return PipelineRunRecord(
+        run_id="regression-pipeline-id",
+        dataset_summary=DatasetSummary(
+            target="LOS",
+            train=DatasetPartSummary(
+                row_count=8,
+                target_summary=RegressionTargetSummary(count=8, mean=4.0, std=2.0, min=1.0, max=7.0),
+            ),
+            test_mimic=DatasetPartSummary(
+                row_count=4,
+                target_summary=RegressionTargetSummary(count=4, mean=3.0, std=1.0, min=2.0, max=4.0),
+            ),
+            test_tudd=DatasetPartSummary(
+                row_count=4,
+                target_summary=RegressionTargetSummary(count=4, mean=5.0, std=1.0, min=4.0, max=6.0),
+            ),
+            data_files=base.dataset_summary.data_files,
+        ),
+        model_runs=(ModelRunRecord("linear-regression", training_result, evaluation),),
+        total_time=0.5,
+    )
+
+
 def _metric_value(metrics: tuple[MetricLog, ...], name: str) -> float:
     return next(metric.value for metric in metrics if metric.name == name)
 
 
 def test_pipeline_result_serialization_omits_trained_model():
     serialized = pipeline_result_to_dict(_result())
+    result = serialized["pipeline_result"]
 
-    assert serialized["run_id"] == "test-pipeline-id"
-    assert serialized["dataset_summary"]["train"]["row_count"] == 8
-    assert serialized["model_runs"][0]["model_instance_id"] == "logistic-regression"
-    assert serialized["model_runs"][0]["status"] == "success"
-    assert "trained_model" not in serialized["model_runs"][0]["training_result"]
-    assert "trained_model" not in serialized["training_results"][0]
-    assert "training_metrics" not in serialized["training_results"][0]
-    assert serialized["training_results"][0]["error"] is None
-    assert serialized["training_results"][0]["failure_stage"] is None
+    assert serialized["tracking_schema_version"] == TRACKING_SCHEMA_VERSION
+    assert result["run_id"] == "test-pipeline-id"
+    assert result["dataset_summary"]["train"]["row_count"] == 8
+    assert result["model_runs"][0]["model_instance_id"] == "logistic-regression"
+    assert set(result["model_runs"][0]) == {"model_instance_id", "training_result", "evaluation"}
+    assert "model_results" not in result
+    assert "training_results" not in result
+    assert result["model_runs"][0]["training_result"]["error"] is None
+    assert result["model_runs"][0]["training_result"]["failure_stage"] is None
 
     tuned_serialized = pipeline_result_to_dict(_result(tuned=True))
-    assert "cv_results" not in tuned_serialized["training_results"][0]["tuning_result"]
+    tuning_result = tuned_serialized["pipeline_result"]["model_runs"][0]["training_result"]["tuning_result"]
+    assert "cv_results" not in tuning_result
+
+
+def test_pipeline_result_serialization_round_trips_to_typed_record():
+    serialized = pipeline_result_to_dict(_result(tuned=True))
+
+    restored = pipeline_result_from_json(canonical_json(serialized))
+    result = restored.pipeline_result
+    source = _result(tuned=True)
+
+    assert restored.tracking_schema_version == TRACKING_SCHEMA_VERSION
+    assert isinstance(result, PipelineRunRecord)
+    assert isinstance(result.dataset_summary, DatasetSummary)
+    assert isinstance(result.dataset_summary.train.target_summary, ClassificationTargetSummary)
+    assert isinstance(result.model_runs[0], ModelRunRecord)
+    assert isinstance(result.model_runs[0].training_result, ModelTrainingResult)
+    assert isinstance(result.model_runs[0].training_result.tuning_result, TuningRecord)
+    assert isinstance(result.model_runs[0].training_result.tuning_result.fold_results[0], FoldRecord)
+    assert isinstance(result.model_runs[0].training_result.tuning_result.fold_results[0].metrics, ClassificationMetrics)
+    aggregate = result.model_runs[0].training_result.tuning_result.final_test_metrics.mimic_test
+    assert isinstance(aggregate, ClassificationMetricsAggregate)
+    assert isinstance(result.model_runs[0].evaluation, ModelEvaluationRecord)
+    assert isinstance(result.model_runs[0].evaluation.test_results[0], EvaluationRecord)
+    np.testing.assert_array_equal(
+        result.model_runs[0].evaluation.test_results[0].metrics.confusion_matrix,
+        source.model_runs[0].evaluation.test_results[0].metrics.confusion_matrix,
+    )
+    np.testing.assert_array_equal(
+        aggregate.mean_confusion_matrix,
+        source.model_runs[0].training_result.tuning_result.final_test_metrics.mimic_test.mean_confusion_matrix,
+    )
+    assert restored.to_dict() == serialized
+
+
+def test_regression_pipeline_result_round_trips_to_typed_records():
+    serialized = pipeline_result_to_dict(_regression_result())
+
+    restored = pipeline_result_from_json(canonical_json(serialized)).pipeline_result
+
+    assert restored.dataset_summary.target == "LOS"
+    assert isinstance(restored.dataset_summary.train.target_summary, RegressionTargetSummary)
+    assert restored.dataset_summary.train.target_summary.mean == 4.0
+    training = restored.model_runs[0].training_result
+    assert training.task_type == "regression"
+    assert isinstance(training.tuning_result, TuningRecord)
+    assert isinstance(training.tuning_result.fold_results[0].metrics, RegressionMetrics)
+    assert isinstance(training.tuning_result.final_test_metrics.mimic_test, RegressionMetricsAggregate)
+    assert isinstance(restored.model_runs[0].evaluation.test_results[0].metrics, RegressionMetrics)
+    assert pipeline_result_to_dict(restored) == serialized
+
+
+def test_pipeline_result_serialization_rejects_unknown_and_non_finite_values():
+    unsupported = _result(tuned=True)
+    unsupported.model_runs[0].training_result.tuning_result.best_params["invalid"] = object()
+    with pytest.raises(TypeError, match="Unsupported value"):
+        pipeline_result_to_dict(unsupported)
+
+    non_finite = _result()
+    non_finite.model_runs[0].training_result.fit_time = float("nan")
+    with pytest.raises(ValueError, match="must be finite"):
+        pipeline_result_to_dict(non_finite)
+
+    unsupported_version = pipeline_result_to_dict(_result())
+    unsupported_version["tracking_schema_version"] = "0"
+    with pytest.raises(ValueError, match="Unsupported MLflow tracking schema version"):
+        pipeline_result_from_json(canonical_json(unsupported_version))
+
+
+def test_pipeline_result_reader_rejects_unknown_nested_keys_and_non_finite_values():
+    unknown_metric = pipeline_result_to_dict(_result())
+    metrics = unknown_metric["pipeline_result"]["model_runs"][0]["evaluation"]["test_results"][0]["metrics"]
+    metrics["unexpected"] = 1.0
+    with pytest.raises(ValueError, match="metrics has invalid keys"):
+        pipeline_result_from_dict(unknown_metric)
+
+    non_finite = pipeline_result_to_dict(_result())
+    non_finite["pipeline_result"]["model_runs"][0]["training_result"]["fit_time"] = float("inf")
+    with pytest.raises(ValueError, match="must be finite"):
+        pipeline_result_from_dict(non_finite)
+
+
+def test_pipeline_projection_rejects_config_result_identity_mismatches():
+    result = _result()
+    with pytest.raises(ValueError, match="run_id mismatch"):
+        assemble_pipeline_observation(_params("sqlite:///unused", run_id="other"), result)
+    with pytest.raises(ValueError, match="target mismatch"):
+        assemble_pipeline_observation(_params("sqlite:///unused", target="LOS"), result)
+    with pytest.raises(ValueError, match="model instance mapping mismatch"):
+        assemble_pipeline_observation(_params("sqlite:///unused", model_name="xgboost"), result)
+
+
+def test_pipeline_projection_accepts_ordered_partial_model_prefix():
+    params = _params("sqlite:///unused")
+    params = params.model_copy(update={"training": (*params.training, ModelConfig(name="xgboost"))})
+
+    observation = assemble_pipeline_observation(params, _result())
+
+    assert [child.run_name for child in observation.children] == ["logistic-regression"]
+
+
+def test_pipeline_serialization_rejects_task_summary_and_metric_family_mismatches():
+    wrong_task = _result()
+    wrong_task.model_runs[0].training_result.task_type = "regression"
+    with pytest.raises(ValueError, match="does not match target task"):
+        pipeline_result_to_dict(wrong_task)
+
+    wrong_metrics = _result(tuned=True)
+    wrong_metrics.model_runs[0].training_result.tuning_result.fold_results[0].metrics = RegressionMetrics(
+        r2=0.8,
+        mae=0.2,
+        mse=0.1,
+        rmse=0.3,
+    )
+    with pytest.raises(ValueError, match="does not match task type"):
+        pipeline_result_to_dict(wrong_metrics)
+
+    malformed_reader_payload = pipeline_result_to_dict(_result())
+    malformed_reader_payload["pipeline_result"]["model_runs"][0]["training_result"]["task_type"] = "regression"
+    with pytest.raises(ValueError, match="invalid keys"):
+        pipeline_result_from_dict(malformed_reader_payload)
+
+    invalid_summary = _regression_result(tuned=False)
+    invalid_summary = replace(
+        invalid_summary,
+        dataset_summary=replace(
+            invalid_summary.dataset_summary,
+            train=replace(
+                invalid_summary.dataset_summary.train,
+                target_summary=replace(invalid_summary.dataset_summary.train.target_summary, count=9),
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="between zero and row_count"):
+        pipeline_result_to_dict(invalid_summary)
+
+
+def test_cv_result_envelope_round_trips_and_rejects_task_mismatch():
+    serialized = cv_result_to_dict("logistic-regression", "classification", _tuning_result())
+
+    restored = cv_result_from_json(canonical_json(serialized))
+
+    assert restored.tracking_schema_version == TRACKING_SCHEMA_VERSION
+    assert restored.model_instance_id == "logistic-regression"
+    assert restored.task_type == "classification"
+    assert isinstance(restored.tuning_result.fold_results[0].metrics, ClassificationMetrics)
+
+    serialized["task_type"] = "regression"
+    with pytest.raises(ValueError, match="invalid for regression"):
+        cv_result_from_dict(serialized)
+
+    regression_tuning = _regression_result().model_runs[0].training_result.tuning_result
+    regression = cv_result_from_dict(cv_result_to_dict("linear-regression", "regression", regression_tuning))
+    assert regression.task_type == "regression"
+    assert isinstance(regression.tuning_result.fold_results[0].metrics, RegressionMetrics)
 
 
 def test_observation_assembly_describes_parent_model_and_cv_runs():
@@ -216,10 +460,18 @@ def test_observation_assembly_describes_parent_model_and_cv_runs():
     assert observation.run_name == "friendly-run"
     assert observation.tags["run_type"] == "pipeline"
     assert observation.tags["trained_on"] == "mimic"
+    assert observation.tags["task_type"] == "classification"
+    assert observation.params["dataset.task_type"] == "classification"
+    assert observation.params["dataset.kind"] == "normal"
+    assert "dataset.classification" not in observation.params
     assert observation.params["dataset.train.row_count"] == "8"
+    assert observation.params["dataset.train.class_balance.0"] == "4"
+    assert all(".target.mean" not in key for key in observation.params)
     assert observation.params["model.logistic-regression.preprocessing.override"] == "True"
+    assert all(not key.startswith("plotting.") for key in observation.params)
+    assert all(".params." not in key for key in observation.params)
     assert _metric_value(observation.metrics, "pipeline.total_time") == 0.5
-    assert {row["dataset"] for row in observation.table_rows} == {
+    assert {row.dataset for row in observation.table_rows} == {
         "mimic",
         "tudd",
         "mimic_minus_tudd",
@@ -257,6 +509,47 @@ def test_observation_assembly_marks_failed_model_without_evaluations():
     assert _metric_value(model_run.metrics, "train.fit_time") == 0.1
     assert model_run.evaluations == ()
     assert model_run.children == ()
+
+
+def test_observation_only_logs_class_count_for_classification_metrics():
+    regression_result = _regression_result(tuned=False)
+
+    observation = assemble_pipeline_observation(
+        _params(
+            "sqlite:///unused",
+            target="LOS",
+            model_name="linear-regression",
+            run_id="regression-pipeline-id",
+        ),
+        regression_result,
+    )
+
+    assert all(not key.endswith(".n_classes") for key in observation.children[0].params)
+    assert observation.tags["task_type"] == "regression"
+    assert observation.children[0].tags["task_type"] == "regression"
+    assert observation.params["dataset.train.target.count"] == "8"
+    assert observation.params["dataset.train.target.mean"] == "4.0"
+    assert all("class_balance" not in key for key in observation.params)
+
+
+def test_observation_logs_regression_aggregate_metrics_and_candidate():
+    observation = assemble_pipeline_observation(
+        _params(
+            "sqlite:///unused",
+            target="LOS",
+            model_name="linear-regression",
+            run_id="regression-pipeline-id",
+        ),
+        _regression_result(),
+    )
+    model_run = observation.children[0]
+
+    assert _metric_value(model_run.metrics, "test.mimic.mean_r2") == pytest.approx(0.75)
+    assert _metric_value(model_run.metrics, "test.mimic.mean_rmse") == pytest.approx(0.35)
+    assert _metric_value(model_run.metrics, "test.mimic.ci_95_rmse_lower") <= 0.35
+    assert _metric_value(model_run.metrics, "test.mimic.ci_95_rmse_upper") >= 0.35
+    assert model_run.children[0].tags["task_type"] == "regression"
+    assert _metric_value(model_run.children[0].metrics, "cv.mean.rmse") == pytest.approx(0.3)
 
 
 def test_observation_assembly_keeps_cv_runs_for_failed_tuned_model():
@@ -322,6 +615,7 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
     cv0 = runs_by_name["logistic-regression/cv00"]
 
     assert parent.data.params["dataset.target"] == "mortality"
+    assert parent.data.tags["tracking_schema_version"] == TRACKING_SCHEMA_VERSION
     assert parent.data.metrics["pipeline.total_time"] == 0.5
     assert model.data.tags["mlflow.parentRunId"] == parent.info.run_id
     assert model.data.tags["pipeline_mlflow_run_id"] == parent.info.run_id
@@ -345,11 +639,29 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
         "config.json",
         "pipeline_result.json",
         "environment.json",
+        "tracking_manifest.json",
         "_evaluations.json",
         "_metrics.json",
         "evaluation_metrics.json",
         "cv_results",
     } <= artifact_names
+    result_artifact = Path(client.download_artifacts(parent.info.run_id, "pipeline_result.json"))
+    loaded_result = pipeline_result_from_json(result_artifact.read_text(encoding="utf-8"))
+    assert loaded_result.pipeline_result.model_runs[0].model_instance_id == "logistic-regression"
+    manifest_artifact = Path(client.download_artifacts(parent.info.run_id, "tracking_manifest.json"))
+    manifest = artifact_manifest_from_json(manifest_artifact.read_text(encoding="utf-8"))
+    assert manifest.pipeline_result == "pipeline_result.json"
+    assert manifest.evaluation_table == "evaluation_metrics.json"
+    assert manifest.cv_results == ("cv_results/logistic-regression.json",)
+    cv_artifact = Path(client.download_artifacts(parent.info.run_id, "cv_results/logistic-regression.json"))
+    cv_result = cv_result_from_json(cv_artifact.read_text(encoding="utf-8"))
+    assert cv_result.model_instance_id == "logistic-regression"
+    assert cv_result.task_type == "classification"
+    assert isinstance(cv_result.tuning_result.fold_results[0].metrics, ClassificationMetrics)
+    config_artifact = Path(client.download_artifacts(parent.info.run_id, "config.json"))
+    logged_config = json.loads(config_artifact.read_text(encoding="utf-8"))
+    assert "plotting" not in logged_config
+    assert "params" not in logged_config["training"][0]
     evaluation_metrics = mlflow.load_table("evaluation_metrics.json", run_ids=[parent.info.run_id])
     assert {"mimic", "tudd", "mimic_minus_tudd"} <= set(evaluation_metrics["dataset"])
 
@@ -422,3 +734,10 @@ def test_mlflow_logger_writes_failed_nested_model_run(tmp_path):
     assert child.data.tags["failure_stage"] == "training"
     assert child.data.tags["error"] == "ValueError: bad params"
     assert child.data.metrics["train.fit_time"] == 0.1
+    client = mlflow.MlflowClient(tracking_uri=tracking_uri)
+    artifact_names = {artifact.path for artifact in client.list_artifacts(child.data.tags["mlflow.parentRunId"])}
+    assert "evaluation_metrics.json" not in artifact_names
+    manifest_path = Path(client.download_artifacts(child.data.tags["mlflow.parentRunId"], "tracking_manifest.json"))
+    manifest_json = manifest_path.read_text(encoding="utf-8")
+    assert "evaluation_table" not in json.loads(manifest_json)
+    assert artifact_manifest_from_json(manifest_json).evaluation_table is None

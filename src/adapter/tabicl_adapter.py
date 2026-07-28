@@ -4,11 +4,11 @@ import numpy as np
 from tabicl import TabICLClassifier, TabICLRegressor
 
 from src.config import config
-from src.interfaces.model_interface import ModelAdapter
+from src.interfaces.model_interface import ModelAdapter, PredictionValues, TimedPrediction
 from src.schemas.base_schemas import TaskType
 
 
-class TabICLAdapter(ModelAdapter):
+class TabICLAdapter(ModelAdapter[PredictionValues]):
     def __init__(
         self,
         task_type: TaskType = "classification",
@@ -26,7 +26,7 @@ class TabICLAdapter(ModelAdapter):
         n_estimators = kwargs.pop("n_estimators", 8)
         cache_type = "kv" if n_estimators <= 8 else "repr"
         kv_cache = kwargs.pop("kv_cache", cache_type)
-        default_kwargs = {"random_state": config.seed, "kv_cache": kv_cache}
+        default_kwargs = {"random_state": config.seed, "kv_cache": kv_cache, "n_estimators": n_estimators}
 
         self.kwargs = {**default_kwargs, **kwargs}
         self.model = self._load_model()
@@ -43,14 +43,14 @@ class TabICLAdapter(ModelAdapter):
         self.model.fit(X_train, y_train)
         return timer() - start_time
 
-    def predict(self, X_test):
+    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
         start_time = timer()
         if self.predict_batch_size is not None and len(X_test) > self.predict_batch_size:
             result = self._predict_batched(X_test)
-            return np.asarray(result), timer() - start_time
+            return self.timed_prediction(result, start_time)
 
         result = self._predict_single_batch(X_test)
-        return np.asarray(result), timer() - start_time
+        return self.timed_prediction(result, start_time)
 
     def _predict_batched(self, X_test):
         predictions = []

@@ -14,37 +14,6 @@ from src.schemas.metrics import (
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 
 
-class _PredictsFromFirstColumn:
-    def predict(self, X_test):
-        positive_probability = np.asarray(X_test)[:, 0]
-        predictions = np.column_stack([1 - positive_probability, positive_probability])
-        return predictions, 0.1
-
-
-class _ReleasablePredictor(_PredictsFromFirstColumn):
-    active = 0
-    peak = 0
-
-    def __init__(self):
-        self.released = False
-        type(self).active += 1
-        type(self).peak = max(type(self).peak, type(self).active)
-
-    def release(self):
-        if self.released:
-            return
-        self.released = True
-        type(self).active -= 1
-
-
-class _FailingReleasablePredictor(_ReleasablePredictor):
-    active = 0
-    peak = 0
-
-    def predict(self, X_test):
-        raise RuntimeError("bad evaluation")
-
-
 def _test_set(labels, signal=None):
     y = pd.Series(labels)
     signal = labels if signal is None else signal
@@ -103,9 +72,7 @@ def test_pipeline_exposes_tuned_test_metrics_as_model_result():
     assert result.final_test_metrics.mimic_minus_tudd.roc_auc == 1.0
 
 
-def test_pipeline_releases_each_model_before_training_next(monkeypatch):
-    _ReleasablePredictor.active = 0
-    _ReleasablePredictor.peak = 0
+def test_pipeline_records_do_not_own_live_models(monkeypatch):
     bundle = DatasetBundle(
         train_data=_test_set([0, 1]),
         test_mimic=_test_set([0, 1, 0, 1]),
@@ -120,8 +87,8 @@ def test_pipeline_releases_each_model_before_training_next(monkeypatch):
             return SimpleNamespace()
 
     class _FakeTrainer:
-        def __init__(self, params, default_imputer, default_scaler):
-            self.params = params
+        def __init__(self, task_type, default_imputer, default_scaler):
+            self.task_type = task_type
 
         def validate_model_configs(self):
             pass
@@ -130,11 +97,9 @@ def test_pipeline_releases_each_model_before_training_next(monkeypatch):
             pass
 
         def train_evaluate_model(self, model_params, data):
-            assert _ReleasablePredictor.active == 0
             return ModelTrainingResult(
                 model_name=model_params.name,
                 task_type="classification",
-                trained_model=_ReleasablePredictor(),
                 tuned=False,
                 fit_time=0.2,
             )
@@ -145,7 +110,7 @@ def test_pipeline_releases_each_model_before_training_next(monkeypatch):
     pipeline.dataset = _FakeDataset()
     pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
-        dataset=SimpleNamespace(imputer=None, scaler_encoder=None),
+        dataset=SimpleNamespace(target="mortality", imputer=None, scaler_encoder=None),
         training=(
             SimpleNamespace(name="model-a"),
             SimpleNamespace(name="model-b"),
@@ -155,9 +120,8 @@ def test_pipeline_releases_each_model_before_training_next(monkeypatch):
     result = pipeline.run()
 
     assert result.model_results == ()
-    assert _ReleasablePredictor.peak == 1
-    assert _ReleasablePredictor.active == 0
-    assert [tr.trained_model for tr in result.training_results] == [None, None]
+    assert len(result.training_results) == 2
+    assert all(not hasattr(tr, "trained_model") for tr in result.training_results)
 
 
 def test_pipeline_records_failed_model_and_continues(monkeypatch):
@@ -175,8 +139,8 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
             return SimpleNamespace()
 
     class _FakeTrainer:
-        def __init__(self, params, default_imputer, default_scaler):
-            self.params = params
+        def __init__(self, task_type, default_imputer, default_scaler):
+            self.task_type = task_type
 
         def validate_model_configs(self):
             pass
@@ -195,10 +159,10 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
     pipeline.dataset = _FakeDataset()
     pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
-        dataset=SimpleNamespace(imputer=None, scaler_encoder=None),
+        dataset=SimpleNamespace(target="mortality", imputer=None, scaler_encoder=None),
         training=(
-            SimpleNamespace(name="model-a", task_type="classification"),
-            SimpleNamespace(name="model-b", task_type="classification"),
+            SimpleNamespace(name="model-a"),
+            SimpleNamespace(name="model-b"),
         ),
     )
 
@@ -207,15 +171,12 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
     assert [tr.model_name for tr in result.training_results] == ["model-a", "model-b"]
     assert result.training_results[0].failure_stage == "training_evaluation"
     assert result.training_results[0].error == "ValueError: bad params"
+    assert result.training_results[0].task_type == "classification"
     assert result.training_results[1].succeeded
     assert [model.model_name for model in result.model_results] == ["model-b"]
 
 
-def test_pipeline_releases_model_after_evaluation_failure_and_continues(monkeypatch):
-    _FailingReleasablePredictor.active = 0
-    _FailingReleasablePredictor.peak = 0
-    _ReleasablePredictor.active = 0
-    _ReleasablePredictor.peak = 0
+def test_pipeline_records_evaluation_failure_and_continues(monkeypatch):
     bundle = DatasetBundle(
         train_data=_test_set([0, 1]),
         test_mimic=_test_set([0, 1, 0, 1]),
@@ -230,8 +191,8 @@ def test_pipeline_releases_model_after_evaluation_failure_and_continues(monkeypa
             return SimpleNamespace()
 
     class _FakeTrainer:
-        def __init__(self, params, default_imputer, default_scaler):
-            self.params = params
+        def __init__(self, task_type, default_imputer, default_scaler):
+            self.task_type = task_type
 
         def validate_model_configs(self):
             pass
@@ -247,10 +208,10 @@ def test_pipeline_releases_model_after_evaluation_failure_and_continues(monkeypa
     pipeline.dataset = _FakeDataset()
     pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
-        dataset=SimpleNamespace(imputer=None, scaler_encoder=None),
+        dataset=SimpleNamespace(target="mortality", imputer=None, scaler_encoder=None),
         training=(
-            SimpleNamespace(name="model-a", task_type="classification"),
-            SimpleNamespace(name="model-b", task_type="classification"),
+            SimpleNamespace(name="model-a"),
+            SimpleNamespace(name="model-b"),
         ),
     )
 
@@ -258,8 +219,6 @@ def test_pipeline_releases_model_after_evaluation_failure_and_continues(monkeypa
 
     assert result.training_results[0].failure_stage == "training_evaluation"
     assert result.training_results[0].error == "RuntimeError: bad evaluation"
-    assert result.training_results[0].trained_model is None
+    assert not hasattr(result.training_results[0], "trained_model")
     assert result.training_results[1].succeeded
     assert [model.model_name for model in result.model_results] == ["model-b"]
-    assert _FailingReleasablePredictor.active == 0
-    assert _ReleasablePredictor.active == 0

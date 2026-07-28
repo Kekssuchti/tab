@@ -10,11 +10,11 @@ import numpy as np
 import torch
 
 from external.tabfm.tabfm import TabFMClassifier, tabfm_v1_0_0_pytorch
-from src.interfaces.model_interface import ModelAdapter, PredictionOutput
+from src.interfaces.model_interface import ModelAdapter, PredictionValues, TimedPrediction
 from src.schemas.base_schemas import TaskType
 
 
-class TabfmAdapter(ModelAdapter):
+class TabfmAdapter(ModelAdapter[PredictionValues]):
     def __init__(
         self,
         task_type: TaskType = "classification",
@@ -44,16 +44,16 @@ class TabfmAdapter(ModelAdapter):
         self.model.fit(X_train, y_train)
         return timer() - start_time
 
-    def predict(self, X_test) -> PredictionOutput:
+    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
         start_time = timer()
         if self.predict_batch_size is not None and len(X_test) > self.predict_batch_size:
             result = self._predict_batched(X_test)
 
-            return result, timer() - start_time
+            return self.timed_prediction(result, start_time)
 
         result = self._predict_single_batch(X_test)
 
-        return result, timer() - start_time
+        return self.timed_prediction(result, start_time)
 
     def _predict_batched(self, X_test):
         predictions = []

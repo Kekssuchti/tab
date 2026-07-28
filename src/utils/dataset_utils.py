@@ -6,7 +6,14 @@ import numpy as np
 import pandas as pd
 
 from src.config import config
-from src.schemas.dataset_schemas import DatasetOrigin, DatasetPartSummary, XYDataset
+from src.schemas.base_schemas import TaskType
+from src.schemas.dataset_schemas import (
+    ClassificationTargetSummary,
+    DatasetOrigin,
+    DatasetPartSummary,
+    RegressionTargetSummary,
+    XYDataset,
+)
 from src.utils.logger import logger
 
 
@@ -193,13 +200,30 @@ def standard_preprocessing(
     return df
 
 
-def summarize_data_part(part: XYDataset) -> DatasetPartSummary:
-    counts = part.y.value_counts(dropna=False).sort_index()
-    class_balance = {str(label): int(count) for label, count in counts.items()}
-    return DatasetPartSummary(
-        row_count=len(part.y),
-        class_balance=class_balance,
-    )
+def summarize_data_part(part: XYDataset, task_type: TaskType) -> DatasetPartSummary:
+    if task_type == "classification":
+        counts = part.y.value_counts(dropna=False).sort_index()
+        target_summary = ClassificationTargetSummary(
+            class_balance={str(label): int(count) for label, count in counts.items()}
+        )
+    else:
+        numeric_values = pd.to_numeric(part.y, errors="coerce")
+        finite_values = numeric_values[numeric_values.notna() & np.isfinite(numeric_values)]
+        count = len(finite_values)
+
+        def finite_or_zero(value: float) -> float:
+            value = float(value)
+            return value if np.isfinite(value) else 0.0
+
+        target_summary = RegressionTargetSummary(
+            count=count,
+            mean=finite_or_zero(finite_values.mean()) if count else 0.0,
+            std=finite_or_zero(finite_values.std()) if count > 1 else 0.0,
+            min=finite_or_zero(finite_values.min()) if count else 0.0,
+            max=finite_or_zero(finite_values.max()) if count else 0.0,
+        )
+
+    return DatasetPartSummary(row_count=len(part.y), target_summary=target_summary)
 
 
 def hash_file_sha256(path: Path) -> str | None:

@@ -1,19 +1,25 @@
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Generic, Literal, TypeAlias, TypeVar
 
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetSummary
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
+    ClassificationMetricsAggregate,
     ClassificationMetrics,
     FinalTestMetrics,
+    RegressionMetricsAggregate,
     RegressionMetrics,
 )
 from src.utils.evaluation_utils import ScoringMethodCLS, ScoringMethodREG
 
 
+MetricT = TypeVar("MetricT", ClassificationMetrics, RegressionMetrics)
+AggregateMetricT = TypeVar("AggregateMetricT", ClassificationMetricsAggregate, RegressionMetricsAggregate)
+
+
 @dataclass
-class FoldRecord:
+class FoldRecord(Generic[MetricT]):
     """
     Validation metrics for one candidate on one CV fold.
 
@@ -37,13 +43,17 @@ class FoldRecord:
 
     candidate_index: int
     fold_index: int
-    metrics: ClassificationMetrics | RegressionMetrics
+    metrics: MetricT
     time: float
     model_params: dict[str, Any]
 
 
+ClassificationFoldRecord: TypeAlias = FoldRecord[ClassificationMetrics]
+RegressionFoldRecord: TypeAlias = FoldRecord[RegressionMetrics]
+
+
 @dataclass
-class TuningRecord:
+class TuningRecord(Generic[MetricT, AggregateMetricT]):
     """
     Result of tuning one model.
 
@@ -67,8 +77,8 @@ class TuningRecord:
 
     best_params: dict[str, Any]
     scoring: ScoringMethodCLS | ScoringMethodREG
-    final_test_metrics: AggregatedFinalTestMetrics
-    fold_results: list[FoldRecord] = field(default_factory=list)
+    final_test_metrics: AggregatedFinalTestMetrics[AggregateMetricT]
+    fold_results: list[FoldRecord[MetricT]] = field(default_factory=list)
     method: Literal["grid", "optuna"] = "optuna"
 
     @property
@@ -76,8 +86,12 @@ class TuningRecord:
         return sum(fold.time for fold in self.fold_results)
 
 
+ClassificationTuningRecord: TypeAlias = TuningRecord[ClassificationMetrics, ClassificationMetricsAggregate]
+RegressionTuningRecord: TypeAlias = TuningRecord[RegressionMetrics, RegressionMetricsAggregate]
+
+
 @dataclass
-class ModelTrainingResult:
+class ModelTrainingResult(Generic[MetricT, AggregateMetricT]):
     """
     Result of fitting a single model, optionally after tuning.
 
@@ -95,9 +109,6 @@ class ModelTrainingResult:
         fit_time: float
             Final fit time in seconds.
 
-        trained_model: Any or None, default=None
-            Live model object, omitted from serialization and usually released.
-
         tuning_result: TuningRecord or None, default=None
             Tuning result when tuning was run.
 
@@ -112,8 +123,7 @@ class ModelTrainingResult:
     task_type: TaskType
     tuned: bool
     fit_time: float
-    trained_model: Any | None = field(default=None, repr=False, compare=False)
-    tuning_result: TuningRecord | None = None
+    tuning_result: TuningRecord[MetricT, AggregateMetricT] | None = None
     error: str | None = None
     failure_stage: str | None = None
 
@@ -122,8 +132,14 @@ class ModelTrainingResult:
         return self.error is None
 
 
+ClassificationModelTrainingResult: TypeAlias = ModelTrainingResult[
+    ClassificationMetrics, ClassificationMetricsAggregate
+]
+RegressionModelTrainingResult: TypeAlias = ModelTrainingResult[RegressionMetrics, RegressionMetricsAggregate]
+
+
 @dataclass(frozen=True)
-class TestSetEvaluationRecord:
+class TestSetEvaluationRecord(Generic[MetricT]):
     """
     Evaluation result for one held-out test set.
 
@@ -140,12 +156,16 @@ class TestSetEvaluationRecord:
     """
 
     dataset_name: str
-    metrics: ClassificationMetrics | RegressionMetrics
+    metrics: MetricT
     predict_time: float
 
 
+ClassificationTestSetEvaluationRecord: TypeAlias = TestSetEvaluationRecord[ClassificationMetrics]
+RegressionTestSetEvaluationRecord: TypeAlias = TestSetEvaluationRecord[RegressionMetrics]
+
+
 @dataclass(frozen=True)
-class ModelEvaluationRecord:
+class ModelEvaluationRecord(Generic[MetricT]):
     """
     Evaluation result for one trained model.
 
@@ -165,8 +185,8 @@ class ModelEvaluationRecord:
     """
 
     model_name: str
-    test_results: tuple[TestSetEvaluationRecord, ...]
-    final_test_metrics: FinalTestMetrics
+    test_results: tuple[TestSetEvaluationRecord[MetricT], ...]
+    final_test_metrics: FinalTestMetrics[MetricT]
     fit_time: float
 
     @property
@@ -174,12 +194,16 @@ class ModelEvaluationRecord:
         return self.fit_time + sum(result.predict_time for result in self.test_results)
 
     @property
-    def metrics_by_test_set(self) -> dict[str, ClassificationMetrics | RegressionMetrics]:
+    def metrics_by_test_set(self) -> dict[str, MetricT]:
         return {result.dataset_name: result.metrics for result in self.test_results}
 
 
+ClassificationModelEvaluationRecord: TypeAlias = ModelEvaluationRecord[ClassificationMetrics]
+RegressionModelEvaluationRecord: TypeAlias = ModelEvaluationRecord[RegressionMetrics]
+
+
 @dataclass(frozen=True)
-class ModelRunRecord:
+class ModelRunRecord(Generic[MetricT, AggregateMetricT]):
     """
     Training and evaluation record for one model instance.
 
@@ -196,8 +220,8 @@ class ModelRunRecord:
     """
 
     model_instance_id: str
-    training_result: ModelTrainingResult
-    evaluation: ModelEvaluationRecord | None
+    training_result: ModelTrainingResult[MetricT, AggregateMetricT]
+    evaluation: ModelEvaluationRecord[MetricT] | None
 
     @property
     def model_name(self) -> str:
@@ -206,6 +230,11 @@ class ModelRunRecord:
     @property
     def succeeded(self) -> bool:
         return self.training_result.succeeded
+
+
+ClassificationModelRunRecord: TypeAlias = ModelRunRecord[ClassificationMetrics, ClassificationMetricsAggregate]
+RegressionModelRunRecord: TypeAlias = ModelRunRecord[RegressionMetrics, RegressionMetricsAggregate]
+ModelRunFamily: TypeAlias = ClassificationModelRunRecord | RegressionModelRunRecord
 
 
 @dataclass(frozen=True)
@@ -230,13 +259,13 @@ class PipelineRunRecord:
 
     run_id: str
     dataset_summary: DatasetSummary
-    model_runs: tuple[ModelRunRecord, ...]
+    model_runs: tuple[ModelRunFamily, ...]
     total_time: float
 
     @property
-    def model_results(self) -> tuple[ModelEvaluationRecord, ...]:
+    def model_results(self) -> tuple[ClassificationModelEvaluationRecord | RegressionModelEvaluationRecord, ...]:
         return tuple(run.evaluation for run in self.model_runs if run.evaluation is not None)
 
     @property
-    def training_results(self) -> tuple[ModelTrainingResult, ...]:
+    def training_results(self) -> tuple[ClassificationModelTrainingResult | RegressionModelTrainingResult, ...]:
         return tuple(run.training_result for run in self.model_runs)

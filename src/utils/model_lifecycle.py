@@ -18,18 +18,6 @@ def release_model(model: Any) -> None:
         _empty_cuda_cache()
 
 
-def release_training_result_model(training_result: Any) -> None:
-    """Release and detach the live model owned by a training result."""
-    if training_result is None:
-        return
-
-    release_model(getattr(training_result, "trained_model", None))
-    try:
-        training_result.trained_model = None
-    except AttributeError:
-        pass
-
-
 def _release_model_attr(owner: Any) -> None:
     estimator = getattr(owner, "model", None)
     if estimator is None:

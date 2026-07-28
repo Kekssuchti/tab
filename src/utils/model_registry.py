@@ -108,23 +108,21 @@ class ModelCatalog:
 
     registries: Mapping[TaskType, Mapping[str, ModelSpec]]
 
-    def spec_for(self, model_params: ModelConfig) -> ModelSpec:
-        registry = self.registries[model_params.task_type]
+    def spec_for(self, model_config: ModelConfig, task_type: TaskType) -> ModelSpec:
+        registry = self.registries[task_type]
 
         try:
-            return registry[model_params.name]
+            return registry[model_config.name]
         except KeyError as exc:
             available = ", ".join(sorted(registry))
-            raise ValueError(
-                f"Unknown {model_params.task_type} model '{model_params.name}'. Available models: {available}"
-            ) from exc
+            raise ValueError(f"Unknown {task_type} model '{model_config.name}'. Available models: {available}") from exc
 
     def available_models(self, task_type: TaskType) -> tuple[str, ...]:
         return tuple(sorted(self.registries[task_type]))
 
 
-def get_model_spec(model_params: ModelConfig) -> ModelSpec:
-    return MODEL_CATALOG.spec_for(model_params)
+def get_model_spec(model_config: ModelConfig, task_type: TaskType) -> ModelSpec:
+    return MODEL_CATALOG.spec_for(model_config, task_type)
 
 
 SKLEARN_ADAPTER = "src.adapter.sklearn_adapter"
@@ -369,12 +367,17 @@ MODEL_REGISTRY_REG = {
         search_spaces=SEARCH_SPACES["tabpfn"],
     ),
     "tabicl-2": ModelSpec(TABICL_ADAPTER, search_spaces=SEARCH_SPACES["tabicl"]),
-    "limix-2m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "2M"}),
-    "limix-16m": ModelSpec(LIMIX_ADAPTER, default_params={"size": "16M"}),
+    "limix-2m": ModelSpec(
+        LIMIX_ADAPTER,
+        default_params={"size": "2M"},
+        search_spaces=SEARCH_SPACES["limix"],
+    ),
+    "limix-16m": ModelSpec(
+        LIMIX_ADAPTER,
+        default_params={"size": "16M"},
+        search_spaces=SEARCH_SPACES["limix"],
+    ),
     "mitra": ModelSpec(MITRA_ADAPTER, search_spaces=SEARCH_SPACES["mitra"]),
-    "orion-msp": ModelSpec(ORION_MSP_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
-    "orion-bix": ModelSpec(ORION_BIX_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
-    "tabfm": ModelSpec(TABFM_ADAPTER, search_spaces=SEARCH_SPACES["tabfm"]),
     "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=SEARCH_SPACES["tabswift"]),
 }
 

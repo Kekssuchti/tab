@@ -1,7 +1,6 @@
 from timeit import default_timer as timer
 from typing import Literal
 
-import numpy as np
 from interpret.glassbox import (
     ExplainableBoostingClassifier,
     ExplainableBoostingRegressor,
@@ -10,11 +9,16 @@ from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier, XGBRegressor
 
 from src.config import config
-from src.interfaces.model_interface import ModelAdapter
+from src.interfaces.model_interface import (
+    ClassificationPredictions,
+    ModelAdapter,
+    PredictionValues,
+    TimedPrediction,
+)
 from src.schemas.base_schemas import TaskType
 
 
-class LinearModelAdapter(ModelAdapter):
+class LinearModelAdapter(ModelAdapter[ClassificationPredictions]):
     def __init__(
         self,
         task_type: TaskType = "regression",
@@ -38,12 +42,12 @@ class LinearModelAdapter(ModelAdapter):
         self.model.fit(X_train, y_train)
         return timer() - start
 
-    def predict(self, X_test):
+    def predict(self, X_test) -> TimedPrediction[ClassificationPredictions]:
         start = timer()
-        return self.predict_from_estimator(X_test), timer() - start
+        return self.timed_prediction(self.predict_from_estimator(X_test), start)
 
 
-class XGBoostAdapter(ModelAdapter):
+class XGBoostAdapter(ModelAdapter[PredictionValues]):
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",
@@ -65,12 +69,12 @@ class XGBoostAdapter(ModelAdapter):
         self.model.fit(X_train, y_train)
         return timer() - start
 
-    def predict(self, X_test):
+    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
         start = timer()
-        return self.predict_from_estimator(X_test), timer() - start
+        return self.timed_prediction(self.predict_from_estimator(X_test), start)
 
 
-class EBMAdapter(ModelAdapter):
+class EBMAdapter(ModelAdapter[PredictionValues]):
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",
@@ -95,6 +99,6 @@ class EBMAdapter(ModelAdapter):
         self.model.fit(X_train, y_train)
         return timer() - start
 
-    def predict(self, X_test):
+    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
         start = timer()
-        return np.asarray(self.predict_from_estimator(X_test)), timer() - start
+        return self.timed_prediction(self.predict_from_estimator(X_test), start)

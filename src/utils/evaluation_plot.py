@@ -14,6 +14,7 @@ _MODEL_COLUMNS = [
     "model_name",
     "model_instance",
     "target",
+    "task_type",
     "trained_on",
 ]
 _CENTER_COLORS = {"mimic": "#315C73", "tudd": "#D17A3F"}
@@ -51,12 +52,24 @@ def calculate_comparative_generalizability(
         ["model_mlflow_run_id", "value"],
     ].rename(columns={"value": "training_score"})
     external = external.merge(training, on="model_mlflow_run_id")
-    external["generalizability_loss"] = external["external_score"] - external["training_score"]
-    groups = ["target", "external_dataset"]
-    external["best_external_score"] = external.groupby(groups, dropna=False)["external_score"].transform("max")
-    external["comparative_generalizability_loss"] = external["external_score"] - external["best_external_score"]
+    lower_is_better = metric in {"mae", "mse", "rmse"}
+    groups = ["target", "task_type", "external_dataset"]
+    if lower_is_better:
+        external["generalizability_loss"] = external["training_score"] - external["external_score"]
+        external["best_external_score"] = external.groupby(groups, dropna=False)["external_score"].transform("min")
+        external["comparative_generalizability_loss"] = (
+            external["best_external_score"] - external["external_score"]
+        )
+    else:
+        external["generalizability_loss"] = external["external_score"] - external["training_score"]
+        external["best_external_score"] = external.groupby(groups, dropna=False)["external_score"].transform("max")
+        external["comparative_generalizability_loss"] = (
+            external["external_score"] - external["best_external_score"]
+        )
     external["generalization_rank"] = (
-        external.groupby(groups, dropna=False)["external_score"].rank(method="min", ascending=False).astype(int)
+        external.groupby(groups, dropna=False)["external_score"]
+        .rank(method="min", ascending=lower_is_better)
+        .astype(int)
     )
     external["model_specific_generalization_rank"] = (
         external.groupby(groups, dropna=False)["generalizability_loss"].rank(method="min", ascending=False).astype(int)

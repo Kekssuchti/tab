@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.classes.data_registry import DATA_FILES_ALL
+from src.classes.data_registry import data_files_for_kind
 from src.config import config
-from src.schemas.dataset_schemas import DataCleanerConfig
+from src.schemas.dataset_schemas import DataCleanerConfig, DatasetKind
 from src.utils.dataset_utils import standard_preprocessing
 from src.utils.logger import logger
 
@@ -15,22 +15,22 @@ class DataCleaner:
     def __init__(self, data_cleaner_config: DataCleanerConfig) -> None:
         self.config = data_cleaner_config
 
-    def preprocess_extracted_to_filtered(self) -> None:
-        """load and return both extracted dataframes"""
+    def preprocess_extracted_to_filtered(self, dataset_kind: DatasetKind | None = None) -> None:
+        """Build filtered files for one dataset kind, or all kinds when omitted."""
         # we skip the raw data step since I dont have access yet
 
         extracted_path = Path(config.dir_data / "extracted")
         filtered_path = Path(config.dir_data / "filtered")
         logger.info("Preprocessing extracted clinical CSVs into filtered CSVs")
 
-        for dataset in DATA_FILES_ALL.values():
+        for dataset in data_files_for_kind(dataset_kind):
             file_name = dataset.file_name
             df = pd.read_csv(Path(extracted_path / file_name))
 
             df_filtered = standard_preprocessing(
                 df,
                 dataset.data_origin,
-                dataset.is_readmission,
+                dataset.dataset_kind == "readmission",
                 self.config.missing_threshold_row,
                 self.config.outlier_limits_path,
             )

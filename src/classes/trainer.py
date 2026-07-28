@@ -8,6 +8,7 @@ from sklearn.model_selection import KFold, StratifiedKFold
 
 from src.classes.preprocessor import Preprocessor
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
+from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle
 from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
@@ -46,11 +47,11 @@ class Trainer:
 
     def __init__(
         self,
-        configs: tuple[ModelConfig, ...],
+        task_type: TaskType,
         default_imputer: ImputerConfig,
         default_scaler: ScalerEncoderConfig,
     ) -> None:
-        self.configs = configs
+        self.task_type = task_type
         self.default_imputer = default_imputer
         self.default_scaler = default_scaler
 
@@ -61,11 +62,7 @@ class Trainer:
         logger.info(f"data imputation via: {imputer.imputation_method}")
         logger.info(f"scaling data using: {scaler.type}")
 
-        spec = get_model_spec(model_config)
-
-        if model_config.tuning is None:
-            raise ValueError("Tuning is required")
-
+        spec = get_model_spec(model_config, self.task_type)
         return self._tune_model(model_config, spec, data)
 
     def _fit_model(
@@ -76,13 +73,17 @@ class Trainer:
         X_train,
         y_train,
     ) -> tuple[ModelAdapter, float]:
-        adapter = model_spec.create(model_config.task_type, model_params)
+        adapter = model_spec.create(self.task_type, model_params)
         model = PreprocessedModelAdapter(
             adapter,
             self._build_preprocess_pipeline(model_config),
         )
-        fit_time = model.fit(X_train, y_train)
-        return model, fit_time
+        try:
+            fit_time = model.fit(X_train, y_train)
+            return model, fit_time
+        except Exception:
+            release_model(model)
+            raise
 
     def _build_preprocess_pipeline(self, model_params: ModelConfig):
         imputer, scaler = self._resolved_preprocessing(model_params)
@@ -107,8 +108,6 @@ class Trainer:
 
     def _tune_model(self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle) -> ModelTrainingResult:
         tuning = model_config.tuning
-        if tuning is None:
-            raise ValueError("Tuning requested without tuning parameters")
 
         if tuning.method == "grid":
             return self._tune_model_grid(model_config, model_spec, data)
@@ -121,13 +120,10 @@ class Trainer:
         self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
     ) -> ModelTrainingResult:
         tuning = model_config.tuning
-        if tuning is None:
-            raise ValueError("Tuning requested without tuning parameters")
-
         X_train, y_train = _databundle_to_xy_train(data)
 
         candidates = model_spec.tuning_candidates(tuning.search_space, tuning.grid)
-        folds = list(self._build_cv(model_config, tuning).split(X_train, y_train))
+        folds = list(self._build_cv(tuning).split(X_train, y_train))
         logger.info(
             f"Tuning {model_config.name}: candidates={len(candidates)} "
             f"folds={len(folds)} scoring={tuning.scoring} method=grid"
@@ -183,15 +179,12 @@ class Trainer:
         self._configure_optuna_logging(optuna)
 
         tuning = model_config.tuning
-        if tuning is None:
-            raise ValueError("Tuning requested without tuning parameters")
-
         search_space = model_spec.tuning_search_space(tuning.search_space, tuning.grid)
         if not search_space:
             raise ValueError("Tuning requires a non-empty search space")
         X_train, y_train = _databundle_to_xy_train(data)
 
-        folds = list(self._build_cv(model_config, tuning).split(X_train, y_train))
+        folds = list(self._build_cv(tuning).split(X_train, y_train))
 
         logger.info(
             f"Tuning {model_config.name}: trials={tuning.optuna.n_trials} "
@@ -264,10 +257,6 @@ class Trainer:
         y_train,
     ) -> _CandidateEvaluation:
         tuning = model_config.tuning
-        if tuning is None:
-            raise ValueError("Tuning requested without tuning parameters")
-
-        model_params = self._merge_params(model_config.params, candidate_params)
         candidate_scores: list[float] = []
         candidate_metrics: list[ClassificationMetrics] = []
         candidate_times: list[float] = []
@@ -276,21 +265,21 @@ class Trainer:
         for fold_index, (train_index, validation_index) in enumerate(folds):
             fold_start = timer()
             fold_model = None
-            predictions = None
+            prediction = None
             try:
                 fold_model, _ = self._fit_model(
                     model_config,
                     model_spec,
-                    model_params,
+                    candidate_params,
                     self._take_rows(X_train, train_index),
                     self._take_rows(y_train, train_index),
                 )
-                predictions, _ = fold_model.predict(self._take_rows(X_train, validation_index))
-                if model_config.task_type != "classification":
+                prediction = fold_model.predict(self._take_rows(X_train, validation_index))
+                if self.task_type != "classification":
                     raise NotImplementedError("Regression tuning metrics are not implemented yet")
 
                 metrics = evaluate_classification_predictions(
-                    predictions,
+                    prediction.values,
                     self._take_rows(y_train, validation_index),
                 )
 
@@ -304,11 +293,11 @@ class Trainer:
                         fold_index=fold_index,
                         metrics=metrics,
                         time=candidate_times[-1],
-                        model_params=model_params,
+                        model_params=candidate_params,
                     )
                 )
             finally:
-                predictions = None
+                prediction = None
                 release_model(fold_model)
 
         return _CandidateEvaluation(
@@ -335,11 +324,11 @@ class Trainer:
         This includes mean scores for all metrics and their 95% confidence intervals.
 
         Args:
-            model_params: The model parameters to fit.
-            spec: The model spec to use for fitting.
+            model_config: The model configuration to fit.
+            model_spec: The model spec to use for fitting.
             data: The dataset bundle to use for training and evaluation.
             evaluations: The candidate evaluations to consolidate.
-            folds: The folds to use for evaluation (consistent with folds where model_params were found).
+            folds: The folds used to find the best parameters.
             method: The tuning method to use.
 
         Returns:
@@ -377,7 +366,7 @@ class Trainer:
                     trained_sub_model, fit_time = self._fit_model(
                         model_config,
                         model_spec,
-                        self._merge_params(model_config.params, best_params),
+                        best_params,
                         fold_X_train,
                         fold_y_train,
                     )
@@ -386,7 +375,7 @@ class Trainer:
                     sub_model_result = evaluate_trained_model(
                         trained_model=trained_sub_model,
                         data=data,
-                        task_type=model_config.task_type,
+                        task_type=self.task_type,
                     )
                     sub_model_results.append(sub_model_result)
                 finally:
@@ -410,7 +399,7 @@ class Trainer:
 
             return ModelTrainingResult(
                 model_name=model_config.name,
-                task_type=model_config.task_type,
+                task_type=self.task_type,
                 tuned=True,
                 fit_time=final_fit_time,
                 tuning_result=tuning_result,
@@ -441,55 +430,15 @@ class Trainer:
         optuna_module.logging.set_verbosity(optuna_module.logging.WARNING)
 
     @staticmethod
-    def _count_grid_candidates(grid: dict[str, list[Any]]) -> int:
-        if not grid:
-            raise ValueError("Tuning requires a non-empty grid")
-
-        candidate_count = 1
-        for values in grid.values():
-            if not values:
-                raise ValueError("Tuning grid values must be non-empty")
-            candidate_count *= len(values)
-        return candidate_count
-
-    @classmethod
-    def _merge_params(
-        cls,
-        base: dict[str, Any],
-        overrides: dict[str, Any],
-    ) -> dict[str, Any]:
-        merged = dict(base)
-        for key, value in overrides.items():
-            if isinstance(value, dict) and isinstance(merged.get(key), dict):
-                merged[key] = cls._merge_params(merged[key], value)
-            else:
-                merged[key] = value
-        return merged
-
-    @staticmethod
     def _take_rows(data, rows: np.ndarray):
         if hasattr(data, "iloc"):
             return data.iloc[rows]
         return np.asarray(data)[rows]
 
-    @staticmethod
-    def _build_cv(model_config: ModelConfig, tuning):
-        cv_cls = StratifiedKFold if model_config.task_type == "classification" else KFold
+    def _build_cv(self, tuning):
+        cv_cls = StratifiedKFold if self.task_type == "classification" else KFold
         return cv_cls(
             n_splits=tuning.cv.n_splits,
             shuffle=tuning.cv.shuffle,
             random_state=tuning.cv.random_state,
         )
-
-    def _training_metrics(
-        self,
-        model_config: ModelConfig,
-        model: ModelAdapter,
-        X_train,
-        y_train,
-    ) -> tuple[ClassificationMetrics | None, float]:
-        if model_config.task_type != "classification":
-            return None, 0.0
-
-        predictions, predict_time = model.predict(X_train)
-        return evaluate_classification_predictions(predictions, y_train), predict_time

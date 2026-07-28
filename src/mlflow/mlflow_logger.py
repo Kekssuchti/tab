@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from importlib import metadata
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any
 
 import mlflow
 from mlflow.entities import Run
@@ -23,18 +21,39 @@ from src.mlflow.observation import (
     table_rows_to_columns,
 )
 from src.mlflow.serialization import (
+    JsonObject,
+    artifact_manifest,
+    canonical_json,
+    cv_result_to_dict,
     pipeline_config_to_dict,
     pipeline_result_to_dict,
-    training_result_to_dict,
 )
 from src.mlflow.tracking_contract import (
+    ARTIFACT_CONFIG,
+    ARTIFACT_CV_RESULTS,
+    ARTIFACT_ENVIRONMENT,
+    ARTIFACT_EVALUATION_TABLE,
+    ARTIFACT_MANIFEST,
+    ARTIFACT_PIPELINE_RESULT,
     RUN_TYPE_PIPELINE,
     TAG_MODEL_MLFLOW_RUN_ID,
     TAG_PIPELINE_ID,
     TAG_PIPELINE_MLFLOW_RUN_ID,
     TAG_RUN_TYPE,
+    TAG_TRACKING_SCHEMA_VERSION,
+    TRACKING_SCHEMA_VERSION,
 )
 from src.schemas.pipeline_schemas import PipelineConfig
+from src.mlflow.validation import validate_pipeline_projection
+
+
+@dataclass(frozen=True)
+class ArtifactPaths:
+    config: Path
+    pipeline_result: Path
+    environment: Path
+    manifest: Path
+    cv_dir: Path
 
 
 class MLflowPipelineLogger:
@@ -51,14 +70,19 @@ class MLflowPipelineLogger:
         observation = assemble_pipeline_observation(params, result)
         with TemporaryDirectory() as temp_dir_name:
             temp_dir = Path(temp_dir_name)
-            artifact_paths = self._write_artifacts(params, result, temp_dir)
+            artifact_paths = self._write_artifacts(
+                params,
+                result,
+                temp_dir,
+                include_evaluation_table=bool(observation.evaluations),
+            )
 
             with mlflow.start_run(run_name=observation.run_name) as pipeline_run:
                 self._log_observation(observation)
                 self._log_artifacts(artifact_paths, config_path)
                 self._log_model_runs(
                     observation.children,
-                    artifact_paths["cv_dir"],
+                    artifact_paths.cv_dir,
                     pipeline_mlflow_run_id=pipeline_run.info.run_id,
                 )
 
@@ -81,7 +105,12 @@ class MLflowPipelineLogger:
 
         with TemporaryDirectory() as temp_dir_name:
             temp_dir = Path(temp_dir_name)
-            artifact_paths = self._write_artifacts(params, result, temp_dir)
+            artifact_paths = self._write_artifacts(
+                params,
+                result,
+                temp_dir,
+                include_evaluation_table=False,
+            )
 
             with self._start_or_resume_pipeline_run(
                 params,
@@ -91,7 +120,7 @@ class MLflowPipelineLogger:
             ) as pipeline_run:
                 self._log_model_runs(
                     (model_observation,),
-                    artifact_paths["cv_dir"],
+                    artifact_paths.cv_dir,
                     pipeline_mlflow_run_id=pipeline_run.info.run_id,
                 )
 
@@ -108,7 +137,12 @@ class MLflowPipelineLogger:
         observation = assemble_pipeline_observation(params, result)
         with TemporaryDirectory() as temp_dir_name:
             temp_dir = Path(temp_dir_name)
-            artifact_paths = self._write_artifacts(params, result, temp_dir)
+            artifact_paths = self._write_artifacts(
+                params,
+                result,
+                temp_dir,
+                include_evaluation_table=bool(observation.evaluations),
+            )
             with self._start_or_resume_pipeline_run(
                 params,
                 observation,
@@ -123,7 +157,7 @@ class MLflowPipelineLogger:
         self,
         params: PipelineConfig,
         observation: RunObservation,
-        artifact_paths: dict[str, Path],
+        artifact_paths: ArtifactPaths,
         config_path: Path | None,
         *,
         include_evaluations: bool = False,
@@ -214,7 +248,7 @@ class MLflowPipelineLogger:
             log_evaluations(evaluations=[_make_mlflow_evaluation(evaluation) for evaluation in observation.evaluations])
         mlflow.log_table(
             data=table_rows_to_columns(observation.table_rows),
-            artifact_file="evaluation_metrics.json",
+            artifact_file=ARTIFACT_EVALUATION_TABLE,
         )
 
     def _write_artifacts(
@@ -222,16 +256,20 @@ class MLflowPipelineLogger:
         params: PipelineConfig,
         result: PipelineRunRecord,
         temp_dir: Path,
-    ) -> dict[str, Path]:
-        config_path = temp_dir / "config.json"
-        result_path = temp_dir / "pipeline_result.json"
-        environment_path = temp_dir / "environment.json"
-        cv_dir = temp_dir / "cv_results"
+        *,
+        include_evaluation_table: bool,
+    ) -> ArtifactPaths:
+        validate_pipeline_projection(params, result)
+        config_path = temp_dir / ARTIFACT_CONFIG
+        result_path = temp_dir / ARTIFACT_PIPELINE_RESULT
+        environment_path = temp_dir / ARTIFACT_ENVIRONMENT
+        manifest_path = temp_dir / ARTIFACT_MANIFEST
+        cv_dir = temp_dir / ARTIFACT_CV_RESULTS
         cv_dir.mkdir()
 
-        config_path.write_text(json.dumps(pipeline_config_to_dict(params), indent=2), encoding="utf-8")
-        result_path.write_text(json.dumps(pipeline_result_to_dict(result), indent=2), encoding="utf-8")
-        environment_path.write_text(json.dumps(_environment_info(), indent=2), encoding="utf-8")
+        config_path.write_text(canonical_json(pipeline_config_to_dict(params)), encoding="utf-8")
+        result_path.write_text(canonical_json(pipeline_result_to_dict(result)), encoding="utf-8")
+        environment_path.write_text(canonical_json(_environment_info()), encoding="utf-8")
 
         for model_run in result.model_runs:
             training_result = model_run.training_result
@@ -239,31 +277,40 @@ class MLflowPipelineLogger:
                 continue
             cv_path = cv_dir / f"{model_run.model_instance_id}.json"
             cv_path.write_text(
-                json.dumps(
-                    training_result_to_dict(training_result)["tuning_result"],
-                    indent=2,
+                canonical_json(
+                    cv_result_to_dict(
+                        model_run.model_instance_id,
+                        training_result.task_type,
+                        training_result.tuning_result,
+                    )
                 ),
                 encoding="utf-8",
             )
 
-        return {
-            "config": config_path,
-            "result": result_path,
-            "environment": environment_path,
-            "cv_dir": cv_dir,
-        }
+        cv_result_names = tuple(sorted(path.name for path in cv_dir.iterdir()))
+        manifest_path.write_text(
+            canonical_json(
+                artifact_manifest(
+                    cv_result_names,
+                    include_evaluation_table=include_evaluation_table,
+                ).to_dict()
+            ),
+            encoding="utf-8",
+        )
+        return ArtifactPaths(config_path, result_path, environment_path, manifest_path, cv_dir)
 
     def _log_artifacts(
         self,
-        artifact_paths: dict[str, Path],
+        artifact_paths: ArtifactPaths,
         config_path: Path | None,
     ) -> None:
-        mlflow.log_artifact(str(artifact_paths["config"]))
-        mlflow.log_artifact(str(artifact_paths["result"]))
-        mlflow.log_artifact(str(artifact_paths["environment"]))
+        mlflow.log_artifact(str(artifact_paths.config))
+        mlflow.log_artifact(str(artifact_paths.pipeline_result))
+        mlflow.log_artifact(str(artifact_paths.environment))
+        mlflow.log_artifact(str(artifact_paths.manifest))
 
-        if any(artifact_paths["cv_dir"].iterdir()):
-            mlflow.log_artifacts(str(artifact_paths["cv_dir"]), artifact_path="cv_results")
+        if any(artifact_paths.cv_dir.iterdir()):
+            mlflow.log_artifacts(str(artifact_paths.cv_dir), artifact_path=ARTIFACT_CV_RESULTS)
 
         if config_path is not None and config_path.exists():
             mlflow.log_artifact(str(config_path), artifact_path="config_source")
@@ -282,7 +329,7 @@ class MLflowPipelineLogger:
 
         cv_path = cv_dir / f"{observation.cv_artifact_model_id}.json"
         if cv_path.exists():
-            mlflow.log_artifact(str(cv_path), artifact_path="cv_results")
+            mlflow.log_artifact(str(cv_path), artifact_path=ARTIFACT_CV_RESULTS)
 
 
 def _make_mlflow_evaluation(evaluation: EvaluationLog) -> Evaluation:
@@ -317,7 +364,8 @@ def _find_pipeline_run(params: PipelineConfig) -> Run | None:
         [experiment.experiment_id],
         filter_string=(
             f"tags.{TAG_PIPELINE_ID} = '{_mlflow_filter_value(params.run_id)}' "
-            f"and tags.{TAG_RUN_TYPE} = '{RUN_TYPE_PIPELINE}'"
+            f"and tags.{TAG_RUN_TYPE} = '{RUN_TYPE_PIPELINE}' "
+            f"and tags.{TAG_TRACKING_SCHEMA_VERSION} = '{TRACKING_SCHEMA_VERSION}'"
         ),
         max_results=1,
         order_by=["attributes.start_time ASC"],
@@ -343,8 +391,8 @@ def _set_experiment(params: PipelineConfig) -> None:
     mlflow.set_experiment(experiment_name=params.mlflow.experiment_name)
 
 
-def _environment_info() -> dict[str, Any]:
-    packages = {}
+def _environment_info() -> JsonObject:
+    packages: JsonObject = {}
     for package in ("mlflow", "numpy", "pandas", "scikit-learn", "xgboost"):
         try:
             packages[package] = metadata.version(package)

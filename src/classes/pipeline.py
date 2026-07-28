@@ -1,9 +1,10 @@
 from time import perf_counter
 from typing import Callable
 
+from src.classes.data_registry import dataset_task_for_target
 from src.classes.dataset import Dataset
-from src.classes.plotter import Plotter
 from src.classes.trainer import Trainer
+from src.schemas.base_schemas import TaskType
 from src.schemas.metrics import (
     ClassificationMetrics,
     ClassificationMetricsAggregate,
@@ -17,9 +18,9 @@ from src.schemas.run_records import (
     PipelineRunRecord,
     TestSetEvaluationRecord,
 )
+from src.schemas.training_schemas import ModelConfig
 from src.utils.logger import logger
 from src.utils.model_identity import model_instance_ids
-from src.utils.model_lifecycle import release_training_result_model
 
 
 class Pipeline:
@@ -29,22 +30,22 @@ class Pipeline:
         self.pipeline_config = pipeline_config
 
         self.dataset = Dataset(pipeline_config.dataset)
-        self.plotter = Plotter(pipeline_config.plotting)
 
     def run(
         self,
         on_model_complete: Callable[[PipelineRunRecord, ModelRunRecord], None] | None = None,
     ) -> PipelineRunRecord:
         start_time = perf_counter()
-        target = getattr(self.pipeline_config.dataset, "target", "unknown")
+        target = self.pipeline_config.dataset.target
+        task_type = dataset_task_for_target(target).task_type
         logger.info(
             f"Pipeline {self.pipeline_config.run_id} starting: "
             f"target={target} models={len(self.pipeline_config.training)}"
         )
         trainer = Trainer(
-            self.pipeline_config.training,
-            self.pipeline_config.dataset.imputer,
-            self.pipeline_config.dataset.scaler_encoder,
+            task_type=task_type,
+            default_imputer=self.pipeline_config.dataset.imputer,
+            default_scaler=self.pipeline_config.dataset.scaler_encoder,
         )
 
         data = self.dataset.get_dataset()
@@ -69,6 +70,7 @@ class Pipeline:
                 if tr is None:
                     tr = self._failed_training_result(
                         model_config=model_config,
+                        task_type=task_type,
                         fit_time=perf_counter() - model_start_time,
                         failure_stage=failure_stage,
                         exc=exc,
@@ -78,7 +80,6 @@ class Pipeline:
                     tr.failure_stage = failure_stage
             finally:
                 if tr is not None:
-                    release_training_result_model(tr)
                     model_run = ModelRunRecord(
                         model_instance_id=model_instance_id,
                         training_result=tr,
@@ -111,15 +112,15 @@ class Pipeline:
 
     @staticmethod
     def _failed_training_result(
-        model_config,
+        model_config: ModelConfig,
+        task_type: TaskType,
         fit_time: float,
         failure_stage: str,
         exc: Exception,
     ) -> ModelTrainingResult:
         return ModelTrainingResult(
             model_name=model_config.name,
-            task_type=getattr(model_config, "task_type", "classification"),
-            trained_model=None,
+            task_type=task_type,
             tuned=False,
             fit_time=fit_time,
             error=_format_exception(exc),

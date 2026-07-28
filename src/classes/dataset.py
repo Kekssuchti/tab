@@ -1,4 +1,3 @@
-from os.path import exists
 from pathlib import Path
 from typing import TypedDict
 
@@ -8,7 +7,6 @@ from sklearn.model_selection import train_test_split
 from src.classes.data_cleaner import DataCleaner
 from src.classes.data_registry import (
     dataset_task_for_target,
-    origin_for_dataset_name,
 )
 from src.config import config
 from src.schemas.dataset_schemas import (
@@ -73,20 +71,16 @@ class Dataset:
     def _load_data(self) -> dict[DatasetOrigin, pd.DataFrame]:
         """Load the filtered files required by the configured clinical target."""
 
-        # ensure filtered csvs exist
-        # force repreprocesisng each time to ensure consistency
-        data_preprocessed = False
+        required_paths = [
+            config.dir_data / "filtered" / data_file.file_name for data_file in self._task.data_files.values()
+        ]
+        missing_paths = [path for path in required_paths if not path.exists()]
 
-        for data_file in self._task.data_files.values():
-            path = config.dir_data / "filtered" / data_file.file_name
-            if not exists(path):
+        if missing_paths or self.config.force_repreprocess:
+            for path in missing_paths:
                 logger.debug(f"Path: {path} doesnt exist")
-                # if any required file is missing we assume something bad happened and reprocess all!
-                data_preprocessed = False
-
-        if not data_preprocessed or self.config.force_repreprocess:
             logger.info("Required filtered data missing or force_repreprocess=true")
-            self.data_cleaner.preprocess_extracted_to_filtered()
+            self.data_cleaner.preprocess_extracted_to_filtered(self._task.dataset_kind)
 
         dfs = {}
         # load csvs
@@ -148,7 +142,7 @@ class Dataset:
             for dataset_origin, split in splits_dict.items():
                 # compared against all keys we have (aka mimic and tudd)
                 # skip if not in training_data_split.dataset
-                if origin_for_dataset_name(training_data_split.dataset) != dataset_origin:
+                if training_data_split.dataset != dataset_origin:
                     continue
 
                 # if we do train on the split -> apply fraction of training data
@@ -201,19 +195,19 @@ class Dataset:
     def summarize(self, bundle: DatasetBundle) -> DatasetSummary:
         return DatasetSummary(
             target=self.config.target,
-            train=summarize_data_part(bundle.train_data),
-            test_mimic=summarize_data_part(bundle.test_mimic),
-            test_tudd=summarize_data_part(bundle.test_tudd),
+            train=summarize_data_part(bundle.train_data, self._task.task_type),
+            test_mimic=summarize_data_part(bundle.test_mimic, self._task.task_type),
+            test_tudd=summarize_data_part(bundle.test_tudd, self._task.task_type),
             data_files=tuple(self._summarize_data_files()),
         )
 
     def _summarize_data_files(self) -> list[DatasetFileSummary]:
         summaries = []
-        for dataset_name, data_file in self._task.data_files.items():
+        for data_file in self._task.data_files.values():
             path = config.dir_data / "filtered" / data_file.file_name
             summaries.append(
                 DatasetFileSummary(
-                    dataset_name=dataset_name,
+                    dataset_name=data_file.dataset_name,
                     data_origin=data_file.data_origin,
                     file_name=data_file.file_name,
                     path=str(path),
@@ -227,7 +221,7 @@ class Dataset:
         X = self._task.features_from(df)
 
         stratify = None
-        if self.config.classification and y.nunique() > 1 and y.value_counts().min() >= 2:
+        if self._task.task_type == "classification" and y.nunique() > 1 and y.value_counts().min() >= 2:
             stratify = y
 
         X_train, X_test, y_train, y_test = train_test_split(

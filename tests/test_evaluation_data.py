@@ -13,6 +13,7 @@ from src.plot_results import (
     plot_roc_auc,
 )
 from src.utils.evaluation_plot import calculate_comparative_generalizability
+from src.mlflow.tracking_contract import TRACKING_SCHEMA_VERSION
 
 
 def _log_pipeline(
@@ -29,6 +30,7 @@ def _log_pipeline(
         run_name=run_name,
         tags={
             "run_type": "pipeline",
+            "tracking_schema_version": TRACKING_SCHEMA_VERSION,
             "pipeline_id": pipeline_id,
             "target": "mortality",
             "task_type": "classification",
@@ -53,6 +55,7 @@ def _log_pipeline(
                 nested=True,
                 tags={
                     "run_type": "model",
+                    "tracking_schema_version": TRACKING_SCHEMA_VERSION,
                     "pipeline_id": pipeline_id,
                     "pipeline_mlflow_run_id": parent_id,
                     "model_name": model_name,
@@ -113,6 +116,60 @@ def _log_pipeline(
     return parent_id
 
 
+def _log_regression_pipeline(tracking_uri: str) -> None:
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment("regression")
+    with mlflow.start_run(
+        run_name="regression-run",
+        tags={
+            "run_type": "pipeline",
+            "tracking_schema_version": TRACKING_SCHEMA_VERSION,
+            "pipeline_id": "regression-pipeline",
+            "target": "LOS",
+            "task_type": "regression",
+            "trained_on": "mimic",
+            "train_sources": "mimic",
+        },
+    ) as parent:
+        mlflow.log_params(
+            {
+                "dataset.target": "LOS",
+                "dataset.train.row_count": 100,
+                "dataset.test.mimic.row_count": 20,
+                "dataset.test.tudd.row_count": 30,
+            }
+        )
+        for model_name, mimic_r2, tudd_r2, mimic_mae, tudd_mae in (
+            ("linear-a", 0.8, 0.6, 0.2, 0.4),
+            ("linear-b", 0.75, 0.65, 0.25, 0.3),
+        ):
+            with mlflow.start_run(
+                run_name=model_name,
+                nested=True,
+                tags={
+                    "run_type": "model",
+                    "tracking_schema_version": TRACKING_SCHEMA_VERSION,
+                    "pipeline_id": "regression-pipeline",
+                    "pipeline_mlflow_run_id": parent.info.run_id,
+                    "model_name": model_name,
+                    "model_instance": model_name,
+                    "task_type": "regression",
+                    "status": "success",
+                    "trained_on": "mimic",
+                    "train_sources": "mimic",
+                },
+            ) as model_run:
+                mlflow.set_tag("model_mlflow_run_id", model_run.info.run_id)
+                mlflow.log_metrics(
+                    {
+                        "test.mimic.r2": mimic_r2,
+                        "test.tudd.r2": tudd_r2,
+                        "test.mimic.mae": mimic_mae,
+                        "test.tudd.mae": tudd_mae,
+                    }
+                )
+
+
 @pytest.fixture
 def tracking_uri(tmp_path):
     uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
@@ -140,6 +197,13 @@ def tracking_uri(tmp_path):
         pipeline_id="pipeline-gamma",
         models=(("ebm", "ebm", True, True),),
     )
+    mlflow.set_tracking_uri(uri)
+    mlflow.set_experiment("tab")
+    with mlflow.start_run(
+        run_name="legacy-unversioned-run",
+        tags={"run_type": "pipeline", "pipeline_id": "legacy-pipeline"},
+    ):
+        pass
     return uri
 
 
@@ -172,6 +236,7 @@ def test_loads_multiple_experiments_into_plotting_tables(tracking_uri):
         "ebm",
     }
     assert set(data["training_size"]) == {100}
+    assert set(data["task_type"]) == {"classification"}
     scores = data
     assert {"kind", "unit"}.isdisjoint(data.columns)
     assert set(scores["dataset"]) == {
@@ -272,6 +337,26 @@ def test_calculates_comparative_generalizability_on_external_test(tracking_uri):
     ].iloc[0]
     assert logistic_external["generalizability_loss_roc_auc"] == pytest.approx(-0.05)
     assert logistic_external["comparative_generalizability_loss_roc_auc"] == pytest.approx(0.0)
+
+
+def test_regression_losses_are_direction_aware(tmp_path):
+    tracking_uri = f"sqlite:///{tmp_path / 'mlflow.db'}"
+    _log_regression_pipeline(tracking_uri)
+
+    results = load_evaluation_data("regression", tracking_uri=tracking_uri)
+    external = results.loc[(results["scope"] == "test") & (results["dataset"] == "tudd")].set_index("model_name")
+
+    assert set(results["task_type"]) == {"regression"}
+    assert external.loc["linear-a", "generalizability_loss_r2"] == pytest.approx(-0.2)
+    assert external.loc["linear-a", "comparative_generalizability_loss_r2"] == pytest.approx(-0.05)
+    assert external.loc["linear-a", "generalizability_loss_mae"] == pytest.approx(-0.2)
+    assert external.loc["linear-a", "comparative_generalizability_loss_mae"] == pytest.approx(-0.1)
+    assert external.loc["linear-b", "comparative_generalizability_loss_mae"] == pytest.approx(0.0)
+
+    comparison = calculate_comparative_generalizability(results, metric="mae").set_index("model_name")
+    assert comparison.loc["linear-a", "generalizability_loss"] == pytest.approx(-0.2)
+    assert comparison.loc["linear-a", "comparative_generalizability_loss"] == pytest.approx(-0.1)
+    assert comparison.loc["linear-b", "generalization_rank"] == 1
 
 
 def test_plots_roc_auc_as_paired_test_centers(tracking_uri):

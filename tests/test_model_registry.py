@@ -4,6 +4,7 @@ import sys
 import numpy as np
 import optuna
 import pytest
+from pydantic import ValidationError
 
 from src.schemas.training_schemas import ModelConfig
 from src.utils import model_registry
@@ -31,25 +32,33 @@ CLASSIFICATION_MODELS = [name for name in model_registry.MODEL_REGISTRY_CLS]
 LIGHTWEIGHT_REGRESSION_MODELS = ["xgboost", "tabswift"]
 
 
+@pytest.mark.parametrize("removed_field", ["task_type", "params"])
+def test_model_config_rejects_removed_fields(removed_field):
+    with pytest.raises(ValidationError, match=removed_field):
+        ModelConfig.model_validate({"name": "logistic-regression", removed_field: {}})
+
+
+def test_regression_catalog_excludes_classification_only_adapters():
+    regression_models = set(model_registry.MODEL_CATALOG.available_models("regression"))
+
+    assert {"orion-msp", "orion-bix", "tabfm"}.isdisjoint(regression_models)
+    assert model_registry.MODEL_REGISTRY_REG["limix-2m"].search_spaces
+
+
 def _make_model(model_name, task_type):
-    spec = model_registry.get_model_spec(ModelConfig(name=model_name, task_type=task_type))
+    spec = model_registry.get_model_spec(ModelConfig(name=model_name), task_type)
     return spec.create(task_type=task_type, params={})
-
-
-def _as_numpy(predictions):
-    if hasattr(predictions, "detach"):
-        predictions = predictions.detach().cpu()
-    return np.asarray(predictions)
 
 
 def _assert_valid_fit_and_predict(model_name, model, X, y, task_type):
     fit_time = model.fit(X, y)
-    predictions, predict_time = model.predict(X)
+    prediction = model.predict(X)
 
-    predictions = _as_numpy(predictions)
+    predictions = prediction.values
 
     assert fit_time >= 0, f"{model_name} returned invalid fit time"
-    assert predict_time >= 0, f"{model_name} returned invalid predict time"
+    assert prediction.seconds >= 0, f"{model_name} returned invalid predict time"
+    assert isinstance(predictions, np.ndarray), f"{model_name} must normalize predictions to numpy"
     assert len(predictions) == len(X), f"{model_name} returned wrong prediction count"
     if task_type == "classification":
         assert predictions.ndim == 2, f"{model_name} must return class probabilities"
@@ -69,7 +78,7 @@ def test_model_catalog_lookup_and_search_spaces_are_lazy():
 
     importlib.reload(model_registry)
 
-    spec = model_registry.get_model_spec(ModelConfig(name="logistic-regression", task_type="classification"))
+    spec = model_registry.get_model_spec(ModelConfig(name="logistic-regression"), "classification")
     candidates = spec.tuning_candidates(search_space=None, overrides=None)
 
     assert ADAPTER_MODULES.isdisjoint(sys.modules)
@@ -83,11 +92,11 @@ def test_model_catalog_reports_task_specific_unknown_models():
         ValueError,
         match="Unknown classification model 'linear-regression'.*logistic-regression",
     ):
-        model_registry.get_model_spec(ModelConfig(name="linear-regression", task_type="classification"))
+        model_registry.get_model_spec(ModelConfig(name="linear-regression"), "classification")
 
 
 def test_model_spec_uses_explicit_tuning_grid_as_the_search_space():
-    spec = model_registry.get_model_spec(ModelConfig(name="logistic-regression", task_type="classification"))
+    spec = model_registry.get_model_spec(ModelConfig(name="logistic-regression"), "classification")
 
     assert spec.tuning_candidates(None, {"C": [0.1, 1.0]}) == [
         {"C": 0.1},
@@ -100,7 +109,7 @@ def test_model_spec_uses_explicit_tuning_grid_as_the_search_space():
 
 
 def test_model_spec_expands_nested_tuning_grid_keys():
-    spec = model_registry.get_model_spec(ModelConfig(name="tabpfn-3", task_type="classification"))
+    spec = model_registry.get_model_spec(ModelConfig(name="tabpfn-3"), "classification")
 
     assert spec.tuning_candidates(
         None,

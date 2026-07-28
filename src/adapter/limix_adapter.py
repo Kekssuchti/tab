@@ -13,11 +13,11 @@ import torch
 from huggingface_hub import hf_hub_download
 
 from external.limix.inference.predictor import LimiXPredictor
-from src.interfaces.model_interface import ModelAdapter
+from src.interfaces.model_interface import ModelAdapter, PredictionValues, TimedPrediction
 from src.schemas.base_schemas import TaskType
 
 
-class LimixAdapter(ModelAdapter):
+class LimixAdapter(ModelAdapter[PredictionValues]):
     def __init__(
         self,
         task_type: TaskType = "classification",
@@ -104,15 +104,15 @@ class LimixAdapter(ModelAdapter):
         self.y_train = y_train
         return 0.0
 
-    def predict(self, X_test):
+    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
         start_time = timer()
         if self.predict_batch_size is not None and len(X_test) > self.predict_batch_size:
             result = self._predict_batched(X_test)
-            return result, timer() - start_time
+            return self.timed_prediction(result, start_time)
 
         result = self._predict_single_batch(X_test)
 
-        return result, timer() - start_time
+        return self.timed_prediction(result, start_time)
 
     def _predict_batched(self, X_test):
         predictions = []

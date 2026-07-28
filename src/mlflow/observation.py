@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import json
 import math
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from statistics import pstdev
-from typing import Any
+from typing import Literal
 
+from src.classes.data_registry import dataset_task_for_target
+from src.mlflow.serialization import canonical_json
 from src.mlflow.tracking_contract import (
     METRIC_CV_TOTAL_TIME,
     METRIC_MODEL_TOTAL_TIME,
@@ -20,6 +22,7 @@ from src.mlflow.tracking_contract import (
     RUN_TYPE_PIPELINE,
     STATUS_FAILED,
     STATUS_SUCCESS,
+    TAG_TRACKING_SCHEMA_VERSION,
     TAG_MODEL_INSTANCE,
     TAG_MODEL_NAME,
     TAG_PIPELINE_ID,
@@ -29,6 +32,7 @@ from src.mlflow.tracking_contract import (
     TAG_TASK_TYPE,
     TAG_TRAIN_SOURCES,
     TAG_TRAINED_ON,
+    TRACKING_SCHEMA_VERSION,
     dataset_row_count_param,
     test_delta_metric,
     test_mean_score_metric,
@@ -37,11 +41,14 @@ from src.mlflow.tracking_contract import (
     test_score_ci_metric,
     test_score_metric,
 )
+from src.schemas.base_schemas import TaskType
+from src.schemas.dataset_schemas import ClassificationTargetSummary, RegressionTargetSummary
 from src.schemas.metrics import (
     AggregatedFinalTestMetrics,
     ClassificationMetrics,
     ClassificationMetricsAggregate,
     RegressionMetrics,
+    RegressionMetricsAggregate,
 )
 from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.run_records import (
@@ -50,13 +57,17 @@ from src.schemas.run_records import (
     ModelRunRecord,
     ModelTrainingResult,
     PipelineRunRecord,
+    TuningRecord,
 )
 from src.schemas.training_schemas import ModelConfig
 from src.utils.evaluation_utils import (
     classification_score,
     mean_classification_metrics,
+    mean_regression_metrics,
+    regression_score,
 )
 from src.utils.model_identity import model_instance_ids
+from src.mlflow.validation import validate_pipeline_projection
 
 
 @dataclass(frozen=True)
@@ -112,6 +123,20 @@ class EvaluationLog:
 
 
 @dataclass(frozen=True)
+class EvaluationTableRow:
+    tracking_schema_version: str
+    pipeline_run_id: str
+    target: str
+    trained_on: str
+    model_name: str
+    model_instance: str
+    dataset: str
+    scope: Literal["test", "test_delta"]
+    metric: str
+    value: float
+
+
+@dataclass(frozen=True)
 class RunObservation:
     """
     Serializable description of one MLflow run and its children.
@@ -133,7 +158,7 @@ class RunObservation:
         evaluations: tuple of EvaluationLog, default=()
             Evaluation payloads logged on the run.
 
-        table_rows: tuple of dict, default=()
+        table_rows: tuple of EvaluationTableRow, default=()
             Rows for summary metric tables.
 
         children: tuple of RunObservation, default=()
@@ -148,7 +173,7 @@ class RunObservation:
     params: dict[str, str]
     metrics: tuple[MetricLog, ...] = ()
     evaluations: tuple[EvaluationLog, ...] = ()
-    table_rows: tuple[dict[str, str | float], ...] = ()
+    table_rows: tuple[EvaluationTableRow, ...] = ()
     children: tuple[RunObservation, ...] = ()
     cv_artifact_model_id: str | None = None
 
@@ -158,7 +183,7 @@ class _EvaluationBundle:
     """Grouped evaluation payloads and metric table rows."""
 
     evaluations: tuple[EvaluationLog, ...]
-    table_rows: tuple[dict[str, str | float], ...]
+    table_rows: tuple[EvaluationTableRow, ...]
 
 
 @dataclass(frozen=True)
@@ -166,7 +191,7 @@ class _CandidateSummary:
     """Aggregated CV summary for one tuning candidate."""
 
     candidate_index: int
-    model_params: dict[str, Any]
+    model_params: dict[str, object]
     folds: tuple[FoldRecord, ...]
     mean_score: float
     std_score: float
@@ -177,6 +202,7 @@ def assemble_pipeline_observation(
     pipeline_config: PipelineConfig,
     pipeline_result: PipelineRunRecord,
 ) -> RunObservation:
+    validate_pipeline_projection(pipeline_config, pipeline_result)
     model_params_by_id = _model_params_by_instance_id(pipeline_config.training)
     evaluation_bundle = _evaluation_bundle(pipeline_config, pipeline_result.model_runs)
 
@@ -203,9 +229,10 @@ def assemble_pipeline_observation(
 
 
 def table_rows_to_columns(
-    rows: tuple[dict[str, str | float], ...],
+    rows: tuple[EvaluationTableRow, ...],
 ) -> dict[str, list[str | float]]:
     columns: dict[str, list[str | float]] = {
+        "tracking_schema_version": [],
         "pipeline_run_id": [],
         "target": [],
         "trained_on": [],
@@ -218,7 +245,7 @@ def table_rows_to_columns(
     }
     for row in rows:
         for key in columns:
-            columns[key].append(row[key])
+            columns[key].append(getattr(row, key))
     return columns
 
 
@@ -269,8 +296,12 @@ def _cv_candidate_observations(
     if tuning_result is None:
         return ()
 
-    candidate_summaries = _candidate_summaries(tuning_result)
-    ranks = _candidate_ranks([candidate.mean_score for candidate in candidate_summaries])
+    task_type = run_record.training_result.task_type
+    candidate_summaries = _candidate_summaries(tuning_result, task_type)
+    ranks = _candidate_ranks(
+        [candidate.mean_score for candidate in candidate_summaries],
+        maximize=tuning_result.scoring not in {"mae", "mse", "rmse"},
+    )
     observations = []
     for position, candidate in enumerate(candidate_summaries):
         candidate_label = f"cv{candidate.candidate_index:02d}"
@@ -301,6 +332,7 @@ def _cv_candidate_observations(
                     pipeline_config,
                     run_record.model_instance_id,
                     model_config,
+                    run_record.training_result.task_type,
                     candidate_label,
                     candidate.candidate_index,
                     ranks[position],
@@ -324,10 +356,11 @@ def _pipeline_tags(pipeline_config: PipelineConfig) -> dict[str, str]:
     return _drop_none(
         {
             TAG_RUN_TYPE: RUN_TYPE_PIPELINE,
+            TAG_TRACKING_SCHEMA_VERSION: TRACKING_SCHEMA_VERSION,
             TAG_PIPELINE_ID: pipeline_config.run_id,
             "run_id": pipeline_config.run_id,
             TAG_TARGET: pipeline_config.dataset.target,
-            TAG_TASK_TYPE: "classification" if pipeline_config.dataset.classification else "regression",
+            TAG_TASK_TYPE: dataset_task_for_target(pipeline_config.dataset.target).task_type,
             TAG_TRAINED_ON: _trained_on(pipeline_config),
             TAG_TRAIN_SOURCES: _train_sources(pipeline_config),
             "trained_models": ",".join(model_params.name for model_params in pipeline_config.training),
@@ -344,9 +377,10 @@ def _model_tags(
     tags = {
         TAG_PIPELINE_ID: pipeline_config.run_id,
         TAG_RUN_TYPE: RUN_TYPE_MODEL,
+        TAG_TRACKING_SCHEMA_VERSION: TRACKING_SCHEMA_VERSION,
         TAG_MODEL_INSTANCE: run_record.model_instance_id,
         TAG_MODEL_NAME: model_config.name,
-        TAG_TASK_TYPE: model_config.task_type,
+        TAG_TASK_TYPE: training_result.task_type,
         TAG_STATUS: STATUS_SUCCESS if training_result.succeeded else STATUS_FAILED,
         TAG_TRAINED_ON: _trained_on(pipeline_config),
         TAG_TRAIN_SOURCES: _train_sources(pipeline_config),
@@ -364,6 +398,7 @@ def _cv_candidate_tags(
     pipeline_config: PipelineConfig,
     model_id: str,
     model_config: ModelConfig,
+    task_type: TaskType,
     candidate_label: str,
     candidate_index: int,
     candidate_rank: int,
@@ -372,30 +407,31 @@ def _cv_candidate_tags(
     return {
         TAG_PIPELINE_ID: pipeline_config.run_id,
         TAG_RUN_TYPE: RUN_TYPE_CV_CANDIDATE,
+        TAG_TRACKING_SCHEMA_VERSION: TRACKING_SCHEMA_VERSION,
         TAG_MODEL_INSTANCE: model_id,
         TAG_MODEL_NAME: model_config.name,
         "candidate": candidate_label,
         "candidate_index": str(candidate_index),
         "candidate_rank": str(candidate_rank),
         "tuning_method": tuning_method,
-        TAG_TASK_TYPE: model_config.task_type,
+        TAG_TASK_TYPE: task_type,
         TAG_TRAINED_ON: _trained_on(pipeline_config),
         TAG_TRAIN_SOURCES: _train_sources(pipeline_config),
     }
 
 
 def _pipeline_params(pipeline_config: PipelineConfig) -> dict[str, str]:
-    run_params: dict[str, Any] = {
+    dataset_task = dataset_task_for_target(pipeline_config.dataset.target)
+    run_params: dict[str, object] = {
         "run_id": pipeline_config.run_id,
         "mlflow.experiment_name": pipeline_config.mlflow.experiment_name,
         PARAM_DATASET_TARGET: pipeline_config.dataset.target,
         "dataset.random_state": pipeline_config.dataset.random_state,
         "dataset.train_size": pipeline_config.dataset.train_size,
-        "dataset.classification": pipeline_config.dataset.classification,
+        "dataset.task_type": dataset_task.task_type,
+        "dataset.kind": dataset_task.dataset_kind,
         "dataset.trained_on": _trained_on(pipeline_config),
         "training.model_names": ",".join(model.name for model in pipeline_config.training),
-        "plotting.enabled": pipeline_config.plotting.enabled,
-        "plotting.formats": ",".join(pipeline_config.plotting.formats),
     }
 
     for index, split in enumerate(pipeline_config.dataset.train_on):
@@ -407,7 +443,7 @@ def _pipeline_params(pipeline_config: PipelineConfig) -> dict[str, str]:
 
 def _dataset_summary_params(pipeline_result: PipelineRunRecord) -> dict[str, str]:
     dataset_summary = pipeline_result.dataset_summary
-    run_params: dict[str, Any] = {}
+    run_params: dict[str, object] = {}
     parts = {
         "train": dataset_summary.train,
         "test.mimic": dataset_summary.test_mimic,
@@ -415,8 +451,17 @@ def _dataset_summary_params(pipeline_result: PipelineRunRecord) -> dict[str, str
     }
     for name, summary in parts.items():
         run_params[dataset_row_count_param(name)] = summary.row_count
-        for label, count in summary.class_balance.items():
-            run_params[f"dataset.{name}.class_balance.{label}"] = count
+        target_summary = summary.target_summary
+        if isinstance(target_summary, ClassificationTargetSummary):
+            for label, count in target_summary.class_balance.items():
+                run_params[f"dataset.{name}.class_balance.{label}"] = count
+        elif isinstance(target_summary, RegressionTargetSummary):
+            prefix = f"dataset.{name}.target"
+            run_params[f"{prefix}.count"] = target_summary.count
+            run_params[f"{prefix}.mean"] = target_summary.mean
+            run_params[f"{prefix}.std"] = target_summary.std
+            run_params[f"{prefix}.min"] = target_summary.min
+            run_params[f"{prefix}.max"] = target_summary.max
 
     for data_file in dataset_summary.data_files:
         prefix = f"dataset.file.{data_file.data_origin}"
@@ -440,6 +485,7 @@ def _model_run_params(
 ) -> dict[str, str]:
     run_params = {
         PARAM_MODEL_TUNED: _param_value(training_result.tuned),
+        "model.task_type": training_result.task_type,
         **_model_config_params("config", model_config),
     }
 
@@ -461,12 +507,9 @@ def _model_run_params(
 
 def _model_config_params(model_id: str, model_config: ModelConfig) -> dict[str, str]:
     prefix = f"model.{model_id}"
-    run_params: dict[str, Any] = {
+    run_params: dict[str, object] = {
         f"{prefix}.name": model_config.name,
-        f"{prefix}.task_type": model_config.task_type,
     }
-    for key, value in model_config.params.items():
-        run_params[f"{prefix}.params.{key}"] = value
 
     if model_config.preprocessing is None:
         run_params[f"{prefix}.preprocessing.override"] = False
@@ -478,10 +521,6 @@ def _model_config_params(model_id: str, model_config: ModelConfig) -> dict[str, 
             run_params[f"{prefix}.preprocessing.scaler_encoder"] = model_config.preprocessing.scaler_encoder.model_dump(
                 mode="json"
             )
-
-    if model_config.tuning is None:
-        run_params[f"{prefix}.tuning.enabled"] = False
-        return _string_params(run_params)
 
     run_params[f"{prefix}.tuning.enabled"] = True
     run_params[f"{prefix}.tuning.method"] = model_config.tuning.method
@@ -537,7 +576,8 @@ def _model_metric_params(
 
     params = {}
     for test_result in model_result.test_results:
-        params[test_n_classes_param(test_result.dataset_name)] = _param_value(test_result.metrics.n_classes)
+        if isinstance(test_result.metrics, ClassificationMetrics):
+            params[test_n_classes_param(test_result.dataset_name)] = _param_value(test_result.metrics.n_classes)
     return params
 
 
@@ -566,54 +606,36 @@ def _cv_final_test_metric_logs(
     metrics: AggregatedFinalTestMetrics,
 ) -> tuple[MetricLog, ...]:
     return (
-        *_cv_classification_metric_logs("mimic", metrics.mimic_test),
-        *_cv_classification_metric_logs("tudd", metrics.tudd_test),
+        *_cv_aggregate_metric_logs("mimic", metrics.mimic_test),
+        *_cv_aggregate_metric_logs("tudd", metrics.tudd_test),
     )
 
 
-def _cv_classification_metric_logs(
+def _cv_aggregate_metric_logs(
     dataset: str,
-    metrics: ClassificationMetricsAggregate,
+    metrics: ClassificationMetricsAggregate | RegressionMetricsAggregate,
 ) -> tuple[MetricLog, ...]:
-    metric_names = (
-        "mean_roc_auc",
-        "mean_prc_auc",
-        "mean_f1",
-        "mean_accuracy",
-        "mean_sensitivity",
-        "mean_precision",
-        "ci_95_roc_auc_lower",
-        "ci_95_roc_auc_upper",
-        "ci_95_prc_auc_lower",
-        "ci_95_prc_auc_upper",
-        "ci_95_f1_lower",
-        "ci_95_f1_upper",
-        "ci_95_accuracy_lower",
-        "ci_95_accuracy_upper",
-        "ci_95_sensitivity_lower",
-        "ci_95_sensitivity_upper",
-        "ci_95_precision_lower",
-        "ci_95_precision_upper",
-    )
-    values = []
-    for name in metric_names:
-        if name.startswith("mean_"):
-            mlflow_name = test_mean_score_metric(dataset, name.removeprefix("mean_"))
-        else:
-            metric, bound = name.removeprefix("ci_95_").rsplit("_", maxsplit=1)
-            mlflow_name = test_score_ci_metric(dataset, metric, bound)
-        values.append((mlflow_name, getattr(metrics, name)))
+    values = [
+        (test_mean_score_metric(dataset, name.removeprefix("mean_")), value) for name, value in metrics.scores.items()
+    ]
+    for name, (lower, upper) in metrics.confidence_intervals.items():
+        values.extend(
+            (
+                (test_score_ci_metric(dataset, name, "lower"), lower),
+                (test_score_ci_metric(dataset, name, "upper"), upper),
+            )
+        )
     return _metric_logs_from_values(values)
 
 
 def _metric_delta_logs(
-    deltas: ClassificationMetrics,
+    deltas: ClassificationMetrics | RegressionMetrics,
 ) -> tuple[MetricLog, ...]:
     return _metric_logs_from_values(((test_delta_metric(name), value) for name, value in deltas.scores.items()))
 
 
 def _metric_logs_from_values(
-    values: Any,
+    values: Iterable[tuple[str, float | int | None]],
     *,
     step: int | None = None,
 ) -> tuple[MetricLog, ...]:
@@ -743,26 +765,27 @@ def _evaluation_metric_rows(
     model_id: str,
     model_name: str,
     dataset_name: str,
-    scope: str,
+    scope: Literal["test", "test_delta"],
     metrics: dict[str, float | int],
-) -> list[dict[str, str | float]]:
+) -> list[EvaluationTableRow]:
     rows = []
     for metric_name, metric_value in metrics.items():
         value = float(metric_value)
         if not math.isfinite(value):
             continue
         rows.append(
-            {
-                "pipeline_run_id": pipeline_config.run_id,
-                "target": pipeline_config.dataset.target,
-                "trained_on": _trained_on(pipeline_config),
-                "model_name": model_name,
-                "model_instance": model_id,
-                "dataset": dataset_name,
-                "scope": scope,
-                "metric": metric_name,
-                "value": value,
-            }
+            EvaluationTableRow(
+                tracking_schema_version=TRACKING_SCHEMA_VERSION,
+                pipeline_run_id=pipeline_config.run_id,
+                target=pipeline_config.dataset.target,
+                trained_on=_trained_on(pipeline_config),
+                model_name=model_name,
+                model_instance=model_id,
+                dataset=dataset_name,
+                scope=scope,
+                metric=metric_name,
+                value=value,
+            )
         )
     return rows
 
@@ -797,15 +820,18 @@ def _dataset_origin(dataset_name: str) -> str:
     return dataset_name
 
 
-def _candidate_ranks(scores: list[float]) -> list[int]:
-    ranked_indices = sorted(range(len(scores)), key=lambda index: scores[index], reverse=True)
+def _candidate_ranks(scores: list[float], *, maximize: bool = True) -> list[int]:
+    ranked_indices = sorted(range(len(scores)), key=lambda index: scores[index], reverse=maximize)
     ranks = [0] * len(scores)
     for rank, index in enumerate(ranked_indices, start=1):
         ranks[index] = rank
     return ranks
 
 
-def _candidate_summaries(tuning_result: Any) -> tuple[_CandidateSummary, ...]:
+def _candidate_summaries(
+    tuning_result: TuningRecord,
+    task_type: TaskType,
+) -> tuple[_CandidateSummary, ...]:
     folds_by_candidate: defaultdict[int, list[FoldRecord]] = defaultdict(list)
     for fold in tuning_result.fold_results:
         folds_by_candidate[fold.candidate_index].append(fold)
@@ -818,10 +844,18 @@ def _candidate_summaries(tuning_result: Any) -> tuple[_CandidateSummary, ...]:
                 key=lambda fold: fold.fold_index,
             )
         )
-        if not isinstance(folds[0].metrics, ClassificationMetrics):
-            raise NotImplementedError("Regression tuning metrics are not implemented yet")
-
-        scores = [classification_score(fold.metrics, tuning_result.scoring) for fold in folds]
+        if task_type == "classification":
+            classification_metrics = [fold.metrics for fold in folds if isinstance(fold.metrics, ClassificationMetrics)]
+            if len(classification_metrics) != len(folds):
+                raise ValueError("Classification tuning record contains regression fold metrics")
+            scores = [classification_score(metric, tuning_result.scoring) for metric in classification_metrics]
+            mean_metrics = mean_classification_metrics(classification_metrics)
+        else:
+            regression_metrics = [fold.metrics for fold in folds if isinstance(fold.metrics, RegressionMetrics)]
+            if len(regression_metrics) != len(folds):
+                raise ValueError("Regression tuning record contains classification fold metrics")
+            scores = [regression_score(metric, tuning_result.scoring) for metric in regression_metrics]
+            mean_metrics = mean_regression_metrics(regression_metrics)
 
         summaries.append(
             _CandidateSummary(
@@ -830,7 +864,7 @@ def _candidate_summaries(tuning_result: Any) -> tuple[_CandidateSummary, ...]:
                 folds=folds,
                 mean_score=float(sum(scores) / len(scores)),
                 std_score=float(pstdev(scores)),
-                mean_metrics=mean_classification_metrics([fold.metrics for fold in folds]),
+                mean_metrics=mean_metrics,
             )
         )
 
@@ -850,11 +884,13 @@ def _drop_none(values: dict[str, str | None]) -> dict[str, str]:
     return {key: value for key, value in values.items() if value is not None}
 
 
-def _string_params(values: dict[str, Any]) -> dict[str, str]:
+def _string_params(values: dict[str, object]) -> dict[str, str]:
     return {key: _param_value(value) for key, value in values.items()}
 
 
-def _param_value(value: Any) -> str:
+def _param_value(value: object) -> str:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("MLflow parameter values must be finite")
     if isinstance(value, str | int | float | bool) or value is None:
         return str(value)
-    return json.dumps(value, sort_keys=True, default=str)
+    return canonical_json(value, indent=None)

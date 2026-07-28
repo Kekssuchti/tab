@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Generic, TypeAlias, TypeVar, cast, overload
 
 import numpy as np
 
@@ -126,6 +127,17 @@ class ClassificationMetricsAggregate:
             "mean_precision": self.mean_precision,
         }
 
+    @property
+    def confidence_intervals(self) -> dict[str, tuple[float, float]]:
+        return {
+            "roc_auc": (self.ci_95_roc_auc_lower, self.ci_95_roc_auc_upper),
+            "prc_auc": (self.ci_95_prc_auc_lower, self.ci_95_prc_auc_upper),
+            "f1": (self.ci_95_f1_lower, self.ci_95_f1_upper),
+            "accuracy": (self.ci_95_accuracy_lower, self.ci_95_accuracy_upper),
+            "sensitivity": (self.ci_95_sensitivity_lower, self.ci_95_sensitivity_upper),
+            "precision": (self.ci_95_precision_lower, self.ci_95_precision_upper),
+        }
+
 
 @dataclass(frozen=True)
 class ClassificationPredictionBatch:
@@ -226,9 +238,22 @@ class RegressionMetricsAggregate:
             "mean_rmse": self.mean_rmse,
         }
 
+    @property
+    def confidence_intervals(self) -> dict[str, tuple[float, float]]:
+        return {
+            "r2": (self.ci_95_r2_lower, self.ci_95_r2_upper),
+            "mae": (self.ci_95_mae_lower, self.ci_95_mae_upper),
+            "mse": (self.ci_95_mse_lower, self.ci_95_mse_upper),
+            "rmse": (self.ci_95_rmse_lower, self.ci_95_rmse_upper),
+        }
+
+
+MetricT = TypeVar("MetricT", ClassificationMetrics, RegressionMetrics)
+AggregateMetricT = TypeVar("AggregateMetricT", ClassificationMetricsAggregate, RegressionMetricsAggregate)
+
 
 @dataclass(frozen=True)
-class FinalTestMetrics:
+class FinalTestMetrics(Generic[MetricT]):
     """
     Final classification metrics for both held-out test sets.
 
@@ -247,18 +272,22 @@ class FinalTestMetrics:
             Prediction time on the TUDD test set, in seconds.
     """
 
-    mimic_test: ClassificationMetrics | RegressionMetrics
+    mimic_test: MetricT
     mimic_prediction_time: float
-    tudd_test: ClassificationMetrics | RegressionMetrics
+    tudd_test: MetricT
     tudd_prediction_time: float
 
     @property
-    def mimic_minus_tudd(self) -> ClassificationMetrics | RegressionMetrics:
-        return calculate_metric_diff(self.mimic_test, self.tudd_test)
+    def mimic_minus_tudd(self) -> MetricT:
+        return cast(MetricT, calculate_metric_diff(self.mimic_test, self.tudd_test))
+
+
+ClassificationFinalTestMetrics: TypeAlias = FinalTestMetrics[ClassificationMetrics]
+RegressionFinalTestMetrics: TypeAlias = FinalTestMetrics[RegressionMetrics]
 
 
 @dataclass(frozen=True)
-class AggregatedFinalTestMetrics:
+class AggregatedFinalTestMetrics(Generic[AggregateMetricT]):
     """
     Aggregated final-test metrics for tuned cross-validation runs.
 
@@ -277,14 +306,46 @@ class AggregatedFinalTestMetrics:
             Mean prediction time on TUDD test folds, in seconds.
     """
 
-    mimic_test: ClassificationMetricsAggregate | RegressionMetricsAggregate
+    mimic_test: AggregateMetricT
     mimic_prediction_time: float
-    tudd_test: ClassificationMetricsAggregate | RegressionMetricsAggregate
+    tudd_test: AggregateMetricT
     tudd_prediction_time: float
 
     @property
     def mimic_minus_tudd(self) -> ClassificationMetrics | RegressionMetrics:
         return calculate_metric_diff(self.mimic_test, self.tudd_test)
+
+
+ClassificationAggregatedFinalTestMetrics: TypeAlias = AggregatedFinalTestMetrics[ClassificationMetricsAggregate]
+RegressionAggregatedFinalTestMetrics: TypeAlias = AggregatedFinalTestMetrics[RegressionMetricsAggregate]
+
+
+@overload
+def calculate_metric_diff(
+    mimic_metrics: ClassificationMetrics,
+    tudd_metrics: ClassificationMetrics,
+) -> ClassificationMetrics: ...
+
+
+@overload
+def calculate_metric_diff(
+    mimic_metrics: ClassificationMetricsAggregate,
+    tudd_metrics: ClassificationMetricsAggregate,
+) -> ClassificationMetrics: ...
+
+
+@overload
+def calculate_metric_diff(
+    mimic_metrics: RegressionMetrics,
+    tudd_metrics: RegressionMetrics,
+) -> RegressionMetrics: ...
+
+
+@overload
+def calculate_metric_diff(
+    mimic_metrics: RegressionMetricsAggregate,
+    tudd_metrics: RegressionMetricsAggregate,
+) -> RegressionMetrics: ...
 
 
 def calculate_metric_diff(

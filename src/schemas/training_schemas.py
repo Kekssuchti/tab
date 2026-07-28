@@ -3,7 +3,7 @@ from typing import Any, Literal
 from pydantic import Field
 
 from src.config import config
-from src.schemas.base_schemas import StrictConfig, TaskType
+from src.schemas.base_schemas import StrictConfig
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.utils.evaluation_utils import ScoringMethodCLS
 
@@ -117,12 +117,6 @@ class ModelConfig(StrictConfig):
         name: str
             Registered model name.
 
-        task_type: {"classification", "regression"}, default="classification"
-            Prediction task type.
-
-        params: dict, default={}
-            Parameters passed to the model adapter.
-
         tuning: TuningConfig, default=TuningConfig()
             Hyperparameter tuning settings.
 
@@ -131,7 +125,5 @@ class ModelConfig(StrictConfig):
     """
 
     name: str
-    task_type: TaskType = "classification"
-    params: dict[str, Any] = Field(default_factory=dict)
     tuning: TuningConfig = Field(default_factory=TuningConfig)
     preprocessing: ModelPreprocessingConfig | None = None

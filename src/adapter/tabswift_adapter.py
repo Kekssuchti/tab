@@ -9,11 +9,11 @@ from timeit import default_timer as timer
 from external.TabSwift.TALENT.model.lib.tabswift.classifier import TabSwiftClassifier
 from external.TabSwift.TALENT.model.lib.tabswift.regressor import TabSwiftRegressor
 from src.config import config
-from src.interfaces.model_interface import ModelAdapter
+from src.interfaces.model_interface import ModelAdapter, PredictionValues, TimedPrediction
 from src.schemas.base_schemas import TaskType
 
 
-class TabSwiftAdapter(ModelAdapter):
+class TabSwiftAdapter(ModelAdapter[PredictionValues]):
     def __init__(
         self,
         task_type: TaskType = "classification",
@@ -39,8 +39,8 @@ class TabSwiftAdapter(ModelAdapter):
         self.model.fit(X_train, y_train)
         return timer() - start_time
 
-    def predict(self, X_test):
+    def predict(self, X_test) -> TimedPrediction[PredictionValues]:
         start_time = timer()
         result = self.predict_from_estimator(X_test)
 
-        return result, timer() - start_time
+        return self.timed_prediction(result, start_time)

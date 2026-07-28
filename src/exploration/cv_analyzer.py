@@ -1,5 +1,4 @@
 import argparse
-import json
 from pathlib import Path
 from statistics import pstdev
 
@@ -9,8 +8,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from src.config import config
-from src.schemas.metrics import ClassificationMetrics
-from src.schemas.run_records import FoldRecord, TuningRecord
+from src.mlflow.serialization import cv_result_from_json
+from src.schemas.run_records import TuningRecord
 from src.utils.evaluation_utils import (
     classification_score,
     mean_classification_metrics,
@@ -18,22 +17,8 @@ from src.utils.evaluation_utils import (
 
 
 def load_tuning_result(path: Path) -> TuningRecord:
-    """Load a TuningRecord from JSON, explicitly converting nested dicts
-    to their dataclass instances."""
-    raw = json.loads(path.read_text())
-
-    raw["fold_results"] = [
-        FoldRecord(
-            candidate_index=f["candidate_index"],
-            fold_index=f["fold_index"],
-            metrics=ClassificationMetrics(**f["metrics"]),
-            time=f["time"],
-            model_params=f["model_params"],
-        )
-        for f in raw.get("fold_results", [])
-    ]
-
-    return TuningRecord(**raw)
+    """Load the typed tuning record from a versioned MLflow CV artifact."""
+    return cv_result_from_json(path.read_text(encoding="utf-8")).tuning_result
 
 
 # ── Data wrangling ──────────────────────────────────────────────────────────
