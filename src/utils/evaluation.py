@@ -4,18 +4,18 @@ from src.config import config
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.metrics import (
-    AggregatedFinalTestMetrics,
     BootstrapClassificationMetrics,
+    BootstrapFinalTestMetrics,
     BootstrapRegressionMetrics,
     FinalTestMetrics,
 )
 from src.schemas.run_records import TestSetEvaluationRecord
 from src.utils.evaluation_utils import (
-    classification_prediction_batch,
+    evaluate_bootstrap_classification,
+    evaluate_bootstrap_regression,
     evaluate_classification_predictions,
     evaluate_regression_predictions,
 )
-from src.utils.logger import logger
 
 
 def evaluate_trained_model(
@@ -62,58 +62,33 @@ def _evaluate_test_set(
 def _evaluate_bootstrap_classification(
     predictions: np.ndarray,
     y_true: np.ndarray,
-    n_bootstrap: int = 5000,
+    n_bootstrap: int = 10000,
     rng: np.random.Generator | None = None,
 ) -> BootstrapClassificationMetrics:
-    logger.info("Started Bootstrap Classification Eval")
-    if n_bootstrap < 1:
-        raise ValueError("n_bootstrap must be at least 1")
-
-    metrics = evaluate_classification_predictions(predictions, y_true)
-    batch = classification_prediction_batch(predictions, y_true)
     rng = rng or np.random.default_rng()
-    indices_by_class = [np.flatnonzero(batch.y_true == label) for label in range(batch.n_classes)]
+    metrics, lower, upper = evaluate_bootstrap_classification(
+        predictions,
+        y_true,
+        n_bootstrap,
+        rng,
+    )
+    roc_auc_lower, prc_auc_lower, f1_lower, accuracy_lower, sensitivity_lower, precision_lower = lower
+    roc_auc_upper, prc_auc_upper, f1_upper, accuracy_upper, sensitivity_upper, precision_upper = upper
 
-    bootstrap_scores = {
-        "roc_auc": np.empty(n_bootstrap),
-        "prc_auc": np.empty(n_bootstrap),
-        "f1": np.empty(n_bootstrap),
-        "accuracy": np.empty(n_bootstrap),
-        "sensitivity": np.empty(n_bootstrap),
-        "precision": np.empty(n_bootstrap),
-    }
-
-    for i in range(n_bootstrap):
-        sampled_indices = np.concatenate(
-            [rng.choice(indices, size=len(indices), replace=True) for indices in indices_by_class]
-        )
-        sampled_metrics = evaluate_classification_predictions(
-            batch.probabilities[sampled_indices],
-            batch.y_true[sampled_indices],
-        )
-        for name, values in bootstrap_scores.items():
-            score = sampled_metrics.scores.get(name)
-            if score is None:
-                raise ValueError(f"Bootstrap metric {name!r} is unavailable")
-            values[i] = score
-
-    confidence_intervals = {name: _percentile_ci(values) for name, values in bootstrap_scores.items()}
-
-    logger.info("Finished Bootstrap Classification Eval")
     return BootstrapClassificationMetrics(
         metrics=metrics,
-        ci_95_roc_auc_lower=confidence_intervals["roc_auc"][0],
-        ci_95_roc_auc_upper=confidence_intervals["roc_auc"][1],
-        ci_95_prc_auc_lower=confidence_intervals["prc_auc"][0],
-        ci_95_prc_auc_upper=confidence_intervals["prc_auc"][1],
-        ci_95_f1_lower=confidence_intervals["f1"][0],
-        ci_95_f1_upper=confidence_intervals["f1"][1],
-        ci_95_accuracy_lower=confidence_intervals["accuracy"][0],
-        ci_95_accuracy_upper=confidence_intervals["accuracy"][1],
-        ci_95_sensitivity_lower=confidence_intervals["sensitivity"][0],
-        ci_95_sensitivity_upper=confidence_intervals["sensitivity"][1],
-        ci_95_precision_lower=confidence_intervals["precision"][0],
-        ci_95_precision_upper=confidence_intervals["precision"][1],
+        ci_95_roc_auc_lower=float(roc_auc_lower),
+        ci_95_roc_auc_upper=float(roc_auc_upper),
+        ci_95_prc_auc_lower=float(prc_auc_lower),
+        ci_95_prc_auc_upper=float(prc_auc_upper),
+        ci_95_f1_lower=float(f1_lower),
+        ci_95_f1_upper=float(f1_upper),
+        ci_95_accuracy_lower=float(accuracy_lower),
+        ci_95_accuracy_upper=float(accuracy_upper),
+        ci_95_sensitivity_lower=float(sensitivity_lower),
+        ci_95_sensitivity_upper=float(sensitivity_upper),
+        ci_95_precision_lower=float(precision_lower),
+        ci_95_precision_upper=float(precision_upper),
         n_bootstrap=n_bootstrap,
     )
 
@@ -121,42 +96,29 @@ def _evaluate_bootstrap_classification(
 def _evaluate_bootstrap_regression(
     predictions: np.ndarray,
     y_true: np.ndarray,
-    n_bootstrap: int = 5000,
+    n_bootstrap: int = 10000,
     rng: np.random.Generator | None = None,
 ) -> BootstrapRegressionMetrics:
-    if n_bootstrap < 1:
-        raise ValueError("n_bootstrap must be at least 1")
-
-    predictions = np.asarray(predictions)
-    y_true = np.asarray(y_true)
-    metrics = evaluate_regression_predictions(predictions=predictions, true_values=y_true)
     rng = rng or np.random.default_rng()
-
-    bootstrap_scores = {
-        "r2": np.empty(n_bootstrap),
-        "mae": np.empty(n_bootstrap),
-        "mse": np.empty(n_bootstrap),
-        "rmse": np.empty(n_bootstrap),
-    }
-
-    for i in range(n_bootstrap):
-        indices = rng.choice(len(predictions), len(predictions), replace=True)
-        sampled_metrics = evaluate_regression_predictions(predictions[indices], y_true[indices])
-        for name, values in bootstrap_scores.items():
-            values[i] = sampled_metrics.scores[name]
-
-    confidence_intervals = {name: _percentile_ci(values) for name, values in bootstrap_scores.items()}
+    metrics, lower, upper = evaluate_bootstrap_regression(
+        predictions,
+        y_true,
+        n_bootstrap,
+        rng,
+    )
+    r2_lower, mae_lower, mse_lower, rmse_lower = lower
+    r2_upper, mae_upper, mse_upper, rmse_upper = upper
 
     return BootstrapRegressionMetrics(
         metrics=metrics,
-        ci_95_r2_lower=confidence_intervals["r2"][0],
-        ci_95_r2_upper=confidence_intervals["r2"][1],
-        ci_95_mae_lower=confidence_intervals["mae"][0],
-        ci_95_mae_upper=confidence_intervals["mae"][1],
-        ci_95_mse_lower=confidence_intervals["mse"][0],
-        ci_95_mse_upper=confidence_intervals["mse"][1],
-        ci_95_rmse_lower=confidence_intervals["rmse"][0],
-        ci_95_rmse_upper=confidence_intervals["rmse"][1],
+        ci_95_r2_lower=float(r2_lower),
+        ci_95_r2_upper=float(r2_upper),
+        ci_95_mae_lower=float(mae_lower),
+        ci_95_mae_upper=float(mae_upper),
+        ci_95_mse_lower=float(mse_lower),
+        ci_95_mse_upper=float(mse_upper),
+        ci_95_rmse_lower=float(rmse_lower),
+        ci_95_rmse_upper=float(rmse_upper),
         n_bootstrap=n_bootstrap,
     )
 
@@ -165,9 +127,9 @@ def evaluate_trained_model_bootstrap(
     trained_model,
     task_type: TaskType,
     data: DatasetBundle,
-    n_bootstrap: int = 5000,
+    n_bootstrap: int = 10000,
     random_state: int | None = config.seed,
-) -> AggregatedFinalTestMetrics:
+) -> BootstrapFinalTestMetrics:
     mimic_prediction = trained_model.predict(data.test_mimic.X)
     tudd_prediction = trained_model.predict(data.test_tudd.X)
     rng = np.random.default_rng(random_state)
@@ -199,14 +161,9 @@ def evaluate_trained_model_bootstrap(
             rng=rng,
         )
 
-    return AggregatedFinalTestMetrics(
+    return BootstrapFinalTestMetrics(
         mimic_test=mimic_bootstrap_metrics,
         mimic_prediction_time=mimic_prediction.seconds,
         tudd_test=tudd_bootstrap_metrics,
         tudd_prediction_time=tudd_prediction.seconds,
     )
-
-
-def _percentile_ci(values: np.ndarray) -> tuple[float, float]:
-    lower, upper = np.percentile(values, [2.5, 97.5])
-    return float(lower), float(upper)

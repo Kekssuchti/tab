@@ -2,7 +2,7 @@
 
 import re
 
-TRACKING_SCHEMA_VERSION = "1"
+TRACKING_SCHEMA_VERSION = "2"
 
 TAG_RUN_TYPE = "run_type"
 TAG_TRACKING_SCHEMA_VERSION = "tracking_schema_version"
@@ -55,10 +55,6 @@ def test_score_metric(dataset: str, metric: str) -> str:
     return f"test.{dataset}.{metric}"
 
 
-def test_mean_score_metric(dataset: str, metric: str) -> str:
-    return f"test.{dataset}.mean_{metric}"
-
-
 def test_score_ci_metric(dataset: str, metric: str, bound: str) -> str:
     return f"test.{dataset}.ci_95_{metric}_{bound}"
 
@@ -82,8 +78,6 @@ def parse_test_score_metric(name: str, dataset: str) -> str | None:
     suffix = name.removeprefix(prefix)
     if suffix == "predict_time":
         return None
-    if suffix.startswith("mean_"):
-        return suffix.removeprefix("mean_")
     ci_match = _TEST_SCORE_CI_PATTERN.fullmatch(suffix)
     return ci_match.group("metric") if ci_match else suffix
 

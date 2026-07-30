@@ -35,7 +35,6 @@ from src.mlflow.tracking_contract import (
     TRACKING_SCHEMA_VERSION,
     dataset_row_count_param,
     test_delta_metric,
-    test_mean_score_metric,
     test_n_classes_param,
     test_predict_time_metric,
     test_score_ci_metric,
@@ -44,13 +43,11 @@ from src.mlflow.tracking_contract import (
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import ClassificationTargetSummary, RegressionTargetSummary
 from src.schemas.metrics import (
-    AggregatedFinalTestMetrics,
     BootstrapClassificationMetrics,
+    BootstrapFinalTestMetrics,
     BootstrapRegressionMetrics,
     ClassificationMetrics,
-    ClassificationMetricsAggregate,
     RegressionMetrics,
-    RegressionMetricsAggregate,
 )
 from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.run_records import (
@@ -500,11 +497,8 @@ def _model_run_params(
         run_params[f"model.best_params.{key}"] = _param_value(value)
 
     final_metrics = tuning_result.final_test_metrics.mimic_test
-    if isinstance(final_metrics, BootstrapClassificationMetrics | BootstrapRegressionMetrics):
-        run_params["model.final_evaluation.method"] = "bootstrap"
-        run_params["model.final_evaluation.n_bootstrap"] = _param_value(final_metrics.n_bootstrap)
-    else:
-        run_params["model.final_evaluation.method"] = "cross_validated_models"
+    run_params["model.final_evaluation.method"] = "bootstrap"
+    run_params["model.final_evaluation.n_bootstrap"] = _param_value(final_metrics.n_bootstrap)
     return run_params
 
 
@@ -558,7 +552,7 @@ def _model_metric_logs(
     tuning_result = training_result.tuning_result
     if tuning_result is not None:
         metrics.extend(_metric_logs_from_values(((METRIC_CV_TOTAL_TIME, tuning_result.total_time),)))
-        metrics.extend(_cv_final_test_metric_logs(tuning_result.final_test_metrics))
+        metrics.extend(_bootstrap_final_test_metric_logs(tuning_result.final_test_metrics))
 
     for test_result in model_result.test_results:
         dataset_name = test_result.dataset_name
@@ -604,29 +598,20 @@ def _test_metric_logs(
     )
 
 
-def _cv_final_test_metric_logs(
-    metrics: AggregatedFinalTestMetrics,
+def _bootstrap_final_test_metric_logs(
+    metrics: BootstrapFinalTestMetrics,
 ) -> tuple[MetricLog, ...]:
     return (
-        *_cv_aggregate_metric_logs("mimic", metrics.mimic_test),
-        *_cv_aggregate_metric_logs("tudd", metrics.tudd_test),
+        *_bootstrap_metric_logs("mimic", metrics.mimic_test),
+        *_bootstrap_metric_logs("tudd", metrics.tudd_test),
     )
 
 
-def _cv_aggregate_metric_logs(
+def _bootstrap_metric_logs(
     dataset: str,
-    metrics: (
-        ClassificationMetricsAggregate
-        | RegressionMetricsAggregate
-        | BootstrapClassificationMetrics
-        | BootstrapRegressionMetrics
-    ),
+    metrics: BootstrapClassificationMetrics | BootstrapRegressionMetrics,
 ) -> tuple[MetricLog, ...]:
-    is_bootstrap = isinstance(metrics, BootstrapClassificationMetrics | BootstrapRegressionMetrics)
-    metric_name = test_score_metric if is_bootstrap else test_mean_score_metric
-    values = [
-        (metric_name(dataset, name.removeprefix("mean_")), value) for name, value in metrics.scores.items()
-    ]
+    values = [(test_score_metric(dataset, name), value) for name, value in metrics.scores.items()]
     for name, (lower, upper) in metrics.confidence_intervals.items():
         values.extend(
             (

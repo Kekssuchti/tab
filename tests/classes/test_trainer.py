@@ -7,8 +7,8 @@ from src.classes.trainer import Trainer
 from src.interfaces.model_interface import TimedPrediction
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.metrics import (
-    AggregatedFinalTestMetrics,
     BootstrapClassificationMetrics,
+    BootstrapFinalTestMetrics,
     ClassificationMetrics,
 )
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
@@ -33,11 +33,6 @@ def _preprocess_pipeline():
         "default_imputer": ImputerConfig(imputation_method="none"),
         "default_scaler": ScalerEncoderConfig(type="none"),
     }
-
-
-@pytest.fixture(autouse=True)
-def _use_cross_validated_final_evaluation(monkeypatch):
-    monkeypatch.setattr(trainer_module.config, "eval_bootstrap", False)
 
 
 def _bundle(X, y):
@@ -85,7 +80,7 @@ class _FitFailureAdapter:
         type(self).releases += 1
 
 
-def _bootstrap_final_metrics() -> AggregatedFinalTestMetrics:
+def _bootstrap_final_metrics() -> BootstrapFinalTestMetrics:
     point_metrics = ClassificationMetrics(
         roc_auc=0.5,
         prc_auc=0.5,
@@ -112,7 +107,7 @@ def _bootstrap_final_metrics() -> AggregatedFinalTestMetrics:
         ci_95_precision_upper=0.6,
         n_bootstrap=100,
     )
-    return AggregatedFinalTestMetrics(
+    return BootstrapFinalTestMetrics(
         mimic_test=bootstrap_metrics,
         mimic_prediction_time=0.1,
         tudd_test=bootstrap_metrics,
@@ -144,8 +139,8 @@ def test_trainer_records_final_metrics_after_training():
     assert result.fit_time >= 0
     assert not hasattr(result, "trained_model")
     assert result.tuning_result is not None
-    assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
-    assert result.tuning_result.final_test_metrics.tudd_test.mean_accuracy >= 0.0
+    assert result.tuning_result.final_test_metrics.mimic_test.accuracy >= 0.0
+    assert result.tuning_result.final_test_metrics.tudd_test.accuracy >= 0.0
 
 
 def test_trainer_uses_one_full_training_fit_for_bootstrap_evaluation(monkeypatch):
@@ -171,7 +166,6 @@ def test_trainer_uses_one_full_training_fit_for_bootstrap_evaluation(monkeypatch
         fit_calls += 1
         return _ReleasableFoldModel(), 0.25
 
-    monkeypatch.setattr(trainer_module.config, "eval_bootstrap", True)
     monkeypatch.setattr(trainer, "_fit_model", _fit_model)
     monkeypatch.setattr(
         trainer_module,
@@ -220,7 +214,7 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
     }
     assert len(result.tuning_result.fold_results) == 4
     assert all("accuracy" in fold.metrics.scores for fold in result.tuning_result.fold_results)
-    assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
+    assert result.tuning_result.final_test_metrics.mimic_test.accuracy >= 0.0
 
 
 def test_trainer_can_tune_with_optuna_categorical_grid():
@@ -251,7 +245,7 @@ def test_trainer_can_tune_with_optuna_categorical_grid():
     }
     assert len(result.tuning_result.fold_results) == 4
     assert set(result.tuning_result.best_params) == {"C"}
-    assert result.tuning_result.final_test_metrics.tudd_test.mean_accuracy >= 0.0
+    assert result.tuning_result.final_test_metrics.tudd_test.accuracy >= 0.0
 
 
 def test_trainer_can_tune_with_mixed_optuna_search_space():
@@ -332,7 +326,7 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
 
     assert result.tuned
     assert _ReleasableFoldModel.peak == 1
-    assert _ReleasableFoldModel.releases == 6
+    assert _ReleasableFoldModel.releases == 5
     assert _ReleasableFoldModel.active == 0
 
 
@@ -362,7 +356,7 @@ def test_trainer_uses_model_specific_preprocessing_override():
 
     assert result.model_name == "logistic-regression"
     assert result.tuning_result is not None
-    assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
+    assert result.tuning_result.final_test_metrics.mimic_test.accuracy >= 0.0
 
 
 def test_trainer_encodes_categorical_columns_before_xgboost():
@@ -387,7 +381,7 @@ def test_trainer_encodes_categorical_columns_before_xgboost():
 
     assert result.model_name == "xgboost"
     assert result.tuning_result is not None
-    assert result.tuning_result.final_test_metrics.mimic_test.mean_accuracy >= 0.0
+    assert result.tuning_result.final_test_metrics.mimic_test.accuracy >= 0.0
 
 
 def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
@@ -417,7 +411,7 @@ def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
     def _fit_model(model_params, spec, params, X_train, y_train):
         nonlocal fit_calls
         fit_calls += 1
-        if fit_calls <= 2:
+        if fit_calls <= 4:
             return _ReleasableFoldModel(), 0.0
         return _ReleasablePredictFailureModel(), 0.0
 
@@ -433,7 +427,7 @@ def test_trainer_releases_final_model_when_training_metrics_fail(monkeypatch):
     assert _ReleasablePredictFailureModel.peak == 1
     assert _ReleasablePredictFailureModel.releases == 1
     assert _ReleasablePredictFailureModel.active == 0
-    assert _ReleasableFoldModel.releases == 2
+    assert _ReleasableFoldModel.releases == 4
 
 
 def test_trainer_releases_adapter_when_fit_fails():

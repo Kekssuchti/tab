@@ -12,9 +12,7 @@ from src.schemas.metrics import (
     BootstrapClassificationMetrics,
     BootstrapRegressionMetrics,
     ClassificationMetrics,
-    ClassificationMetricsAggregate,
     RegressionMetrics,
-    RegressionMetricsAggregate,
 )
 from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.run_records import PipelineRunRecord, TuningRecord
@@ -77,8 +75,10 @@ def validate_tuning_record(tuning: TuningRecord, task_type: TaskType, *, path: s
     for index, fold in enumerate(tuning.fold_results):
         _validate_point_metrics(fold.metrics, task_type, path=f"{path}.fold_results[{index}].metrics")
     final = tuning.final_test_metrics
-    _validate_aggregate_metrics(final.mimic_test, task_type, path=f"{path}.final_test_metrics.mimic_test")
-    _validate_aggregate_metrics(final.tudd_test, task_type, path=f"{path}.final_test_metrics.tudd_test")
+    _validate_bootstrap_metrics(final.mimic_test, task_type, path=f"{path}.final_test_metrics.mimic_test")
+    _validate_bootstrap_metrics(final.tudd_test, task_type, path=f"{path}.final_test_metrics.tudd_test")
+    if final.mimic_test.n_bootstrap != final.tudd_test.n_bootstrap:
+        raise ValueError(f"{path}.final_test_metrics bootstrap counts must match")
 
 
 def validate_tuning_settings(scoring: str, method: str, task_type: TaskType, *, path: str) -> None:
@@ -119,11 +119,10 @@ def _validate_point_metrics(metrics: object, task_type: TaskType, *, path: str) 
         raise ValueError(f"{path} does not match task type {task_type!r}")
 
 
-def _validate_aggregate_metrics(metrics: object, task_type: TaskType, *, path: str) -> None:
-    expected = (
-        (ClassificationMetricsAggregate, BootstrapClassificationMetrics)
-        if task_type == "classification"
-        else (RegressionMetricsAggregate, BootstrapRegressionMetrics)
-    )
+def _validate_bootstrap_metrics(metrics: object, task_type: TaskType, *, path: str) -> None:
+    expected = BootstrapClassificationMetrics if task_type == "classification" else BootstrapRegressionMetrics
     if not isinstance(metrics, expected):
         raise ValueError(f"{path} does not match task type {task_type!r}")
+    _validate_point_metrics(metrics.metrics, task_type, path=f"{path}.metrics")
+    if metrics.n_bootstrap < 1:
+        raise ValueError(f"{path}.n_bootstrap must be at least 1")

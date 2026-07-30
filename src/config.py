@@ -31,7 +31,6 @@ class Config(BaseSettings):
 
     dir_external_limix: Path = dir_root / "external" / "limix"
     dir_external_tabfm: Path = dir_root / "external" / "tabfm"
-    eval_bootstrap: bool = Field(default=True)
 
 
 @lru_cache

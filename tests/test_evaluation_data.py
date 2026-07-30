@@ -76,12 +76,12 @@ def _log_pipeline(
                     mlflow.log_param("model.tuning.best_params", '{"C": 1.0}')
                     mlflow.log_metrics(
                         {
-                            "test.mimic.mean_accuracy": 0.9,
-                            "test.mimic.mean_roc_auc": 0.8,
+                            "test.mimic.accuracy": 0.9,
+                            "test.mimic.roc_auc": 0.8,
                             "test.mimic.ci_95_accuracy_lower": 0.85,
                             "test.mimic.ci_95_accuracy_upper": 0.95,
-                            "test.tudd.mean_accuracy": 0.7,
-                            "test.tudd.mean_roc_auc": 0.75,
+                            "test.tudd.accuracy": 0.7,
+                            "test.tudd.roc_auc": 0.75,
                             "test.tudd.ci_95_accuracy_lower": 0.65,
                             "test.tudd.ci_95_accuracy_upper": 0.75,
                             "cv.total_time": 4.0,

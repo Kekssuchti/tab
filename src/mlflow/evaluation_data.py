@@ -31,7 +31,6 @@ from src.mlflow.tracking_contract import (
     dataset_row_count_param,
     parse_test_delta_metric,
     parse_test_score_metric,
-    test_mean_score_metric,
     test_n_classes_param,
     test_predict_time_metric,
     test_score_ci_metric,
@@ -335,10 +334,7 @@ def _test_scores(
     }
     measurements = []
     for metric in sorted(metric_names):
-        mean_value = run.data.metrics.get(test_mean_score_metric(dataset, metric))
-        value = mean_value
-        if value is None:
-            value = run.data.metrics.get(test_score_metric(dataset, metric))
+        value = run.data.metrics.get(test_score_metric(dataset, metric))
         if value is None:
             continue
         lower = run.data.metrics.get(test_score_ci_metric(dataset, metric, "lower"))
@@ -351,7 +347,7 @@ def _test_scores(
                 dataset=dataset,
                 metric=metric,
                 value=value,
-                statistic="mean" if mean_value is not None else "point",
+                statistic="point",
                 ci_level=0.95 if lower is not None and upper is not None else None,
                 ci_lower=lower,
                 ci_upper=upper,

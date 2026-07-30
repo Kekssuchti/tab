@@ -30,13 +30,12 @@ from src.schemas.dataset_schemas import (
 )
 from src.schemas.pipeline_schemas import MLflowConfig, PipelineConfig
 from src.schemas.metrics import (
-    AggregatedFinalTestMetrics,
     BootstrapClassificationMetrics,
+    BootstrapFinalTestMetrics,
+    BootstrapRegressionMetrics,
     ClassificationMetrics,
-    ClassificationMetricsAggregate,
     FinalTestMetrics,
     RegressionMetrics,
-    RegressionMetricsAggregate,
 )
 from src.schemas.run_records import (
     FoldRecord,
@@ -48,7 +47,6 @@ from src.schemas.run_records import (
     TuningRecord,
 )
 from src.schemas.training_schemas import ModelConfig
-from src.utils.evaluation_utils import aggregate_classification_metrics, aggregate_regression_metrics
 
 
 def _metrics(value: float = 1.0) -> ClassificationMetrics:
@@ -64,6 +62,47 @@ def _metrics(value: float = 1.0) -> ClassificationMetrics:
     )
 
 
+def _bootstrap_classification_metrics(
+    value: float,
+    *,
+    lower: float | None = None,
+    upper: float | None = None,
+) -> BootstrapClassificationMetrics:
+    lower = value if lower is None else lower
+    upper = value if upper is None else upper
+    return BootstrapClassificationMetrics(
+        metrics=_metrics(value),
+        ci_95_roc_auc_lower=lower,
+        ci_95_roc_auc_upper=upper,
+        ci_95_prc_auc_lower=lower,
+        ci_95_prc_auc_upper=upper,
+        ci_95_f1_lower=lower,
+        ci_95_f1_upper=upper,
+        ci_95_accuracy_lower=lower,
+        ci_95_accuracy_upper=upper,
+        ci_95_sensitivity_lower=lower,
+        ci_95_sensitivity_upper=upper,
+        ci_95_precision_lower=lower,
+        ci_95_precision_upper=upper,
+        n_bootstrap=5000,
+    )
+
+
+def _bootstrap_regression_metrics(metrics: RegressionMetrics) -> BootstrapRegressionMetrics:
+    return BootstrapRegressionMetrics(
+        metrics=metrics,
+        ci_95_r2_lower=metrics.r2 - 0.1,
+        ci_95_r2_upper=metrics.r2 + 0.1,
+        ci_95_mae_lower=metrics.mae - 0.1,
+        ci_95_mae_upper=metrics.mae + 0.1,
+        ci_95_mse_lower=metrics.mse - 0.1,
+        ci_95_mse_upper=metrics.mse + 0.1,
+        ci_95_rmse_lower=metrics.rmse - 0.1,
+        ci_95_rmse_upper=metrics.rmse + 0.1,
+        n_bootstrap=5000,
+    )
+
+
 def _tuning_result() -> TuningRecord:
     cv0_fold0 = _metrics(0.7)
     cv0_fold1 = _metrics(0.8)
@@ -72,10 +111,10 @@ def _tuning_result() -> TuningRecord:
     return TuningRecord(
         best_params={"C": 1.0},
         scoring="accuracy",
-        final_test_metrics=AggregatedFinalTestMetrics(
-            mimic_test=aggregate_classification_metrics([_metrics(0.9), _metrics(1.0)]),
+        final_test_metrics=BootstrapFinalTestMetrics(
+            mimic_test=_bootstrap_classification_metrics(0.95, lower=0.9, upper=1.0),
             mimic_prediction_time=0.03,
-            tudd_test=aggregate_classification_metrics([_metrics(0.9), _metrics(1.0)]),
+            tudd_test=_bootstrap_classification_metrics(0.95, lower=0.9, upper=1.0),
             tudd_prediction_time=0.04,
         ),
         fold_results=[
@@ -89,27 +128,11 @@ def _tuning_result() -> TuningRecord:
 
 def _bootstrap_result() -> PipelineRunRecord:
     result = _result(tuned=True)
-    point_metrics = _metrics(0.85)
-    bootstrap_metrics = BootstrapClassificationMetrics(
-        metrics=point_metrics,
-        ci_95_roc_auc_lower=0.75,
-        ci_95_roc_auc_upper=0.95,
-        ci_95_prc_auc_lower=0.75,
-        ci_95_prc_auc_upper=0.95,
-        ci_95_f1_lower=0.75,
-        ci_95_f1_upper=0.95,
-        ci_95_accuracy_lower=0.75,
-        ci_95_accuracy_upper=0.95,
-        ci_95_sensitivity_lower=0.75,
-        ci_95_sensitivity_upper=0.95,
-        ci_95_precision_lower=0.75,
-        ci_95_precision_upper=0.95,
-        n_bootstrap=5000,
-    )
+    bootstrap_metrics = _bootstrap_classification_metrics(0.85, lower=0.75, upper=0.95)
     training_result = result.model_runs[0].training_result
     tuning_result = replace(
         training_result.tuning_result,
-        final_test_metrics=AggregatedFinalTestMetrics(
+        final_test_metrics=BootstrapFinalTestMetrics(
             mimic_test=bootstrap_metrics,
             mimic_prediction_time=0.03,
             tudd_test=bootstrap_metrics,
@@ -256,17 +279,15 @@ def _regression_result(*, tuned: bool = True) -> PipelineRunRecord:
     tudd_metrics = RegressionMetrics(r2=0.6, mae=0.4, mse=0.3, rmse=0.5)
     tuning_result = None
     if tuned:
+        mimic_bootstrap = RegressionMetrics(r2=0.75, mae=0.25, mse=0.15, rmse=0.35)
+        tudd_bootstrap = RegressionMetrics(r2=0.55, mae=0.45, mse=0.35, rmse=0.55)
         tuning_result = TuningRecord(
             best_params={"alpha": 0.5},
             scoring="rmse",
-            final_test_metrics=AggregatedFinalTestMetrics(
-                mimic_test=aggregate_regression_metrics(
-                    [mimic_metrics, RegressionMetrics(r2=0.7, mae=0.3, mse=0.2, rmse=0.4)]
-                ),
+            final_test_metrics=BootstrapFinalTestMetrics(
+                mimic_test=_bootstrap_regression_metrics(mimic_bootstrap),
                 mimic_prediction_time=0.03,
-                tudd_test=aggregate_regression_metrics(
-                    [tudd_metrics, RegressionMetrics(r2=0.5, mae=0.5, mse=0.4, rmse=0.6)]
-                ),
+                tudd_test=_bootstrap_regression_metrics(tudd_bootstrap),
                 tudd_prediction_time=0.04,
             ),
             fold_results=[FoldRecord(0, 0, mimic_metrics, 0.01, {"alpha": 0.5})],
@@ -356,8 +377,8 @@ def test_pipeline_result_serialization_round_trips_to_typed_record():
     assert isinstance(result.model_runs[0].training_result.tuning_result, TuningRecord)
     assert isinstance(result.model_runs[0].training_result.tuning_result.fold_results[0], FoldRecord)
     assert isinstance(result.model_runs[0].training_result.tuning_result.fold_results[0].metrics, ClassificationMetrics)
-    aggregate = result.model_runs[0].training_result.tuning_result.final_test_metrics.mimic_test
-    assert isinstance(aggregate, ClassificationMetricsAggregate)
+    bootstrap = result.model_runs[0].training_result.tuning_result.final_test_metrics.mimic_test
+    assert isinstance(bootstrap, BootstrapClassificationMetrics)
     assert isinstance(result.model_runs[0].evaluation, ModelEvaluationRecord)
     assert isinstance(result.model_runs[0].evaluation.test_results[0], EvaluationRecord)
     np.testing.assert_array_equal(
@@ -365,8 +386,8 @@ def test_pipeline_result_serialization_round_trips_to_typed_record():
         source.model_runs[0].evaluation.test_results[0].metrics.confusion_matrix,
     )
     np.testing.assert_array_equal(
-        aggregate.mean_confusion_matrix,
-        source.model_runs[0].training_result.tuning_result.final_test_metrics.mimic_test.mean_confusion_matrix,
+        bootstrap.metrics.confusion_matrix,
+        source.model_runs[0].training_result.tuning_result.final_test_metrics.mimic_test.metrics.confusion_matrix,
     )
     assert restored.to_dict() == serialized
 
@@ -383,7 +404,7 @@ def test_regression_pipeline_result_round_trips_to_typed_records():
     assert training.task_type == "regression"
     assert isinstance(training.tuning_result, TuningRecord)
     assert isinstance(training.tuning_result.fold_results[0].metrics, RegressionMetrics)
-    assert isinstance(training.tuning_result.final_test_metrics.mimic_test, RegressionMetricsAggregate)
+    assert isinstance(training.tuning_result.final_test_metrics.mimic_test, BootstrapRegressionMetrics)
     assert isinstance(restored.model_runs[0].evaluation.test_results[0].metrics, RegressionMetrics)
     assert pipeline_result_to_dict(restored) == serialized
 
@@ -452,6 +473,17 @@ def test_pipeline_serialization_rejects_task_summary_and_metric_family_mismatche
     )
     with pytest.raises(ValueError, match="does not match task type"):
         pipeline_result_to_dict(wrong_metrics)
+
+    wrong_bootstrap = _result(tuned=True)
+    tuning_result = wrong_bootstrap.model_runs[0].training_result.tuning_result
+    final_metrics = tuning_result.final_test_metrics
+    regression_metrics = RegressionMetrics(r2=0.8, mae=0.2, mse=0.1, rmse=0.3)
+    tuning_result.final_test_metrics = replace(
+        final_metrics,
+        mimic_test=replace(final_metrics.mimic_test, metrics=regression_metrics),
+    )
+    with pytest.raises(ValueError, match="does not match task type"):
+        pipeline_result_to_dict(wrong_bootstrap)
 
     malformed_reader_payload = pipeline_result_to_dict(_result())
     malformed_reader_payload["pipeline_result"]["model_runs"][0]["training_result"]["task_type"] = "regression"
@@ -535,8 +567,8 @@ def test_observation_assembly_describes_parent_model_and_cv_runs():
     assert model_run.tags["status"] == "success"
     assert model_run.params["model.tuning.best_params"] == '{"C": 1.0}'
     assert _metric_value(model_run.metrics, "test.mimic_minus_tudd.accuracy") == 0.0
-    assert _metric_value(model_run.metrics, "test.mimic.mean_accuracy") == 0.95
-    assert all(metric.name != "test.mimic.accuracy" for metric in model_run.metrics)
+    assert _metric_value(model_run.metrics, "test.mimic.accuracy") == 0.95
+    assert model_run.params["model.final_evaluation.method"] == "bootstrap"
 
     cv0, cv1 = model_run.children
     assert cv0.run_name == "logistic-regression/cv00"
@@ -575,7 +607,6 @@ def test_observation_logs_bootstrap_point_metrics_and_method():
     assert model_run.params["model.final_evaluation.n_bootstrap"] == "5000"
     assert _metric_value(model_run.metrics, "test.mimic.accuracy") == pytest.approx(0.85)
     assert _metric_value(model_run.metrics, "test.mimic.ci_95_accuracy_lower") == pytest.approx(0.75)
-    assert all(metric.name != "test.mimic.mean_accuracy" for metric in model_run.metrics)
 
 
 def test_observation_only_logs_class_count_for_classification_metrics():
@@ -599,7 +630,7 @@ def test_observation_only_logs_class_count_for_classification_metrics():
     assert all("class_balance" not in key for key in observation.params)
 
 
-def test_observation_logs_regression_aggregate_metrics_and_candidate():
+def test_observation_logs_regression_bootstrap_metrics_and_candidate():
     observation = assemble_pipeline_observation(
         _params(
             "sqlite:///unused",
@@ -611,8 +642,8 @@ def test_observation_logs_regression_aggregate_metrics_and_candidate():
     )
     model_run = observation.children[0]
 
-    assert _metric_value(model_run.metrics, "test.mimic.mean_r2") == pytest.approx(0.75)
-    assert _metric_value(model_run.metrics, "test.mimic.mean_rmse") == pytest.approx(0.35)
+    assert _metric_value(model_run.metrics, "test.mimic.r2") == pytest.approx(0.75)
+    assert _metric_value(model_run.metrics, "test.mimic.rmse") == pytest.approx(0.35)
     assert _metric_value(model_run.metrics, "test.mimic.ci_95_rmse_lower") <= 0.35
     assert _metric_value(model_run.metrics, "test.mimic.ci_95_rmse_upper") >= 0.35
     assert model_run.children[0].tags["task_type"] == "regression"
@@ -687,9 +718,8 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
     assert model.data.tags["pipeline_mlflow_run_id"] == parent.info.run_id
     assert model.data.tags["model_mlflow_run_id"] == model.info.run_id
     assert model.data.metrics["test.mimic_minus_tudd.accuracy"] == 0.0
-    assert model.data.metrics["test.mimic.mean_accuracy"] == 0.95
-    assert "test.mimic.accuracy" not in model.data.metrics
-    assert "test.mimic.roc_auc" not in model.data.metrics
+    assert model.data.metrics["test.mimic.accuracy"] == 0.95
+    assert model.data.metrics["test.mimic.roc_auc"] == 0.95
     assert cv0.data.tags["mlflow.parentRunId"] == model.info.run_id
     assert cv0.data.tags["candidate_rank"] == "2"
     assert cv0.data.metrics["cv.mean.accuracy"] == 0.75
@@ -772,8 +802,7 @@ def test_mlflow_logger_appends_model_runs_incrementally(tmp_path):
     assert parent.data.tags["pipeline_id"] == "test-pipeline-id"
     assert parent.data.metrics["pipeline.total_time"] == 0.5
     assert model.data.tags["mlflow.parentRunId"] == parent.info.run_id
-    assert model.data.metrics["test.mimic.mean_accuracy"] == 0.95
-    assert "test.mimic.accuracy" not in model.data.metrics
+    assert model.data.metrics["test.mimic.accuracy"] == 0.95
 
     client = mlflow.MlflowClient(tracking_uri=tracking_uri)
     artifact_names = {artifact.path for artifact in client.list_artifacts(parent.info.run_id)}

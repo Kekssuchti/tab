@@ -7,17 +7,14 @@ import numpy as np
 from sklearn.model_selection import KFold, StratifiedKFold
 
 from src.classes.preprocessor import Preprocessor
-from src.config import config
 from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle
-from src.schemas.metrics import FinalTestMetrics
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 from src.schemas.training_schemas import ModelConfig, TuningMethod
-from src.utils.evaluation import evaluate_trained_model, evaluate_trained_model_bootstrap
+from src.utils.evaluation import evaluate_trained_model_bootstrap
 from src.utils.evaluation_utils import (
-    aggregate_final_test_metrics,
     classification_score,
     evaluate_classification_predictions,
 )
@@ -161,7 +158,6 @@ class Trainer:
             model_spec,
             data,
             evaluations,
-            folds=folds,
             method="grid",
         )
 
@@ -236,7 +232,6 @@ class Trainer:
             model_spec,
             data,
             evaluations,
-            folds=folds,
             method="optuna",
         )
 
@@ -302,21 +297,17 @@ class Trainer:
         model_spec: ModelSpec,
         data: DatasetBundle,
         evaluations: list[_CandidateEvaluation],
-        folds,
         *,
         method: TuningMethod,
     ) -> ModelTrainingResult:
         """
-        Fits the best found params for a model to each fold and evaluates it against the common test sets.
-        Results get consolidated into a single `ModelTrainingResult`.
-        This includes mean scores for all metrics and their 95% confidence intervals.
+        Fits the best parameters on all training data and bootstraps the held-out test predictions.
 
         Args:
             model_config: The model configuration to fit.
             model_spec: The model spec to use for fitting.
             data: The dataset bundle to use for training and evaluation.
             evaluations: The candidate evaluations to consolidate.
-            folds: The folds used to find the best parameters.
             method: The tuning method to use.
 
         Returns:
@@ -339,55 +330,22 @@ class Trainer:
 
         logger.info(f"CV Done. Best params: {best_params}")
         base_X_train, base_y_train = _training_data(data)
-        sub_model_results: list[FinalTestMetrics] = []
-        final_fit_time = 0.0
-        # here we use bohlens method to fit the best model on each fold
-        # and predict with each the test data to get more robust evaluations
-
-        if config.eval_bootstrap:
-            trained_model = None
-            try:
-                trained_model, fit_time = self._fit_model(
-                    model_config,
-                    model_spec,
-                    best_params,
-                    base_X_train,
-                    base_y_train,
-                )
-                final_fit_time = fit_time
-                test_metrics = evaluate_trained_model_bootstrap(
-                    trained_model=trained_model,
-                    data=data,
-                    task_type=self.task_type,
-                )
-            finally:
-                release_model(trained_model)
-        else:
-            for train_indices, _ in folds:
-                trained_sub_model = None
-                try:
-                    fold_X_train = self._take_rows(base_X_train, train_indices)
-                    fold_y_train = self._take_rows(base_y_train, train_indices)
-
-                    trained_sub_model, fit_time = self._fit_model(
-                        model_config,
-                        model_spec,
-                        best_params,
-                        fold_X_train,
-                        fold_y_train,
-                    )
-                    final_fit_time += fit_time
-
-                    sub_model_result = evaluate_trained_model(
-                        trained_model=trained_sub_model,
-                        data=data,
-                        task_type=self.task_type,
-                    )
-                    sub_model_results.append(sub_model_result)
-                finally:
-                    release_model(trained_sub_model)
-
-            test_metrics = aggregate_final_test_metrics(sub_model_results)
+        trained_model = None
+        try:
+            trained_model, final_fit_time = self._fit_model(
+                model_config,
+                model_spec,
+                best_params,
+                base_X_train,
+                base_y_train,
+            )
+            test_metrics = evaluate_trained_model_bootstrap(
+                trained_model=trained_model,
+                data=data,
+                task_type=self.task_type,
+            )
+        finally:
+            release_model(trained_model)
 
         tuning_result = TuningRecord(
             best_params=best_params,

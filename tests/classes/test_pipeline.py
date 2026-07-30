@@ -7,11 +7,11 @@ from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.classes import pipeline as pipeline_module
 from src.classes.pipeline import Pipeline
 from src.schemas.metrics import (
-    AggregatedFinalTestMetrics,
+    BootstrapClassificationMetrics,
+    BootstrapFinalTestMetrics,
     ClassificationMetrics,
 )
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
-from src.utils.evaluation_utils import aggregate_classification_metrics
 
 
 def _test_set(labels, signal=None):
@@ -34,8 +34,8 @@ def _metrics(value: float) -> ClassificationMetrics:
 
 
 def _tuned_training_result(model_name: str) -> ModelTrainingResult:
-    mimic = aggregate_classification_metrics([_metrics(1.0), _metrics(1.0)])
-    tudd = aggregate_classification_metrics([_metrics(0.0), _metrics(0.0)])
+    mimic = _bootstrap_metrics(1.0)
+    tudd = _bootstrap_metrics(0.0)
     mean_metrics = _metrics(1.0)
     return ModelTrainingResult(
         model_name=model_name,
@@ -45,7 +45,7 @@ def _tuned_training_result(model_name: str) -> ModelTrainingResult:
         tuning_result=TuningRecord(
             best_params={},
             scoring="accuracy",
-            final_test_metrics=AggregatedFinalTestMetrics(
+            final_test_metrics=BootstrapFinalTestMetrics(
                 mimic_test=mimic,
                 mimic_prediction_time=0.1,
                 tudd_test=tudd,
@@ -53,6 +53,25 @@ def _tuned_training_result(model_name: str) -> ModelTrainingResult:
             ),
             fold_results=[FoldRecord(0, 0, mean_metrics, 0.0, {})],
         ),
+    )
+
+
+def _bootstrap_metrics(value: float) -> BootstrapClassificationMetrics:
+    return BootstrapClassificationMetrics(
+        metrics=_metrics(value),
+        ci_95_roc_auc_lower=value,
+        ci_95_roc_auc_upper=value,
+        ci_95_prc_auc_lower=value,
+        ci_95_prc_auc_upper=value,
+        ci_95_f1_lower=value,
+        ci_95_f1_upper=value,
+        ci_95_accuracy_lower=value,
+        ci_95_accuracy_upper=value,
+        ci_95_sensitivity_lower=value,
+        ci_95_sensitivity_upper=value,
+        ci_95_precision_lower=value,
+        ci_95_precision_upper=value,
+        n_bootstrap=100,
     )
 
 
