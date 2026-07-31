@@ -195,6 +195,7 @@ def _(Trainer, dataset_params, model_config, task_type):
         task_type=task_type,
         default_imputer=dataset_params.imputer,
         default_scaler=dataset_params.scaler_encoder,
+        log_transform_target=dataset_params.log_transform_target,
     )
     return (trainer,)
 

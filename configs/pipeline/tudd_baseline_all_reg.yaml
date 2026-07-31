@@ -1,5 +1,6 @@
 dataset:
-  target: mortality
+  target: LOS
+  log_transform_target: true
   random_state: 1337
   train_size: 0.8
   train_on:
@@ -25,7 +26,7 @@ training:
     tuning:
       method: optuna
       search_space: good
-      scoring: roc_auc
+      scoring: rmse
       optuna:
         n_trials: 100
         sampler: tpe
@@ -40,7 +41,7 @@ training:
     tuning:
       method: optuna
       search_space: good
-      scoring: roc_auc
+      scoring: rmse
       optuna:
         n_trials: 100
         sampler: tpe
@@ -55,7 +56,7 @@ training:
     tuning:
       method: optuna
       search_space: default
-      scoring: roc_auc
+      scoring: rmse
       optuna:
         n_trials: 50
         sampler: tpe
@@ -66,24 +67,31 @@ training:
         shuffle: true
         random_state: 1337
 
-  - name: tabswift
-    preprocessing:
-      imputer:
-        imputation_method: mean
+  - name: tabpfn-3
     tuning:
       method: grid
       search_space: best
-      scoring: roc_auc
+      scoring: rmse
       cv:
         n_splits: 5
         shuffle: true
         random_state: 1337
 
-  - name: tabpfn-3
+  - name: tabpfn-2.5
     tuning:
       method: grid
-      search_space: best
-      scoring: roc_auc
+      search_space: best_2_5
+      scoring: rmse
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabpfn-2.6
+    tuning:
+      method: grid
+      search_space: best_2_6
+      scoring: rmse
       cv:
         n_splits: 5
         shuffle: true
@@ -93,7 +101,17 @@ training:
     tuning:
       method: grid
       search_space: best
-      scoring: roc_auc
+      scoring: rmse
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: limix-2m
+    tuning:
+      method: grid
+      search_space: best
+      scoring: rmse
       cv:
         n_splits: 5
         shuffle: true
@@ -103,7 +121,7 @@ training:
     tuning:
       method: grid
       search_space: best
-      scoring: roc_auc
+      scoring: rmse
       cv:
         n_splits: 5
         shuffle: true
@@ -116,7 +134,17 @@ training:
     tuning:
       method: grid
       search_space: best
-      scoring: roc_auc
+      scoring: rmse
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: mitra
+    tuning:
+      method: grid
+      search_space: best
+      scoring: rmse
       cv:
         n_splits: 5
         shuffle: true
@@ -129,7 +157,20 @@ training:
     tuning:
       method: grid
       search_space: best
-      scoring: roc_auc
+      scoring: rmse
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabswift
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: best
+      scoring: rmse
       cv:
         n_splits: 5
         shuffle: true
@@ -139,4 +180,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tudd_size_mortality
+  experiment_name: tab

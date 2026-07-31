@@ -106,7 +106,7 @@ def test_pipeline_records_do_not_own_live_models(monkeypatch):
             return SimpleNamespace()
 
     class _FakeTrainer:
-        def __init__(self, task_type, default_imputer, default_scaler):
+        def __init__(self, task_type, default_imputer, default_scaler, log_transform_target):
             self.task_type = task_type
 
         def validate_model_configs(self):
@@ -129,7 +129,9 @@ def test_pipeline_records_do_not_own_live_models(monkeypatch):
     pipeline.dataset = _FakeDataset()
     pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
-        dataset=SimpleNamespace(target="mortality", imputer=None, scaler_encoder=None),
+        dataset=SimpleNamespace(
+            target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False
+        ),
         training=(
             SimpleNamespace(name="model-a"),
             SimpleNamespace(name="model-b"),
@@ -158,7 +160,7 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
             return SimpleNamespace()
 
     class _FakeTrainer:
-        def __init__(self, task_type, default_imputer, default_scaler):
+        def __init__(self, task_type, default_imputer, default_scaler, log_transform_target):
             self.task_type = task_type
 
         def validate_model_configs(self):
@@ -178,7 +180,9 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
     pipeline.dataset = _FakeDataset()
     pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
-        dataset=SimpleNamespace(target="mortality", imputer=None, scaler_encoder=None),
+        dataset=SimpleNamespace(
+            target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False
+        ),
         training=(
             SimpleNamespace(name="model-a"),
             SimpleNamespace(name="model-b"),
@@ -210,7 +214,7 @@ def test_pipeline_records_evaluation_failure_and_continues(monkeypatch):
             return SimpleNamespace()
 
     class _FakeTrainer:
-        def __init__(self, task_type, default_imputer, default_scaler):
+        def __init__(self, task_type, default_imputer, default_scaler, log_transform_target):
             self.task_type = task_type
 
         def validate_model_configs(self):
@@ -227,7 +231,9 @@ def test_pipeline_records_evaluation_failure_and_continues(monkeypatch):
     pipeline.dataset = _FakeDataset()
     pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
-        dataset=SimpleNamespace(target="mortality", imputer=None, scaler_encoder=None),
+        dataset=SimpleNamespace(
+            target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False
+        ),
         training=(
             SimpleNamespace(name="model-a"),
             SimpleNamespace(name="model-b"),

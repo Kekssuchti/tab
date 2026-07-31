@@ -120,3 +120,40 @@ class PreprocessedModelAdapter(ModelAdapter):
         self.adapter = None
         self.model = None
         self.preprocess_pipeline = None
+
+
+class LogTargetModelAdapter(ModelAdapter):
+    """Train a regression adapter in log space and return predictions in original units."""
+
+    def __init__(self, adapter: ModelAdapter) -> None:
+        if adapter.task_type != "regression":
+            raise ValueError("Log target transformation is only supported for regression")
+        self.adapter = adapter
+        self.task_type = adapter.task_type
+        self.kwargs = adapter.kwargs
+        self.model = adapter.model
+
+    def fit(self, X_train, y_train) -> float:
+        targets = np.asarray(y_train, dtype=float)
+        if not np.all(np.isfinite(targets)) or np.any(targets <= 0):
+            raise ValueError("Log target transformation requires finite, positive targets")
+        return self.adapter.fit(X_train, np.log(targets))
+
+    def predict(self, X_test) -> TimedPrediction:
+        start = timer()
+        prediction = self.adapter.predict(X_test)
+        try:
+            with np.errstate(over="raise", invalid="raise"):
+                values = np.exp(np.asarray(prediction.values, dtype=float))
+        except FloatingPointError as exc:
+            raise ValueError("Inverse log target transformation produced non-finite predictions") from exc
+        if not np.all(np.isfinite(values)):
+            raise ValueError("Inverse log target transformation produced non-finite predictions")
+        return TimedPrediction(values=values, seconds=timer() - start)
+
+    def release(self) -> None:
+        adapter = getattr(self, "adapter", None)
+        if adapter is not None:
+            adapter.release()
+        self.adapter = None
+        self.model = None

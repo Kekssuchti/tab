@@ -1,8 +1,0 @@
-name: training-size
-base_config: ../pipeline/default_optuna.yaml
-matrix:
-  - path: dataset.train_on.0.fraction
-    range:
-      start: 2000
-      stop: 10000
-      step: 2000

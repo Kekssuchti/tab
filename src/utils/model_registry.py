@@ -137,6 +137,15 @@ TABSWIFT_ADAPTER = "src.adapter.tabswift_adapter:TabSwiftAdapter"
 
 
 SEARCH_SPACES = {
+    "linear-regression": {
+        "default": {
+            "fit_intercept": [True],
+        },
+        "good": {
+            "fit_intercept": [True, False],
+            "positive": [True, False],
+        },
+    },
     "logistic-regression": {
         "default": {
             "C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0],
@@ -345,7 +354,9 @@ MODEL_REGISTRY_CLS = {
 
 
 MODEL_REGISTRY_REG = {
-    "linear-regression": ModelSpec(f"{SKLEARN_ADAPTER}:LinearModelAdapter"),
+    "linear-regression": ModelSpec(
+        f"{SKLEARN_ADAPTER}:LinearModelAdapter", search_spaces=SEARCH_SPACES["linear-regression"]
+    ),
     "xgboost": ModelSpec(
         f"{SKLEARN_ADAPTER}:XGBoostAdapter",
         search_spaces=SEARCH_SPACES["xgboost"],

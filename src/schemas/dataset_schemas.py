@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 
 import pandas as pd
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from src.config import config
 from src.schemas.base_schemas import StrictConfig
@@ -172,6 +172,9 @@ class DatasetConfig(StrictConfig):
         force_repreprocess: bool, default=False
             Whether to rebuild filtered data from extracted data.
 
+        log_transform_target: bool, default=False
+            Whether to train LOS regression models on the natural log of LOS.
+
         scaler_encoder: ScalerEncoderConfig, default=ScalerEncoderConfig()
             Default scaling and encoding settings.
 
@@ -188,6 +191,10 @@ class DatasetConfig(StrictConfig):
         default=False,
         description="Forces reprocessing from extracted to filtered if true",
     )
+    log_transform_target: bool = Field(
+        default=False,
+        description="Train LOS regression models in log space and evaluate in hours",
+    )
     scaler_encoder: ScalerEncoderConfig = Field(default_factory=ScalerEncoderConfig)
     imputer: ImputerConfig = Field(default_factory=ImputerConfig)
 
@@ -198,6 +205,12 @@ class DatasetConfig(StrictConfig):
         if len(origins) != len(set(origins)):
             raise ValueError("Duplicate dataset origins detected")
         return train_on
+
+    @model_validator(mode="after")
+    def log_transform_requires_los(self):
+        if self.log_transform_target and self.target != "LOS":
+            raise ValueError("log_transform_target is only supported for the LOS target")
+        return self
 
 
 @dataclass

@@ -1,22 +1,25 @@
 from dataclasses import dataclass
 from functools import partial
 from timeit import default_timer as timer
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
+import optuna
 from sklearn.model_selection import KFold, StratifiedKFold
 
 from src.classes.preprocessor import Preprocessor
-from src.interfaces.model_interface import ModelAdapter, PreprocessedModelAdapter
+from src.interfaces.model_interface import LogTargetModelAdapter, ModelAdapter, PreprocessedModelAdapter
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
-from src.schemas.training_schemas import ModelConfig, TuningMethod
+from src.schemas.training_schemas import ClassificationScoring, ModelConfig, RegressionScoring, TuningMethod
 from src.utils.evaluation import evaluate_trained_model_bootstrap
 from src.utils.evaluation_utils import (
     classification_score,
     evaluate_classification_predictions,
+    evaluate_regression_predictions,
+    regression_score,
 )
 from src.utils.logger import logger
 from src.utils.model_lifecycle import release_model
@@ -43,10 +46,12 @@ class Trainer:
         task_type: TaskType,
         default_imputer: ImputerConfig,
         default_scaler: ScalerEncoderConfig,
+        log_transform_target: bool = False,
     ) -> None:
         self.task_type = task_type
         self.default_imputer = default_imputer
         self.default_scaler = default_scaler
+        self.log_transform_target = log_transform_target
 
     def train_evaluate_model(self, model_config: ModelConfig, data: DatasetBundle) -> ModelTrainingResult:
         logger.info(f"Training model: {model_config.name}")
@@ -71,6 +76,8 @@ class Trainer:
             adapter,
             self._build_preprocess_pipeline(model_config),
         )
+        if self.log_transform_target:
+            model = LogTargetModelAdapter(model)
         try:
             fit_time = model.fit(X_train, y_train)
             return model, fit_time
@@ -164,7 +171,6 @@ class Trainer:
     def _tune_model_optuna(
         self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
     ) -> ModelTrainingResult:
-        import optuna
 
         self._configure_optuna_logging(optuna)
 
@@ -184,8 +190,15 @@ class Trainer:
 
         evaluations: list[_CandidateEvaluation] = []
 
+        if tuning.scoring in ["roc_auc", "f1", "accuracy", "r2"]:
+            direction = "maximize"
+        elif tuning.scoring in ["rmse", "mae", "mse"]:
+            direction = "minimize"
+        else:
+            raise ValueError(f"Unsupported scoring metric: {tuning.scoring}")
+
         study = optuna.create_study(
-            direction="maximize",
+            direction=direction,
             sampler=self._build_optuna_sampler(tuning),
         )
 
@@ -262,15 +275,21 @@ class Trainer:
                     self._take_rows(y_train, train_index),
                 )
                 prediction = fold_model.predict(self._take_rows(X_train, validation_index))
-                if self.task_type != "classification":
-                    raise NotImplementedError("Regression tuning metrics are not implemented yet")
+                validation_targets = self._take_rows(y_train, validation_index)
+                if self.task_type == "classification":
+                    metrics = evaluate_classification_predictions(
+                        prediction.values,
+                        validation_targets,
+                    )
+                    score = classification_score(metrics, cast(ClassificationScoring, tuning.scoring))
+                else:
+                    metrics = evaluate_regression_predictions(
+                        prediction.values,
+                        validation_targets,
+                    )
+                    score = regression_score(metrics, cast(RegressionScoring, tuning.scoring))
 
-                metrics = evaluate_classification_predictions(
-                    prediction.values,
-                    self._take_rows(y_train, validation_index),
-                )
-
-                candidate_scores.append(classification_score(metrics, tuning.scoring))
+                candidate_scores.append(score)
 
                 fold_results.append(
                     FoldRecord(
@@ -325,7 +344,10 @@ class Trainer:
         else:
             fold_scores_by_candidate = [evaluation.fold_scores for evaluation in evaluations]
             mean_scores = [float(np.mean(scores)) for scores in fold_scores_by_candidate]
-            best_index = int(np.argmax(mean_scores))
+            if tuning_config.scoring in ("mae", "mse", "rmse"):
+                best_index = int(np.argmin(mean_scores))
+            else:
+                best_index = int(np.argmax(mean_scores))
             best_params = candidates[best_index]
 
         logger.info(f"CV Done. Best params: {best_params}")
@@ -366,7 +388,7 @@ class Trainer:
         else:
             logger.info(
                 f"Model tuning complete in {tuning_result.total_time:.3f}s. "
-                f"Best R2 MIMIC: {mimic_metrics.r2:.4f}, Best R2 TUDD: {tudd_metrics.r2:.4f}"
+                f"Best RMSE MIMIC: {mimic_metrics.rmse:.4f}, Best RMSE TUDD: {tudd_metrics.rmse:.4f}"
             )
 
         return ModelTrainingResult(

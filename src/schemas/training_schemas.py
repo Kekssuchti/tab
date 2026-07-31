@@ -90,7 +90,7 @@ class TuningConfig(StrictConfig):
     method: TuningMethod = "optuna"
     search_space: str | None = "default"
     grid: dict[str, list[Any]] | None = None
-    scoring: ClassificationScoring = "roc_auc"
+    scoring: ScoringMethod = "roc_auc"
     cv: CrossValidationConfig = Field(default_factory=CrossValidationConfig)
     optuna: OptunaConfig = Field(default_factory=OptunaConfig)
 

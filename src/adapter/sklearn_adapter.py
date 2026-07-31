@@ -5,7 +5,7 @@ from interpret.glassbox import (
     ExplainableBoostingClassifier,
     ExplainableBoostingRegressor,
 )
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LinearRegression, LogisticRegression
 from xgboost import XGBClassifier, XGBRegressor
 
 from src.config import config
@@ -20,17 +20,21 @@ class LinearModelAdapter(ModelAdapter):
         **kwargs,
     ) -> None:
         self.task_type = task_type
-        default_params = {
-            "random_state": config.seed,
-            "penalty": "l2",
-        }
+        default_params = (
+            {
+                "random_state": config.seed,
+                "penalty": "l2",
+            }
+            if task_type == "classification"
+            else {}
+        )
         self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):
         if self.task_type == "classification":
             return LogisticRegression(**self.kwargs)
-        raise NotImplementedError
+        return LinearRegression(**self.kwargs)
 
     def fit(self, X_train, y_train) -> float:
         start = timer()

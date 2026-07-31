@@ -44,6 +44,7 @@ class Pipeline:
             task_type=task_type,
             default_imputer=self.pipeline_config.dataset.imputer,
             default_scaler=self.pipeline_config.dataset.scaler_encoder,
+            log_transform_target=self.pipeline_config.dataset.log_transform_target,
         )
 
         data = self.dataset.get_dataset()

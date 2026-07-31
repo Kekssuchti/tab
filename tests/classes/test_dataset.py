@@ -151,6 +151,23 @@ def test_dataset_config_rejects_independent_classification_flag():
         )
 
 
+def test_dataset_config_only_allows_log_transform_for_los():
+    los_config = DatasetConfig(
+        target="LOS",
+        train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
+        log_transform_target=True,
+    )
+
+    assert los_config.log_transform_target
+
+    with pytest.raises(ValidationError, match="only supported for the LOS target"):
+        DatasetConfig(
+            target="mortality",
+            log_transform_target=True,
+            train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
+        )
+
+
 def test_los_regression_split_does_not_stratify_continuous_labels():
     df = _make_rows("mimic", 1, 10)
     dataset = Dataset(
