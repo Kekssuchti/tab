@@ -14,25 +14,36 @@ def _():
         list_pipeline_runs,
         load_evaluation_data,
     )
-    from src.utils.evaluation_plot import plot_roc_auc
     from src.exploration.latex_table import performance_table_to_latex
 
-    return (
-        list_pipeline_runs,
-        load_evaluation_data,
-        performance_table_to_latex,
-        plot_roc_auc,
-    )
+    return list_pipeline_runs, load_evaluation_data, performance_table_to_latex
 
 
 @app.cell
-def _(list_pipeline_runs, load_evaluation_data):
+def _(list_pipeline_runs):
     mortality_exp_name = "tudd_baseline_mortality"
     readmission_exp_name = "tudd_baseline_hours_to_readmit"
 
     runs_moratlity = list_pipeline_runs(mortality_exp_name)
     runs_readmission = list_pipeline_runs(readmission_exp_name)
+    runs_moratlity = runs_moratlity[runs_moratlity["run_name"].str.contains(r"training-size", na=False)]
+    runs_moratlity
+    return (
+        mortality_exp_name,
+        readmission_exp_name,
+        runs_moratlity,
+        runs_readmission,
+    )
 
+
+@app.cell
+def _(
+    load_evaluation_data,
+    mortality_exp_name,
+    readmission_exp_name,
+    runs_moratlity,
+    runs_readmission,
+):
     data_mortality = load_evaluation_data(
         experiment_names=mortality_exp_name,
         pipeline_runs=runs_moratlity["mlflow_run_id"],
@@ -67,14 +78,21 @@ def _(latex_mortality, latex_readmission):
 
 
 @app.cell
-def _(data_mortality, plot_roc_auc):
-    plot_roc_auc(data_mortality)
-    return
+def _(data_mortality):
+    # change sample size plots
+    from src.utils.plot_eval import plot_roc_auc, plot_over_training_size, plot_performance_vs_runtime
+    import matplotlib.pyplot as plt
+
+
+    plot_over_training_size(data=data_mortality, ignore_models=["orion-msp", "ebm", "limix-16m"], datasets=("tudd",))
+    return plot_performance_vs_runtime, plt
 
 
 @app.cell
-def _(data_readmission, plot_roc_auc):
-    plot_roc_auc(data_readmission)
+def _(data_readmission, plot_performance_vs_runtime, plt):
+    fig = plot_performance_vs_runtime(data=data_readmission, test_dataset="tudd")
+
+    plt.show()
     return
 
 

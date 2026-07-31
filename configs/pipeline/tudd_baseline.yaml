@@ -1,5 +1,5 @@
 dataset:
-  target: mortality
+  target: LOS7
   random_state: 1337
   train_size: 0.8
   train_on:
@@ -16,6 +16,65 @@ dataset:
     knn_neighbors: 5
 
 training:
+  - name: tabswift
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabpfn-3
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabicl-2
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: orion-msp
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabfm
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
   - name: logistic-regression
     preprocessing:
       imputer:
@@ -66,66 +125,7 @@ training:
         shuffle: true
         random_state: 1337
 
-  - name: tabswift
-    preprocessing:
-      imputer:
-        imputation_method: mean
-    tuning:
-      method: grid
-      search_space: best
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: tabpfn-3
-    tuning:
-      method: grid
-      search_space: best
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: tabicl-2
-    tuning:
-      method: grid
-      search_space: best
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
   - name: limix-16m
-    tuning:
-      method: grid
-      search_space: best
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: orion-msp
-    preprocessing:
-      imputer:
-        imputation_method: mean
-    tuning:
-      method: grid
-      search_space: best
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: tabfm
-    preprocessing:
-      imputer:
-        imputation_method: mean
     tuning:
       method: grid
       search_space: best
@@ -139,4 +139,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tudd_size_mortality
+  experiment_name: tudd_baseline_LOS7

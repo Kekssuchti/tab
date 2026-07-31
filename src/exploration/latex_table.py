@@ -4,44 +4,14 @@ from collections.abc import Mapping, Sequence
 
 import pandas as pd
 
-CAPTION = "Model performance (AUROC [95\% CI]) for the three ICU classification tasks across train and test set combinations. Gray fields show scenarios with external test sets. $\Delta_{\mathrm{spec}}$ shows model-specific and and $\Delta_{\mathrm{comp}}$ comparative generalizability loss"
+from src.utils.plot_utils import MODEL_LABELS, MODEL_ORDER
+
+CAPTION = "Model performance (AUROC [95\\% CI]) for the three ICU classification tasks across train and test set combinations. Gray fields show scenarios with external test sets. $\Delta_{\mathrm{spec}}$ shows model-specific and and $\Delta_{\mathrm{comp}}$ comparative generalizability loss"
 DATASET_ORDER = ["tudd", "mimic"]
-
-MODEL_ORDER = [
-    "logistic-regression",
-    "ebm",
-    "xgboost",
-    "tabpfn-2.5",
-    "tabpfn-2.6",
-    "tabpfn-3",
-    "tabicl-2",
-    "limix-2m",
-    "limix-16m",
-    "mitra",
-    "orion-msp",
-    "orion-bix",
-    "tabswift",
-    "tabfm",
-]
-
 DATASET_MAP = {"tudd": "EUH", "mimic": "MIMIC-IV"}
 
-MODEL_MAP = {
-    "logistic-regression": "LR",
-    "ebm": "EBM",
-    "xgboost": "XGBoost",
-    "tabpfn-2.5": "TabPFNv2.5",
-    "tabpfn-2.6": "TabPFNv2.6",
-    "tabpfn-3": "TabPFNv3",
-    "tabicl-2": "TabICLv2",
-    "tabswift": "TabSwift",
-    "limix-16m": "LimiX16M",
-    "limix-2m": "LimiX2M",
-    "mitra": "Mitra",
-    "tabfm": "TabFM",
-    "orion-msp": "OrionMSP",
-    "orion-bix": "OrionBIX",
-}
+MODEL_ORDER = list(MODEL_ORDER)
+MODEL_MAP = dict(MODEL_LABELS)
 
 
 def performance_table_to_latex(

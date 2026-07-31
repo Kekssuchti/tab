@@ -179,4 +179,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tab
+  experiment_name: tudd_baseline

@@ -1,18 +1,18 @@
 from collections.abc import Iterable
 
-import mlflow
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
 
+import mlflow
 from src.mlflow.evaluation_data import list_pipeline_runs, load_evaluation_data
-from src.utils.evaluation_plot import (
+from src.mlflow.tracking_contract import TRACKING_SCHEMA_VERSION
+from src.utils.plot_eval import (
     calculate_comparative_generalizability,
     plot_generalization_gaps,
     plot_performance_vs_runtime,
     plot_roc_auc,
 )
-from src.mlflow.tracking_contract import TRACKING_SCHEMA_VERSION
 
 
 def _log_pipeline(
@@ -364,7 +364,7 @@ def test_plots_roc_auc_as_paired_test_centers(tracking_uri):
     ax = plot_roc_auc(results)
 
     assert len(ax.get_yticklabels()) == 2
-    assert ax.get_xlabel() == "ROC AUC"
+    assert ax.get_xlabel() == "AUROC"
     assert {text.get_text() for text in ax.get_legend().get_texts()} == {
         "MIMIC",
         "TUDD",
@@ -392,9 +392,9 @@ def test_plots_external_performance_against_model_runtime(tracking_uri):
     ax = plot_performance_vs_runtime(results)
 
     assert ax.get_xscale() == "log"
-    assert ax.get_ylabel() == "External ROC AUC"
-    assert "#1  logistic-regression" in ax.texts[-1].get_text()
-    assert "#2  xgboost" in ax.texts[-1].get_text()
+    assert ax.get_ylabel() == "External AUROC"
+    assert {text.get_text() for text in ax.get_legend().get_texts()} == {"LR", "XGBoost"}
+    assert {text.get_text() for text in ax.texts} == {"#1", "#2"}
     plt.close(ax.figure)
 
 
