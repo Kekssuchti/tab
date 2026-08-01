@@ -15,7 +15,7 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
-from src.utils.plot_utils import ModelStyle, metric_label, model_styles, ordered_models
+from src.utils.plot_utils import DATASET_NAMES, ModelStyle, metric_label, model_styles, ordered_models
 
 _MODEL_COLUMNS = [
     "pipeline_mlflow_run_id",
@@ -348,12 +348,14 @@ def plot_performance_vs_runtime(
 
 def plot_over_training_size(
     data: pd.DataFrame,
-    ignore_models: list[str],
+    ignore_models: list[str] | None = None,
+    include_models: list[str] | None = None,
     *,
     metric: str = "roc_auc",
     datasets: Sequence[str] = ("mimic", "tudd"),
     log_x: bool = True,
     show_ci: bool = True,
+    show_title: bool = True,
 ) -> Figure:
     """Plot a metric against the training sample size for each test dataset.
 
@@ -373,6 +375,9 @@ def plot_over_training_size(
     data = data.loc[(data["scope"] == "test") & (data["dataset"].isin(datasets)) & data[metric].notna()].copy()
     if ignore_models:
         data = data.loc[~data["model_name"].isin(ignore_models)]
+    if include_models:
+        data = data.loc[data["model_name"].isin(include_models)]
+
     data["training_size"] = pd.to_numeric(data["training_size"], errors="coerce")
     data = data.dropna(subset=["training_size"])
     if data.empty:
@@ -432,7 +437,7 @@ def plot_over_training_size(
         ax.set_xticklabels([f"{int(size):,}" for size in sizes], rotation=45, ha="right", fontsize=8)
         ax.set_xlabel("Training sample size")
         ax.set_ylabel(metric_label(metric))
-        ax.set_title(dataset.upper())
+        ax.set_title(DATASET_NAMES[dataset])
         ax.grid(alpha=0.3, which="both")
         ax.margins(y=0.08)
 
@@ -454,7 +459,9 @@ def plot_over_training_size(
                 fontsize=9,
             )
         fig.tight_layout(rect=(0, 0, 1, 0.9))
-    fig.suptitle(f"{metric_label(metric)} vs training size", fontsize=13, y=0.99)
+
+    if show_title:
+        fig.suptitle(f"{metric_label(metric)} vs training size", fontsize=13, y=0.99)
     return fig
 
 

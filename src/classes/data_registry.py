@@ -8,10 +8,11 @@ from src.schemas.dataset_schemas import DatasetKind, DatasetName, DatasetOrigin,
 
 TARGET_LIKE_COLUMNS = (
     "mortality",
-    "LOS",
-    "LOS3",
-    "LOS7",
-    "hours_to_readmit",
+    "LOS",  # regression
+    "LOS3",  # binary, true if LOS <= 3 days
+    "LOS7",  # binary, true if LOS <= 7 days
+    "hours_to_readmit",  # binary, did or didnt
+    "hours_to_readmit_72",  # binary, true if readmitted within <= 72 hours
 )
 
 
@@ -81,6 +82,10 @@ def _readmission_labels(df: pd.DataFrame) -> pd.Series:
     return df["hours_to_readmit"].notna().astype(int)
 
 
+def _readmission_72_labels(df: pd.DataFrame) -> pd.Series:
+    return (df["hours_to_readmit"] <= 72).astype(int)
+
+
 def _los_labels(df: pd.DataFrame) -> pd.Series:
     return df["LOS"].copy()
 
@@ -107,9 +112,10 @@ class TargetDefinition(NamedTuple):
 
 TARGET_DEFINITIONS: dict[Target, TargetDefinition] = {
     "mortality": TargetDefinition("classification", "normal", _mortality_labels),
+    "LOS": TargetDefinition("regression", "normal", _los_labels),
     "LOS7": TargetDefinition("classification", "normal", _los7_labels),
     "hours_to_readmit": TargetDefinition("classification", "readmission", _readmission_labels),
-    "LOS": TargetDefinition("regression", "normal", _los_labels),
+    "hours_to_readmit_72": TargetDefinition("classification", "readmission", _readmission_72_labels),
 }
 
 

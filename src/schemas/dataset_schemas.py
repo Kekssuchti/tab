@@ -15,7 +15,7 @@ from src.schemas.preprocessing_schemas import (
 DatasetName = Literal["mimic", "tudd", "mimic_readmission", "tudd_readmission"]
 DatasetOrigin = Literal["mimic", "tudd"]
 DatasetKind = Literal["normal", "readmission"]
-Target = Literal["mortality", "LOS7", "hours_to_readmit", "LOS"]
+Target = Literal["mortality", "LOS7", "hours_to_readmit", "LOS", "hours_to_readmit_72"]
 
 
 @dataclass(frozen=True)

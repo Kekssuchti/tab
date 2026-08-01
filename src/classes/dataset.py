@@ -3,6 +3,7 @@ from typing import TypedDict
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from sklearn.utils import resample
 
 from src.classes.data_cleaner import DataCleaner
 from src.classes.data_registry import (
@@ -152,7 +153,13 @@ class Dataset:
                 else:
                     n = training_data_split.fraction
 
-                sampled_indices = split["X_train"].sample(n=n, random_state=self.seed).index
+                sampled_indices = resample(
+                    split["X_train"].index,
+                    replace=False,
+                    n_samples=n,
+                    random_state=self.seed,
+                    stratify=split["y_train"] if self._task.task_type == "classification" else None,
+                )
 
                 X_train_sampled = split["X_train"].loc[sampled_indices]
                 y_train_sampled = split["y_train"].loc[sampled_indices]

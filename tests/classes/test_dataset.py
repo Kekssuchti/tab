@@ -364,6 +364,26 @@ def test_mortality_dataset_uses_only_normal_task_files_and_assembles_splits(tmp_
     assert not (tmp_path / "filtered" / "tudd_readmission.csv").exists()
 
 
+def test_combined_classification_training_subsamples_are_stratified():
+    mortality = [0] * 16 + [1] * 4
+    mimic = _make_rows("mimic", 100, 20).assign(mortality=mortality)
+    tudd = _make_rows("tudd", 200, 20).assign(mortality=mortality)
+    dataset = Dataset(
+        _dataset_params(
+            target="mortality",
+            train_on=(
+                DataSplitConfig(dataset="mimic", fraction=5),
+                DataSplitConfig(dataset="tudd", fraction=5),
+            ),
+            random_state=7,
+        )
+    )
+
+    bundle = dataset._split_data({"mimic": mimic, "tudd": tudd})
+
+    assert bundle.train_data.y.value_counts().to_dict() == {0: 8, 1: 2}
+
+
 def test_readmission_dataset_uses_readmission_task_policy_without_normal_files(tmp_path, monkeypatch):
     mimic_readmission = _make_rows("mimic", 300, 10).assign(mimic_only_feature=1.0)
     tudd_readmission = _make_rows("tudd", 400, 10).assign(tudd_only_feature=2.0)

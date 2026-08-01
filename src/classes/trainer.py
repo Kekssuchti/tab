@@ -123,7 +123,7 @@ class Trainer:
         X_train, y_train = _training_data(data)
 
         candidates = model_spec.tuning_candidates(tuning.search_space, tuning.grid)
-        folds = list(self._build_cv(tuning).split(X_train, y_train))
+        folds = self._build_cv_folds(tuning, X_train, y_train) if len(candidates) > 1 else []
         logger.info(
             f"Tuning {model_config.name}: candidates={len(candidates)} "
             f"folds={len(folds)} scoring={tuning.scoring} method=grid"
@@ -180,7 +180,7 @@ class Trainer:
             raise ValueError("Tuning requires a non-empty search space")
         X_train, y_train = _training_data(data)
 
-        folds = list(self._build_cv(tuning).split(X_train, y_train))
+        folds = self._build_cv_folds(tuning, X_train, y_train)
 
         logger.info(
             f"Tuning {model_config.name}: trials={tuning.optuna.n_trials} "
@@ -433,6 +433,24 @@ class Trainer:
             shuffle=tuning.cv.shuffle,
             random_state=tuning.cv.random_state,
         )
+
+    def _build_cv_folds(self, tuning, X_train, y_train) -> list[tuple[np.ndarray, np.ndarray]]:
+        if self.task_type == "classification":
+            _, class_counts = np.unique(np.asarray(y_train), return_counts=True)
+            if class_counts.size < 2:
+                raise ValueError(
+                    f"Cannot run {tuning.cv.n_splits}-fold cross-validation: "
+                    "training data contains only one class"
+                )
+
+            minority_count = int(class_counts.min())
+            if minority_count < tuning.cv.n_splits:
+                raise ValueError(
+                    f"Cannot run {tuning.cv.n_splits}-fold cross-validation: "
+                    f"minority class has only {minority_count} samples"
+                )
+
+        return list(self._build_cv(tuning).split(X_train, y_train))
 
 
 def _training_data(data: DatasetBundle):

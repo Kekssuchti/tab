@@ -31,7 +31,7 @@ def metric_label(metric: str) -> str:
 # --- Dataset defaults ------------------------------------------------------
 
 DATASET_COLORS = {"mimic": "#315C73", "tudd": "#D17A3F"}
-
+DATASET_NAMES = {"mimic": "MIMIC-IV", "tudd": "EUH"}
 
 # --- Model defaults --------------------------------------------------------
 

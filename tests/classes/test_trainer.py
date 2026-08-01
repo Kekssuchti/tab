@@ -184,6 +184,73 @@ def test_trainer_uses_one_full_training_fit_for_bootstrap_evaluation(monkeypatch
     assert _ReleasableFoldModel.active == 0
 
 
+def test_single_candidate_grid_does_not_construct_cv(monkeypatch):
+    X, y = _classification_data()
+    trainer = Trainer(task_type="classification", **_preprocess_pipeline())
+    model_config = ModelConfig(
+        name="logistic-regression",
+        tuning=TuningConfig(
+            method="grid",
+            grid={"C": [1.0]},
+            scoring="roc_auc",
+            cv=CrossValidationConfig(n_splits=5, random_state=1),
+        ),
+    )
+
+    def fail_if_cv_is_constructed(tuning):
+        pytest.fail("CV must not be constructed for a single tuning candidate")
+
+    monkeypatch.setattr(trainer, "_build_cv", fail_if_cv_is_constructed)
+
+    result = trainer._tune_model(
+        model_config,
+        model_registry.get_model_spec(model_config, "classification"),
+        _bundle(X, y),
+    )
+
+    assert result.tuning_result is not None
+    assert result.tuning_result.fold_results == []
+
+
+@pytest.mark.parametrize(
+    ("method", "grid"),
+    [
+        ("grid", {"C": [0.1, 1.0]}),
+        ("optuna", {"C": [0.1, 1.0]}),
+    ],
+)
+def test_tuning_rejects_more_cv_splits_than_minority_samples(monkeypatch, method, grid):
+    X, _ = _classification_data()
+    X = X.iloc[:10]
+    y = np.array([0] * 7 + [1] * 3)
+    trainer = Trainer(task_type="classification", **_preprocess_pipeline())
+    model_config = ModelConfig(
+        name="logistic-regression",
+        tuning=TuningConfig(
+            method=method,
+            grid=grid,
+            scoring="roc_auc",
+            cv=CrossValidationConfig(n_splits=5, random_state=1),
+            optuna=OptunaConfig(n_trials=1, sampler="random"),
+        ),
+    )
+
+    def fail_if_candidate_is_evaluated(*args, **kwargs):
+        pytest.fail("CV candidate evaluation must not start with invalid folds")
+
+    monkeypatch.setattr(trainer, "_evaluate_cv_candidate", fail_if_candidate_is_evaluated)
+
+    with pytest.raises(
+        ValueError,
+        match=r"5-fold cross-validation.*minority class has only 3 samples",
+    ):
+        trainer._tune_model(
+            model_config,
+            model_registry.get_model_spec(model_config, "classification"),
+            _bundle(X, y),
+        )
+
+
 def test_trainer_uses_tuning_grid_and_returns_best_params():
     X, y = _classification_data()
     model_params = ModelConfig(
