@@ -1,4 +1,4 @@
-"""Shared plot defaults and helpers for pipeline evaluation results."""
+"""Canonical plot and table defaults for evaluation results."""
 
 from __future__ import annotations
 
@@ -23,15 +23,36 @@ METRIC_LABELS = {
     "r2": "R²",
 }
 
+LOWER_IS_BETTER_METRICS = frozenset({"mae", "mse", "rmse"})
+
 
 def metric_label(metric: str) -> str:
     return METRIC_LABELS.get(metric, metric.replace("_", " ").title())
+
+
+def metric_lower_is_better(metric: str) -> bool:
+    """Return whether smaller values represent better performance."""
+    return metric in LOWER_IS_BETTER_METRICS
 
 
 # --- Dataset defaults ------------------------------------------------------
 
 DATASET_COLORS = {"mimic": "#315C73", "tudd": "#D17A3F"}
 DATASET_NAMES = {"mimic": "MIMIC-IV", "tudd": "EUH"}
+DATASET_ORDER = ["tudd", "mimic"]
+
+
+def dataset_label(dataset: str) -> str:
+    """Return a shared display label, with a useful fallback."""
+    return DATASET_NAMES.get(dataset, dataset.upper())
+
+
+def ordered_datasets(dataset_names: Sequence[str]) -> list[str]:
+    """Order datasets canonically, appending unknown datasets stably."""
+    present = set(dataset_names)
+    known = [name for name in DATASET_ORDER if name in present]
+    unknown = [name for name in dict.fromkeys(dataset_names) if name not in DATASET_ORDER]
+    return known + unknown
 
 # --- Model defaults --------------------------------------------------------
 

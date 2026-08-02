@@ -1,7 +1,7 @@
 """Top-level plotting functions for pipeline evaluation results.
 
 Shared style defaults (colors, markers, labels) come from
-:mod:`src.utils.plot_utils`.
+:mod:`src.plotting.defaults`.
 """
 
 from __future__ import annotations
@@ -15,7 +15,14 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
-from src.utils.plot_utils import DATASET_NAMES, ModelStyle, metric_label, model_styles, ordered_models
+from src.plotting.defaults import (
+    ModelStyle,
+    dataset_label,
+    metric_label,
+    metric_lower_is_better,
+    model_styles,
+    ordered_models,
+)
 
 _MODEL_COLUMNS = [
     "pipeline_mlflow_run_id",
@@ -61,7 +68,7 @@ def calculate_comparative_generalizability(
         ["model_mlflow_run_id", "value"],
     ].rename(columns={"value": "training_score"})
     external = external.merge(training, on="model_mlflow_run_id")
-    lower_is_better = metric in {"mae", "mse", "rmse"}
+    lower_is_better = metric_lower_is_better(metric)
     groups = ["target", "task_type", "external_dataset"]
     if lower_is_better:
         external["generalizability_loss"] = external["training_score"] - external["external_score"]
@@ -336,8 +343,8 @@ def plot_performance_vs_runtime(
     ax.set_xscale("log")
     ax.set(
         xlabel=_runtime_label(runtime_scope, runtime_metric),
-        ylabel=f"Test {metric_label_text}",
-        title=f"Test performance ({centers}) vs runtime ",
+        ylabel=f"External {metric_label_text}",
+        title=f"External performance ({centers}) vs runtime ",
     )
     ax.grid(alpha=0.2)
     if created_axis:
@@ -437,7 +444,7 @@ def plot_over_training_size(
         ax.set_xticklabels([f"{int(size):,}" for size in sizes], rotation=45, ha="right", fontsize=8)
         ax.set_xlabel("Training sample size")
         ax.set_ylabel(metric_label(metric))
-        ax.set_title(DATASET_NAMES[dataset])
+        ax.set_title(dataset_label(dataset))
         ax.grid(alpha=0.3, which="both")
         ax.margins(y=0.08)
 
@@ -466,13 +473,19 @@ def plot_over_training_size(
 
 
 def _test_scores(results: pd.DataFrame, metric: str) -> pd.DataFrame:
-    if metric not in results:
-        raise ValueError(f"Metric {metric!r} is not available in evaluation data")
-    scores = results.loc[(results["scope"] == "test") & results[metric].notna()].copy()
+    ci_lower = f"{metric}_ci_lower"
+    ci_upper = f"{metric}_ci_upper"
+    required = {"scope", "statistic", metric, ci_lower, ci_upper}
+    missing = sorted(required - set(results.columns))
+    if missing:
+        raise ValueError(f"Missing required evaluation columns: {', '.join(missing)}")
+    scores = results.loc[
+        results["scope"].eq("test") & results["statistic"].eq("point") & results[metric].notna()
+    ].copy()
     scores["metric"] = metric
     scores["value"] = scores[metric]
-    scores["ci_lower"] = scores[f"{metric}_ci_lower"]
-    scores["ci_upper"] = scores[f"{metric}_ci_upper"]
+    scores["ci_lower"] = scores[ci_lower]
+    scores["ci_upper"] = scores[ci_upper]
     return scores
 
 

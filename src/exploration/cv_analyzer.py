@@ -5,10 +5,14 @@ from statistics import pstdev
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 from src.config import config
 from src.mlflow.serialization import cv_result_from_json
+from src.plotting.cv import (
+    plot_pairwise_heatmap,
+    plot_parallel_coordinates,
+    plot_param_marginal_effects,
+)
 from src.schemas.run_records import TuningRecord
 from src.utils.evaluation_utils import (
     classification_score,
@@ -63,169 +67,6 @@ def _param_columns(df: pd.DataFrame) -> list[str]:
         "mean_precision",
     }
     return [c for c in df.columns if c not in exclude]
-
-
-# ── Plots ───────────────────────────────────────────────────────────────────
-
-
-def plot_parallel_coordinates(
-    df: pd.DataFrame,
-    param_cols: list[str],
-    metric_col: str,
-    title: str = "CV Candidates — Parallel Coordinates",
-) -> go.Figure:
-    """Every candidate as a polyline across parameter axes, colored by score."""
-    dimensions = []
-    for col in param_cols:
-        vals = df[col]
-        if pd.api.types.is_numeric_dtype(vals) and vals.notna().all():
-            dimensions.append(go.parcoords.Dimension(label=col, values=vals, tickvals=sorted(vals.unique())))
-        else:
-            # Fill NaN with a sentinel so factorize produces contiguous codes
-            filled = vals.fillna("None")
-            codes, uniques = pd.factorize(filled)
-            dimensions.append(
-                go.parcoords.Dimension(
-                    label=col,
-                    values=codes,
-                    tickvals=list(range(len(uniques))),
-                    ticktext=[str(u) for u in uniques],
-                )
-            )
-
-    fig = go.Figure(
-        go.Parcoords(
-            line=dict(
-                color=df[metric_col],
-                colorscale="viridis",
-                showscale=True,
-                colorbar=dict(title=metric_col),
-            ),
-            dimensions=dimensions,
-        )
-    )
-    fig.update_layout(
-        title=f"{title}<br><sup>Colored by {metric_col}</sup>",
-        height=500 + 30 * len(param_cols),
-    )
-    return fig
-
-
-def plot_param_marginal_effects(
-    df: pd.DataFrame,
-    param_cols: list[str],
-    metric_col: str,
-    title: str = "Parameter Marginal Effects",
-) -> go.Figure:
-    """Box plots of score distributions for each parameter value."""
-    n_params = len(param_cols)
-    n_cols = min(3, n_params)
-    n_rows = int(np.ceil(n_params / n_cols))
-
-    fig = make_subplots(
-        rows=n_rows,
-        cols=n_cols,
-        subplot_titles=param_cols,
-        vertical_spacing=0.15,
-        horizontal_spacing=0.08,
-    )
-
-    for idx, param in enumerate(param_cols):
-        row, col = idx // n_cols + 1, idx % n_cols + 1
-        for pv in sorted(df[param].dropna().unique()):
-            subset = df[df[param] == pv][metric_col]
-            fig.add_trace(
-                go.Box(
-                    y=subset,
-                    name=str(pv),
-                    boxpoints="outliers",
-                    marker=dict(size=3, opacity=0.5),
-                    line=dict(width=1),
-                    showlegend=False,
-                ),
-                row=row,
-                col=col,
-            )
-        fig.update_xaxes(title_text=param, row=row, col=col)
-        fig.update_yaxes(title_text=metric_col, row=row, col=col)
-
-    fig.update_layout(
-        title=f"{title}<br><sup>Metric: {metric_col}</sup>",
-        height=300 * n_rows,
-        showlegend=False,
-    )
-    return fig
-
-
-def plot_pairwise_heatmap(
-    df: pd.DataFrame,
-    param_cols: list[str],
-    metric_col: str,
-    title: str = "Pairwise Parameter Heatmaps",
-) -> go.Figure:
-    """2D heatmaps for every parameter pair, averaging over remaining params."""
-    numeric_params = [c for c in param_cols if pd.api.types.is_numeric_dtype(df[c])] or param_cols
-    pairs = [
-        (numeric_params[i], numeric_params[j])
-        for i in range(len(numeric_params))
-        for j in range(i + 1, len(numeric_params))
-    ]
-
-    if not pairs:
-        return go.Figure().update_layout(title="Need at least 2 parameters for heatmaps")
-
-    n_cols = min(3, len(pairs))
-    n_rows = int(np.ceil(len(pairs) / n_cols))
-    fig = make_subplots(
-        rows=n_rows,
-        cols=n_cols,
-        subplot_titles=[f"{x} vs {y}" for x, y in pairs],
-        vertical_spacing=0.14,
-        horizontal_spacing=0.1,
-    )
-
-    # Collect all pivot tables first to compute shared color range
-    pivots = []
-    for px_name, py_name in pairs:
-        pivots.append(
-            (
-                px_name,
-                py_name,
-                df.pivot_table(index=py_name, columns=px_name, values=metric_col, aggfunc="mean"),
-            )
-        )
-    z_all = np.concatenate([p.values.ravel() for _, _, p in pivots])
-    zmin, zmax = float(z_all.min()), float(z_all.max())
-
-    for idx, (px_name, py_name, pivot) in enumerate(pivots):
-        row, col = idx // n_cols + 1, idx % n_cols + 1
-        fig.add_trace(
-            go.Heatmap(
-                z=pivot.values,
-                x=pivot.columns,
-                y=pivot.index,
-                coloraxis="coloraxis",
-                zmin=zmin,
-                zmax=zmax,
-                hovertemplate=f"{px_name}=%{{x}}<br>{py_name}=%{{y}}<br>{metric_col}=%{{z:.4f}}<extra></extra>",
-            ),
-            row=row,
-            col=col,
-        )
-        fig.update_xaxes(title_text=px_name, row=row, col=col)
-        fig.update_yaxes(title_text=py_name, row=row, col=col)
-
-    fig.update_layout(
-        title=f"{title}<br><sup>Metric: {metric_col}</sup>",
-        height=350 * n_rows,
-        coloraxis=dict(
-            colorscale="viridis",
-            cmin=zmin,
-            cmax=zmax,
-            colorbar=dict(title=metric_col),
-        ),
-    )
-    return fig
 
 
 # ── Output helpers ──────────────────────────────────────────────────────────

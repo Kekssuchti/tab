@@ -1,12 +1,12 @@
 import matplotlib.pyplot as plt
 
 from src.mlflow.evaluation_data import list_pipeline_runs, load_evaluation_data
-from src.utils.plot_eval import (
+from src.plotting.evaluation import (
     plot_generalization_gaps,
     plot_performance_vs_runtime,
     plot_roc_auc,
 )
-from src.utils.plot_utils import set_plot_style
+from src.plotting.defaults import set_plot_style
 
 if __name__ == "__main__":
     set_plot_style()

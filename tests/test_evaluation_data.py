@@ -7,7 +7,7 @@ import pytest
 import mlflow
 from src.mlflow.evaluation_data import list_pipeline_runs, load_evaluation_data
 from src.mlflow.tracking_contract import TRACKING_SCHEMA_VERSION
-from src.utils.plot_eval import (
+from src.plotting.evaluation import (
     calculate_comparative_generalizability,
     plot_generalization_gaps,
     plot_performance_vs_runtime,
@@ -336,6 +336,20 @@ def test_calculates_comparative_generalizability_on_external_test(tracking_uri):
     ].iloc[0]
     assert logistic_external["generalizability_loss_roc_auc"] == pytest.approx(-0.05)
     assert logistic_external["comparative_generalizability_loss_roc_auc"] == pytest.approx(0.0)
+
+
+def test_evaluation_plots_ignore_mean_test_rows(tracking_uri):
+    results = load_evaluation_data("tab", tracking_uri=tracking_uri)
+    mean_rows = results.loc[results["scope"].eq("test")].copy()
+    mean_rows["statistic"] = "mean"
+    mean_rows["roc_auc"] = 0.01
+
+    comparison = calculate_comparative_generalizability(
+        pd.concat([results, mean_rows], ignore_index=True)
+    )
+
+    assert len(comparison) == 2
+    assert set(comparison["external_score"]) == {0.75, 0.71}
 
 
 def test_regression_losses_are_direction_aware(tmp_path):

@@ -10,7 +10,7 @@ def _():
 
     sys.path.insert(0, ".")
 
-    from src.exploration.latex_table import performance_table_to_latex
+    from src.plotting.latex_table import performance_table_to_latex
     from src.mlflow.evaluation_data import (
         list_pipeline_runs,
         load_evaluation_data,
@@ -87,7 +87,7 @@ def _(data_los7, data_mortality, data_readmission, data_readmission_72):
     # change sample size plots
     import matplotlib.pyplot as plt
 
-    from src.utils.plot_eval import plot_over_training_size, plot_performance_vs_runtime, plot_roc_auc
+    from src.plotting.evaluation import plot_over_training_size, plot_performance_vs_runtime, plot_roc_auc
 
     save_figs = True
     setups = {

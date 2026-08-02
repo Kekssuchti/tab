@@ -1,5 +1,5 @@
 dataset:
-  target: hours_to_readmit_72
+  target: LOS7
   random_state: 1337
   train_size: 0.8
   train_on:
@@ -33,6 +33,16 @@ training:
     tuning:
       method: grid
       search_space: best
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+        random_state: 1337
+
+  - name: tabpfn-2.6
+    tuning:
+      method: grid
+      search_space: best_2_6
       scoring: roc_auc
       cv:
         n_splits: 5
@@ -139,4 +149,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tudd_sample_size_hours_to_readmit_72
+  experiment_name: tudd_baseline_LOS7
