@@ -9,16 +9,16 @@ def _():
     import pandas as pd
     import numpy as np
     import sys
-    import json
     import pathlib
 
-    sys.path.append("/var/home/keks/projects/tab/src")
+    sys.path.insert(0, ".")
     import matplotlib.pyplot as plt
     import seaborn as sns
 
-    from config import config
+    from src.config import config
+    from src.utils.dataset_utils import remove_impossible_values
 
-    return config, json, np, pathlib, pd, plt, sns
+    return config, np, pathlib, pd, plt, remove_impossible_values, sns
 
 
 @app.cell
@@ -36,83 +36,22 @@ def _(config, pd):
 
 
 @app.cell
-def _(json):
-    def remove_impossible_values(df, json_file_path):
-        """
-        Remove outliers from a DataFrame based on limits specified in a JSON file.
-
-        Parameters:
-        df (pd.DataFrame): The input DataFrame.
-        json_file_path (str): Path to the JSON file containing limits.
-
-        Returns:
-        pd.DataFrame: DataFrame with outliers removed.
-        dict: Dictionary with the count of removed values for each column.
-        """
-        # Read the limits from the JSON file
-        with open(json_file_path, "r") as file:
-            limits = json.load(file)
-
-        removed_counts = {}
-
-        for column, bounds in limits.items():
-            if column in df.columns:
-                lower_bound = bounds["lower_bound"]
-                upper_bound = bounds["upper_bound"]
-
-                before_count = df[column].notna().sum()
-                df[column] = df[column].apply(lambda x: x if lower_bound <= x <= upper_bound else None)
-                after_count = df[column].notna().sum()
-
-                removed_counts[column] = before_count - after_count
-
-        return df, removed_counts
-
-    return (remove_impossible_values,)
-
-
-@app.cell
-def _(df_tudd, np, outlier_json, remove_impossible_values):
-    df_tudd_cleaned, tudd_remove_counts = remove_impossible_values(df=df_tudd, json_file_path=outlier_json)
-
-    print(tudd_remove_counts)
-
-    df_tudd_cleaned.replace([np.inf, -np.inf], np.nan, inplace=True)
-    return (df_tudd_cleaned,)
-
-
-@app.cell
-def _(df_mimic, np, outlier_json, remove_impossible_values):
-    df_mimic_cleaned, mimic_remove_counts = remove_impossible_values(df=df_mimic, json_file_path=outlier_json)
-
-    print(mimic_remove_counts)
-
-    df_mimic_cleaned.replace([np.inf, -np.inf], np.nan, inplace=True)
-    return (df_mimic_cleaned,)
-
-
-@app.cell
-def _(df_tudd_read, np, outlier_json, remove_impossible_values):
-    df_tudd_read_cleaned, tudd_read_remove_counts = remove_impossible_values(
-        df=df_tudd_read, json_file_path=outlier_json
-    )
-
-    print(tudd_read_remove_counts)
-
-    df_tudd_read_cleaned.replace([np.inf, -np.inf], np.nan, inplace=True)
-    return (df_tudd_read_cleaned,)
-
-
-@app.cell
-def _(df_mimic_read, np, outlier_json, remove_impossible_values):
-    df_mimic_read_cleaned, mimic_read_remove_counts = remove_impossible_values(
-        df=df_mimic_read, json_file_path=outlier_json
-    )
-
-    print(mimic_read_remove_counts)
-
-    df_mimic_read_cleaned.replace([np.inf, -np.inf], np.nan, inplace=True)
-    return (df_mimic_read_cleaned,)
+def _(df_mimic, df_mimic_read, df_tudd, df_tudd_read, np, outlier_json, remove_impossible_values):
+    cleaned = {}
+    for name, frame in {
+        "mimic": df_mimic,
+        "mimic_read": df_mimic_read,
+        "tudd": df_tudd,
+        "tudd_read": df_tudd_read,
+    }.items():
+        cleaned[name], removed_counts = remove_impossible_values(frame, outlier_json)
+        print(removed_counts)
+        cleaned[name].replace([np.inf, -np.inf], np.nan, inplace=True)
+    df_mimic_cleaned = cleaned["mimic"]
+    df_mimic_read_cleaned = cleaned["mimic_read"]
+    df_tudd_cleaned = cleaned["tudd"]
+    df_tudd_read_cleaned = cleaned["tudd_read"]
+    return df_mimic_cleaned, df_mimic_read_cleaned, df_tudd_cleaned, df_tudd_read_cleaned
 
 
 @app.cell
@@ -121,24 +60,13 @@ def _(config, pathlib, plt, sns):
         print(feature)
         plt.figure(figsize=(8, 5))
 
-        sns.histplot(
-            df_mimic[feature].dropna(),
-            bins=50,
-            color="red",
-            label="mimic",
-            kde=True,
-            stat="density",
-            alpha=0.5,
-        )
-        sns.histplot(
-            df_tudd[feature].dropna(),
-            bins=50,
-            color="blue",
-            label="tudd",
-            kde=True,
-            stat="density",
-            alpha=0.3,
-        )
+        for frame, color, label, alpha in (
+            (df_mimic, "red", "mimic", 0.5),
+            (df_tudd, "blue", "tudd", 0.3),
+        ):
+            sns.histplot(
+                frame[feature].dropna(), bins=50, color=color, label=label, kde=True, stat="density", alpha=alpha
+            )
 
         plt.xlabel("")
         plt.ylabel("Density")

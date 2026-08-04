@@ -87,7 +87,6 @@ def _(data_mortality, performance_table_to_latex):
         "line_width_percent": 0.5,
     }
 
-
     latex_mortality = performance_table_to_latex(results=data_mortality, **common_kwargs)
     print(latex_mortality)
     return common_kwargs, latex_mortality
@@ -125,40 +124,28 @@ def _(
 
 
 @app.cell
-def _(data_readmission):
+def _(data_mortality, data_readmission):
     # change sample size plots
-    from src.plotting.evaluation import plot_roc_auc, plot_over_training_size, plot_performance_vs_runtime
+    from src.plotting.evaluation import plot_over_training_size, plot_performance_vs_runtime
     import matplotlib.pyplot as plt
 
-    fig_sample_size = plot_over_training_size(data=data_readmission, ignore_models=[], datasets=("tudd",))
-
-    base_path_read = "./plots/sample_size/readmission/"
-    fig_sample_size.savefig(f"{base_path_read}all_models.png")
-    plt.show()
-
-    fig_ss_main = plot_over_training_size(data=data_readmission, include_models=["tabpfn-3", "xgboost", "logistic-regression", "tabicl-2", "tabfm"], datasets=("tudd",))
-    fig_ss_main.savefig(f"{base_path_read}main_models.png")
-    plt.show()
+    main_models = ["tabpfn-3", "xgboost", "logistic-regression", "tabicl-2", "tabfm"]
+    for plot_data, base_path in (
+        (data_readmission, "./plots/sample_size/readmission/"),
+        (data_mortality, "./plots/sample_size/mortality/"),
+    ):
+        for filename, included_models in (("all_models.png", None), ("main_models.png", main_models)):
+            fig_sample_size = plot_over_training_size(
+                data=plot_data, include_models=included_models, datasets=("tudd",)
+            )
+            fig_sample_size.savefig(f"{base_path}{filename}")
+            plt.show()
     return plot_over_training_size, plot_performance_vs_runtime, plt
 
 
 @app.cell
-def _(data_mortality, plot_over_training_size, plt):
-    fig_sample_size_mort = plot_over_training_size(data=data_mortality, ignore_models=[], datasets=("tudd",))
-
-    base_path_mort = "./plots/sample_size/mortality/"
-    fig_sample_size_mort.savefig(f"{base_path_mort}all_models.png")
-    plt.show()
-
-    fig_ss_main_mort = plot_over_training_size(data=data_mortality, include_models=["tabpfn-3", "xgboost", "logistic-regression", "tabicl-2", "tabfm"], datasets=("tudd",))
-    fig_ss_main_mort.savefig(f"{base_path_mort}main_models.png")
-    plt.show()
-    return
-
-
-@app.cell
 def _(data_readmission, plot_performance_vs_runtime, plt):
-    fig = plot_performance_vs_runtime(data=data_readmission, test_dataset="tudd")
+    plot_performance_vs_runtime(data=data_readmission, test_dataset="tudd")
 
     plt.show()
     return

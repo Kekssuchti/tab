@@ -9,6 +9,7 @@ from src.plotting.evaluation import (
     plot_model_setting_performance_vs_runtime,
     plot_over_training_size,
 )
+from src.plotting.plot_utils import format_model_setting_mapping
 
 
 def _repeated_run_data() -> pd.DataFrame:
@@ -116,12 +117,12 @@ def test_plot_over_training_size_averages_repeated_instance_ids_separately() -> 
 def _model_setting_data() -> pd.DataFrame:
     rows = []
     scores = {
-        "xgboost": ((0.70, 10.0), (0.75, 8.0)),
-        "logistic-regression": ((0.60, 2.0), (0.65, 1.0)),
+        "xgboost": ((0.70, 10.0, "baseline-b"), (0.75, 8.0, "tuned-run")),
+        "logistic-regression": ((0.60, 2.0, "baseline-a"), (0.65, 1.0, "tuned-run")),
     }
     for model, settings in scores.items():
         for dataset in ("mimic", "tudd"):
-            for score, runtime in settings:
+            for score, runtime, pipeline_run_name in settings:
                 dataset_score = score + (0.1 if dataset == "mimic" else 0.0)
                 rows.append(
                     {
@@ -129,6 +130,7 @@ def _model_setting_data() -> pd.DataFrame:
                         "statistic": "point",
                         "dataset": dataset,
                         "model_name": model,
+                        "pipeline_run_name": pipeline_run_name if dataset == "tudd" else "excluded-dataset-run",
                         "roc_auc": dataset_score,
                         "roc_auc_ci_lower": dataset_score - 0.02,
                         "roc_auc_ci_upper": dataset_score + 0.03,
@@ -141,6 +143,7 @@ def _model_setting_data() -> pd.DataFrame:
                 "statistic": "delta",
                 "dataset": "tudd",
                 "model_name": model,
+                "pipeline_run_name": "excluded-statistic-run",
                 "roc_auc": -0.1,
                 "total_time": 99.0,
             }
@@ -148,7 +151,26 @@ def _model_setting_data() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def test_model_setting_bars_filter_dataset_and_use_canonical_order_and_default_labels() -> None:
+def test_format_model_setting_mapping_uses_stable_runs_canonical_models_and_deduplicates() -> None:
+    frame = pd.DataFrame(
+        [
+            {"setting_index": 0, "pipeline_run_name": "baseline-b", "model_name": "xgboost"},
+            {"setting_index": 0, "pipeline_run_name": "baseline-b", "model_name": "xgboost"},
+            {"setting_index": 0, "pipeline_run_name": "baseline-b", "model_name": "logistic-regression"},
+            {"setting_index": 0, "pipeline_run_name": "baseline-a", "model_name": "tabpfn-3"},
+            {"setting_index": 1, "pipeline_run_name": "tuned-run", "model_name": "xgboost"},
+            {"setting_index": 1, "pipeline_run_name": "tuned-run", "model_name": "logistic-regression"},
+        ]
+    )
+
+    assert format_model_setting_mapping(frame, ("Base", "Tuned")) == (
+        "Model setting mapping:\n"
+        "Base: baseline-b: LR, XGBoost; baseline-a: TabPFNv3\n"
+        "Tuned: tuned-run: LR, XGBoost"
+    )
+
+
+def test_model_setting_bars_filter_dataset_and_use_canonical_order_and_default_labels(capsys) -> None:
     figure = plot_model_setting_performance(_model_setting_data())
 
     try:
@@ -167,11 +189,50 @@ def test_model_setting_bars_filter_dataset_and_use_canonical_order_and_default_l
         assert first_centers[0] < second_centers[0]
         assert first_centers[1] < second_centers[1]
         assert len(axis.collections) == 2  # one CI error-bar collection per setting
+        assert axis.get_ylim()[0] == pytest.approx(0.0)
+        figure.canvas.draw()
+        legend = axis.get_legend()
+        legend_box = legend.get_window_extent()
+        axis_box = axis.get_window_extent()
+        title_box = axis.title.get_window_extent()
+        assert legend_box.y0 >= axis_box.y1
+        assert legend_box.y0 > title_box.y1
+        assert legend_box.y1 <= figure.bbox.y1
+        assert legend_box.x0 + legend_box.width / 2 == pytest.approx(axis_box.x0 + axis_box.width / 2, abs=2)
+        assert legend._ncols == 2
+        assert capsys.readouterr().out == (
+            "Model setting mapping:\n"
+            "Setting 1: baseline-a: LR; baseline-b: XGBoost\n"
+            "Setting 2: tuned-run: LR, XGBoost\n"
+        )
     finally:
         plt.close(figure)
 
 
-def test_model_setting_bars_use_caller_labels_titles_and_model_filters() -> None:
+def test_model_setting_bars_support_auto_and_explicit_y_limits() -> None:
+    auto_figure = plot_model_setting_performance(_model_setting_data(), y_limits="auto")
+    explicit_figure = plot_model_setting_performance(_model_setting_data(), y_limits=(0.55, 0.82))
+
+    try:
+        auto_limits = auto_figure.axes[0].get_ylim()
+        assert 0.0 < auto_limits[0] < 0.58
+        assert auto_limits[1] > 0.78
+        assert explicit_figure.axes[0].get_ylim() == pytest.approx((0.55, 0.82))
+    finally:
+        plt.close(auto_figure)
+        plt.close(explicit_figure)
+
+
+@pytest.mark.parametrize(
+    "y_limits",
+    ["automatic", (0.5,), (0.5, 0.7, 0.9), (0.5, np.inf), (np.nan, 0.8), (0.8, 0.8), (0.9, 0.8)],
+)
+def test_model_setting_bars_reject_invalid_y_limits(y_limits) -> None:
+    with pytest.raises(ValueError, match="y_limits"):
+        plot_model_setting_performance(_model_setting_data(), y_limits=y_limits)
+
+
+def test_model_setting_bars_use_caller_labels_titles_and_model_filters(capsys) -> None:
     figure = plot_model_setting_performance(
         _model_setting_data(),
         include_models=["xgboost"],
@@ -188,6 +249,9 @@ def test_model_setting_bars_use_caller_labels_titles_and_model_filters() -> None
         assert axis.get_legend().get_title().get_text() == "Configuration"
         assert axis.get_title() == "Comparison"
         assert not axis.collections
+        assert capsys.readouterr().out == (
+            "Model setting mapping:\nBase: baseline-b: XGBoost\nTuned: tuned-run: XGBoost\n"
+        )
     finally:
         plt.close(figure)
 
@@ -207,7 +271,19 @@ def test_model_setting_bars_validate_occurrence_and_label_counts(mutator, messag
         plot_model_setting_performance(data, setting_labels=labels)
 
 
-def test_model_setting_runtime_scatter_plots_values_inverts_axis_and_annotates_models() -> None:
+def test_model_setting_plots_require_valid_pipeline_run_names_on_selected_rows() -> None:
+    missing_column = _model_setting_data().drop(columns="pipeline_run_name")
+    with pytest.raises(ValueError, match="Missing required evaluation columns: pipeline_run_name"):
+        plot_model_setting_performance(missing_column)
+
+    invalid_selected = _model_setting_data()
+    selected = (invalid_selected["dataset"] == "tudd") & (invalid_selected["statistic"] == "point")
+    invalid_selected.loc[selected.idxmax(), "pipeline_run_name"] = "  "
+    with pytest.raises(ValueError, match="pipeline_run_name.*fix the selected evaluation rows"):
+        plot_model_setting_performance_vs_runtime(invalid_selected)
+
+
+def test_model_setting_runtime_scatter_plots_values_inverts_axis_and_annotates_models(capsys) -> None:
     figure = plot_model_setting_performance_vs_runtime(
         _model_setting_data(),
         setting_labels=["Base", "Tuned"],
@@ -227,6 +303,12 @@ def test_model_setting_runtime_scatter_plots_values_inverts_axis_and_annotates_m
         assert axis.get_legend().get_title().get_text() == "Setup"
         assert axis.get_title() == "Runtime tradeoff"
         assert axis.get_xlabel() == "Model total time (seconds, log scale)"
+        assert all(annotation.arrow_patch is None for annotation in axis.texts)
+        assert capsys.readouterr().out == (
+            "Model setting mapping:\n"
+            "Base: baseline-a: LR; baseline-b: XGBoost\n"
+            "Tuned: tuned-run: LR, XGBoost\n"
+        )
     finally:
         plt.close(figure)
 
@@ -246,3 +328,21 @@ def test_model_setting_runtime_scatter_supports_linear_x_and_rejects_nonpositive
 
     with pytest.raises(ValueError, match="strictly positive"):
         plot_model_setting_performance_vs_runtime(data, log_x=True)
+
+
+def test_model_setting_runtime_scatter_keeps_plain_annotations_when_points_collide() -> None:
+    data = _model_setting_data()
+    selected = (data["dataset"] == "tudd") & (data["statistic"] == "point")
+    data.loc[selected, "total_time"] = 5.0
+    data.loc[selected, "roc_auc"] = 0.7
+
+    figure = plot_model_setting_performance_vs_runtime(data, show_ci=False)
+
+    try:
+        annotations = figure.axes[0].texts
+        positions = [annotation.get_position() for annotation in annotations]
+        assert positions == [(5, 4)] * len(annotations)
+        assert all(annotation.arrow_patch is None for annotation in annotations)
+        assert [annotation.get_text() for annotation in annotations] == ["LR", "LR", "XGBoost", "XGBoost"]
+    finally:
+        plt.close(figure)

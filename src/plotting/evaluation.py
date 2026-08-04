@@ -23,7 +23,12 @@ from src.plotting.defaults import (
     model_styles,
     ordered_models,
 )
-from src.plotting.plot_utils import prepare_model_setting_plot_data, runtime_label
+from src.plotting.plot_utils import (
+    calculate_y_limits,
+    format_model_setting_mapping,
+    prepare_model_setting_plot_data,
+    runtime_label,
+)
 
 _MODEL_COLUMNS = [
     "pipeline_mlflow_run_id",
@@ -35,6 +40,8 @@ _MODEL_COLUMNS = [
     "task_type",
     "trained_on",
 ]
+
+_UNIT_INTERVAL_METRICS = frozenset({"roc_auc", "prc_auc", "f1", "accuracy", "precision", "sensitivity"})
 
 
 def calculate_comparative_generalizability(
@@ -164,13 +171,14 @@ def plot_score_dumbbell(
                 s=42,
                 zorder=3,
             )
-            _plot_horizontal_ci(
+            _plot_ci(
                 ax,
-                rows[f"{dataset}_value"],
                 rows["_y"],
+                rows[f"{dataset}_value"],
                 rows[f"{dataset}_lower"],
                 rows[f"{dataset}_upper"],
                 style.color,
+                horizontal=True,
             )
 
     metric_label_text = metric_label(metric)
@@ -316,7 +324,7 @@ def plot_performance_vs_runtime(
             zorder=3,
             label=label,
         )
-        _plot_vertical_ci(
+        _plot_ci(
             ax,
             rows["runtime"],
             rows["external_score"],
@@ -343,7 +351,7 @@ def plot_performance_vs_runtime(
     centers = ", ".join(dataset.upper() for dataset in plot_data["external_dataset"].unique())
     ax.set_xscale("log")
     ax.set(
-        xlabel=_runtime_label(runtime_scope, runtime_metric),
+        xlabel=runtime_label(runtime_metric, log_x=True, scope=runtime_scope),
         ylabel=f"External {metric_label_text}",
         title=f"External performance ({centers}) vs runtime ",
     )
@@ -405,13 +413,7 @@ def plot_over_training_size(
         value_columns = [metric] + ([ci_lower, ci_upper] if has_ci else [])
         data = data.groupby(group_columns, sort=False, dropna=False)[value_columns].mean().reset_index()
 
-    instances = data["model_instance"].drop_duplicates().tolist()
-    styles = model_styles(data["model_name"].unique().tolist())
-    instance_model = data.drop_duplicates("model_instance").set_index("model_instance")["model_name"].to_dict()
-    instance_counts = data.groupby("model_name")["model_instance"].nunique()
-    # Draw lines and legend in canonical MODEL_ORDER rather than first-seen order.
-    model_rank = {model: index for index, model in enumerate(ordered_models(list(instance_model.values())))}
-    instances.sort(key=lambda instance: model_rank[instance_model[instance]])
+    instance_styles = _instance_plot_styles(data)
 
     datasets = tuple(datasets)
     fig, axes = plt.subplots(1, len(datasets), figsize=(5.5 * len(datasets), 5), squeeze=False)
@@ -419,13 +421,10 @@ def plot_over_training_size(
 
     for ax, dataset in zip(axes, datasets, strict=True):
         sub = data.loc[data["dataset"].eq(dataset)]
-        for instance in instances:
+        for instance, (style, label) in instance_styles.items():
             rows = sub.loc[sub["model_instance"].eq(instance)].sort_values("training_size")
             if rows.empty:
                 continue
-            model = instance_model[instance]
-            style = styles[model]
-            label = instance if instance_counts[model] > 1 else style.label
             ax.plot(
                 rows["training_size"],
                 rows[metric],
@@ -493,6 +492,7 @@ def plot_model_setting_performance(
     show_ci: bool = True,
     title: str | None = None,
     legend_title: str = "Setting",
+    y_limits: Literal["auto"] | tuple[float, float] | None = None,
 ) -> Figure:
     """Plot adjacent performance bars for repeated settings of each model.
 
@@ -502,6 +502,10 @@ def plot_model_setting_performance(
     averaged. Because evaluation rows do not represent every model parameter,
     setting differences cannot be inferred: occurrence order must consistently
     identify settings across models. Use ``setting_labels`` to name them.
+    A setting-to-pipeline/model mapping for the prepared rows is printed once.
+    ``y_limits=None`` preserves matplotlib's zero-based bar baseline,
+    ``y_limits="auto"`` zooms around displayed scores and confidence intervals,
+    and a two-number tuple applies exact limits.
     """
     prepared = prepare_model_setting_plot_data(
         data,
@@ -523,14 +527,12 @@ def plot_model_setting_performance(
         zip(prepared.setting_labels, prepared.setting_colors, strict=True)
     ):
         rows = (
-            frame.loc[frame["setting_index"].eq(setting_index)]
-            .set_index("model_name")
-            .loc[list(prepared.model_names)]
+            frame.loc[frame["setting_index"].eq(setting_index)].set_index("model_name").loc[list(prepared.model_names)]
         )
         positions = model_positions + (setting_index - (len(prepared.setting_labels) - 1) / 2) * bar_width
         ax.bar(positions, rows[metric], width=bar_width, color=color, label=setting_label, zorder=3)
         if prepared.has_ci:
-            _plot_vertical_ci(ax, positions, rows[metric], rows[ci_lower], rows[ci_upper], color)
+            _plot_ci(ax, positions, rows[metric], rows[ci_lower], rows[ci_upper], color)
 
     labels = [model_styles([model])[model].label for model in prepared.model_names]
     ax.set_xticks(model_positions, labels)
@@ -539,9 +541,27 @@ def plot_model_setting_performance(
         ylabel=metric_label(metric),
         title=title if title is not None else f"{metric_label(metric)} by model setting on {dataset_label(dataset)}",
     )
+    ci_lower_values = frame[ci_lower] if prepared.has_ci else None
+    ci_upper_values = frame[ci_upper] if prepared.has_ci else None
+    resolved_y_limits = calculate_y_limits(
+        frame[metric],
+        y_limits,
+        ci_lower=ci_lower_values,
+        ci_upper=ci_upper_values,
+        natural_bounds=(0.0, 1.0) if metric in _UNIT_INTERVAL_METRICS else None,
+    )
+    if resolved_y_limits is not None:
+        ax.set_ylim(resolved_y_limits)
     ax.grid(axis="y", alpha=0.3)
-    ax.legend(title=legend_title, frameon=False)
-    fig.tight_layout()
+    ax.legend(
+        title=legend_title,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.16),
+        ncol=min(len(prepared.setting_labels), 4),
+        frameon=False,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.78))
+    print(format_model_setting_mapping(frame, prepared.setting_labels))
     return fig
 
 
@@ -566,7 +586,9 @@ def plot_model_setting_performance_vs_runtime(
     :func:`plot_model_setting_performance`. Color identifies settings, while
     canonical model labels annotate points and model markers are shared with
     the other evaluation plots. The runtime axis is inverted so faster models
-    appear to the right; logarithmic scaling is used by default.
+    appear to the right; logarithmic scaling is used by default. Occurrence
+    order must consistently identify settings across models. A
+    setting-to-pipeline/model mapping for the prepared rows is printed once.
     """
     prepared = prepare_model_setting_plot_data(
         data,
@@ -576,10 +598,10 @@ def plot_model_setting_performance_vs_runtime(
         include_models=include_models,
         ignore_models=ignore_models,
         show_ci=show_ci,
-        runtime_metric=runtime_metric,
-        log_x=log_x,
     )
     frame = prepared.frame
+    if log_x and frame[runtime_metric].le(0).any():
+        raise ValueError(f"{runtime_metric} must be strictly positive when log_x=True")
     styles = model_styles(list(prepared.model_names))
     fig, ax = plt.subplots(figsize=(10, 6))
     ci_lower = f"{metric}_ci_lower"
@@ -593,7 +615,7 @@ def plot_model_setting_performance_vs_runtime(
         y = row[metric]
         ax.scatter(x, y, color=color, marker=styles[model].marker, s=58, zorder=3)
         if prepared.has_ci:
-            _plot_vertical_ci(
+            _plot_ci(
                 ax,
                 pd.Series([x]),
                 pd.Series([y]),
@@ -608,16 +630,13 @@ def plot_model_setting_performance_vs_runtime(
             textcoords="offset points",
             fontsize=8,
         )
-
     if log_x:
         ax.set_xscale("log")
     ax.invert_xaxis()
     ax.set(
         xlabel=runtime_label(runtime_metric, log_x=log_x),
         ylabel=metric_label(metric),
-        title=title
-        if title is not None
-        else f"{metric_label(metric)} vs model runtime on {dataset_label(dataset)}",
+        title=title if title is not None else f"{metric_label(metric)} vs model runtime on {dataset_label(dataset)}",
     )
     ax.grid(alpha=0.3, which="both")
     legend_handles = [
@@ -626,6 +645,7 @@ def plot_model_setting_performance_vs_runtime(
     ]
     ax.legend(handles=legend_handles, title=legend_title, frameon=False)
     fig.tight_layout()
+    print(format_model_setting_mapping(frame, prepared.setting_labels))
     return fig
 
 
@@ -653,20 +673,18 @@ def _instance_plot_styles(frame: pd.DataFrame) -> dict[str, tuple[ModelStyle, st
     with duplicate instances fall back to the raw instance id so legend
     entries never collide.
     """
-    unique = frame.drop_duplicates("model_instance")
-    instance_model: dict[str, str] = dict(
-        zip(unique["model_instance"].astype(str), unique["model_name"].astype(str), strict=True)
+    unique = frame.drop_duplicates("model_instance").assign(
+        model_instance=lambda rows: rows["model_instance"].astype(str),
+        model_name=lambda rows: rows["model_name"].astype(str),
     )
-    styles = model_styles(list(instance_model.values()))
-    instance_counts: dict[str, int] = {}
-    for model in instance_model.values():
-        instance_counts[model] = instance_counts.get(model, 0) + 1
-    result: dict[str, tuple[ModelStyle, str]] = {}
-    for instance, model in instance_model.items():
-        style = styles[model]
-        label = style.label if instance_counts[model] == 1 else instance
-        result[instance] = (style, label)
-    return result
+    models = ordered_models(unique["model_name"].tolist())
+    styles = model_styles(models)
+    counts = unique["model_name"].value_counts()
+    return {
+        row.model_instance: (styles[model], styles[model].label if counts[model] == 1 else row.model_instance)
+        for model in models
+        for row in unique.loc[unique["model_name"].eq(model)].itertuples()
+    }
 
 
 def _with_model_labels(frame: pd.DataFrame) -> pd.DataFrame:
@@ -676,69 +694,31 @@ def _with_model_labels(frame: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def _plot_horizontal_ci(
+def _plot_ci(
     ax: Axes,
-    values: pd.Series,
     positions: pd.Series,
-    lower: pd.Series,
-    upper: pd.Series,
-    color: str,
-) -> None:
-    values = np.asarray(values, dtype=float)
-    positions = np.asarray(positions, dtype=float)
-    lower = np.asarray(lower, dtype=float)
-    upper = np.asarray(upper, dtype=float)
-    present = ~np.isnan(lower) & ~np.isnan(upper)
-    if present.any():
-        ax.errorbar(
-            values[present],
-            positions[present],
-            xerr=[
-                values[present] - lower[present],
-                upper[present] - values[present],
-            ],
-            fmt="none",
-            ecolor=color,
-            capsize=2,
-            alpha=0.65,
-            zorder=2,
-        )
-
-
-def _plot_vertical_ci(
-    ax: Axes,
-    x: pd.Series,
     values: pd.Series,
     lower: pd.Series,
     upper: pd.Series,
     color: str,
+    *,
+    horizontal: bool = False,
 ) -> None:
-    x = np.asarray(x, dtype=float)
+    positions = np.asarray(positions, dtype=float)
     values = np.asarray(values, dtype=float)
     lower = np.asarray(lower, dtype=float)
     upper = np.asarray(upper, dtype=float)
     present = ~np.isnan(lower) & ~np.isnan(upper)
     if present.any():
+        errors = np.vstack((values[present] - lower[present], upper[present] - values[present]))
+        x, y = (values, positions) if horizontal else (positions, values)
         ax.errorbar(
             x[present],
-            values[present],
-            yerr=np.vstack(
-                [
-                    values[present] - lower[present],
-                    upper[present] - values[present],
-                ]
-            ),
+            y[present],
+            **{"xerr" if horizontal else "yerr": errors},
             fmt="none",
             ecolor=color,
             capsize=2,
             alpha=0.65,
             zorder=2,
         )
-
-
-def _runtime_label(scope: str, metric: str) -> str:
-    if (scope, metric) == ("model", "total_time"):
-        return "Model total time (seconds, log scale)"
-    scope_label = scope.replace("_", " ").title()
-    metric_label_text = metric.replace("_", " ")
-    return f"{scope_label} {metric_label_text} (seconds, log scale)"

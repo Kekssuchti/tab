@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Literal, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.colors import to_hex
 
-from src.plotting.defaults import ordered_models
+from src.plotting.defaults import model_label, ordered_models
 
 
 @dataclass(frozen=True)
 class ModelSettingPlotData:
-    """Validated rows and display metadata for model-setting comparisons."""
+    """Prepared rows and display metadata for model-setting comparisons."""
 
     frame: pd.DataFrame
     model_names: tuple[str, ...]
@@ -33,10 +33,8 @@ def prepare_model_setting_plot_data(
     include_models: Sequence[str] | None,
     ignore_models: Sequence[str] | None,
     show_ci: bool,
-    runtime_metric: str | None = None,
-    log_x: bool = False,
 ) -> ModelSettingPlotData:
-    """Filter and validate rows for a model-setting comparison.
+    """Filter rows for a model-setting comparison.
 
     Filtering by test scope, point statistic, and dataset happens before a
     setting index is assigned. Within each model, occurrences are numbered in
@@ -48,19 +46,10 @@ def prepare_model_setting_plot_data(
 
     Rows are never averaged or otherwise deduplicated.
     """
-    if not isinstance(data, pd.DataFrame):
-        raise TypeError("data must be one pandas DataFrame")
+    if "pipeline_run_name" not in data:
+        raise ValueError("Missing required evaluation columns: pipeline_run_name")
 
-    required = {"scope", "statistic", "dataset", "model_name", metric}
-    if runtime_metric is not None:
-        required.add(runtime_metric)
-    missing = sorted(required - set(data.columns))
-    if missing:
-        raise ValueError(f"Missing required evaluation columns: {', '.join(missing)}")
-
-    frame = data.loc[
-        data["scope"].eq("test") & data["statistic"].eq("point") & data["dataset"].eq(dataset)
-    ].copy()
+    frame = data.loc[data["scope"].eq("test") & data["statistic"].eq("point") & data["dataset"].eq(dataset)].copy()
     if ignore_models:
         frame = frame.loc[~frame["model_name"].isin(ignore_models)]
     if include_models:
@@ -69,30 +58,16 @@ def prepare_model_setting_plot_data(
         raise ValueError(
             f"No scope='test', statistic='point' rows are available for dataset {dataset!r} and the model filters"
         )
-
-    invalid_names = frame["model_name"].isna() | ~frame["model_name"].map(
-        lambda value: isinstance(value, str) and bool(value.strip())
-    )
-    if invalid_names.any():
-        raise ValueError("Column 'model_name' must contain a non-empty string for every selected row")
-
-    _coerce_finite_numeric(frame, metric, allow_missing=False)
-    if runtime_metric is not None:
-        _coerce_finite_numeric(frame, runtime_metric, allow_missing=False)
-        if log_x and frame[runtime_metric].le(0).any():
-            invalid = frame.loc[frame[runtime_metric].le(0), runtime_metric].tolist()
-            raise ValueError(
-                f"Runtime column {runtime_metric!r} must contain strictly positive values when log_x=True; "
-                f"found {invalid}"
-            )
+    valid_run_names = frame["pipeline_run_name"].map(lambda value: isinstance(value, str) and bool(value.strip()))
+    if not valid_run_names.all():
+        raise ValueError("pipeline_run_name must be a nonblank string; fix the selected evaluation rows")
 
     frame["setting_index"] = frame.groupby("model_name", sort=False).cumcount()
     counts = frame.groupby("model_name", sort=False).size()
     if counts.nunique() != 1:
         details = ", ".join(f"{model}={count}" for model, count in counts.items())
         raise ValueError(
-            "All compared models must have the same number of setting occurrences after filtering; "
-            f"found {details}"
+            f"All compared models must have the same number of setting occurrences after filtering; found {details}"
         )
     setting_count = int(counts.iloc[0])
     labels = _setting_labels(setting_labels, setting_count)
@@ -100,15 +75,6 @@ def prepare_model_setting_plot_data(
     ci_lower = f"{metric}_ci_lower"
     ci_upper = f"{metric}_ci_upper"
     has_ci = show_ci and ci_lower in frame.columns and ci_upper in frame.columns
-    if has_ci:
-        _coerce_finite_numeric(frame, ci_lower, allow_missing=True)
-        _coerce_finite_numeric(frame, ci_upper, allow_missing=True)
-        complete_ci = frame[ci_lower].notna() & frame[ci_upper].notna()
-        invalid_ci = complete_ci & ((frame[ci_lower] > frame[metric]) | (frame[ci_upper] < frame[metric]))
-        if invalid_ci.any():
-            raise ValueError(
-                f"Confidence interval columns {ci_lower!r} and {ci_upper!r} must bound {metric!r}"
-            )
 
     models = tuple(ordered_models(frame["model_name"].drop_duplicates().tolist()))
     model_rank = {model: index for index, model in enumerate(models)}
@@ -124,11 +90,75 @@ def prepare_model_setting_plot_data(
     )
 
 
-def runtime_label(runtime_metric: str, *, log_x: bool) -> str:
-    """Return the standard model-runtime axis label."""
+def runtime_label(runtime_metric: str, *, log_x: bool, scope: str = "model") -> str:
+    """Return the standard runtime axis label."""
     metric_text = "total time" if runtime_metric == "total_time" else runtime_metric.replace("_", " ")
     scale_text = ", log scale" if log_x else ""
-    return f"Model {metric_text} (seconds{scale_text})"
+    return f"{scope.replace('_', ' ').title()} {metric_text} (seconds{scale_text})"
+
+
+def format_model_setting_mapping(frame: pd.DataFrame, setting_labels: Sequence[str]) -> str:
+    """Format setting-to-pipeline/model provenance from prepared plot rows."""
+    lines = ["Model setting mapping:"]
+    for setting_index, setting_label in enumerate(setting_labels):
+        setting_rows = frame.loc[frame["setting_index"].eq(setting_index)]
+        pipeline_summaries = []
+        for pipeline_run_name in setting_rows["pipeline_run_name"].drop_duplicates():
+            run_rows = setting_rows.loc[setting_rows["pipeline_run_name"].eq(pipeline_run_name)]
+            models = ordered_models(run_rows["model_name"].drop_duplicates().tolist())
+            model_names = ", ".join(model_label(model) for model in models)
+            pipeline_summaries.append(f"{pipeline_run_name}: {model_names}")
+        lines.append(f"{setting_label}: {'; '.join(pipeline_summaries)}")
+    return "\n".join(lines)
+
+
+def calculate_y_limits(
+    values: Sequence[float],
+    y_limits: Literal["auto"] | tuple[float, float] | None,
+    *,
+    ci_lower: Sequence[float] | None = None,
+    ci_upper: Sequence[float] | None = None,
+    natural_bounds: tuple[float, float] | None = None,
+) -> tuple[float, float] | None:
+    """Return explicit limits or calculate padded limits around plotted values.
+
+    ``None`` leaves axis limit selection to matplotlib. Automatic limits include
+    complete confidence intervals and may be clipped to known natural metric
+    bounds, such as ``(0, 1)`` for classification scores.
+    """
+    if y_limits is None:
+        return None
+    if y_limits != "auto":
+        try:
+            lower, upper = map(float, y_limits)
+        except (TypeError, ValueError):
+            raise ValueError("y_limits must contain exactly two finite numeric bounds") from None
+        if not np.isfinite((lower, upper)).all() or lower >= upper:
+            raise ValueError("y_limits must contain finite bounds with lower < upper")
+        return lower, upper
+
+    bounds = [np.asarray(values, dtype=float).ravel()]
+    if ci_lower is not None and ci_upper is not None:
+        lower_values = np.asarray(ci_lower, dtype=float)
+        upper_values = np.asarray(ci_upper, dtype=float)
+        complete = np.isfinite(lower_values) & np.isfinite(upper_values)
+        bounds.extend((lower_values[complete], upper_values[complete]))
+
+    finite_bounds = np.concatenate(bounds)
+    finite_bounds = finite_bounds[np.isfinite(finite_bounds)]
+    lower = float(finite_bounds.min())
+    upper = float(finite_bounds.max())
+    span = upper - lower
+    scale = max(abs(lower), abs(upper), 1.0)
+    padding = 0.08 * span if span > scale * 1e-9 else 0.05 * scale
+    lower -= padding
+    upper += padding
+
+    if natural_bounds is not None:
+        natural_lower, natural_upper = natural_bounds
+        lower = max(lower, natural_lower)
+        upper = min(upper, natural_upper)
+    return lower, upper
 
 
 def _setting_labels(labels: Sequence[str] | None, setting_count: int) -> tuple[str, ...]:
@@ -146,16 +176,3 @@ def _setting_colors(setting_count: int) -> tuple[str, ...]:
         return tuple(to_hex(palette(index)) for index in range(setting_count))
     palette = plt.get_cmap("turbo")
     return tuple(to_hex(palette(value)) for value in np.linspace(0.05, 0.95, setting_count))
-
-
-def _coerce_finite_numeric(frame: pd.DataFrame, column: str, *, allow_missing: bool) -> None:
-    original = frame[column]
-    numeric = pd.to_numeric(original, errors="coerce")
-    invalid = numeric.isna() & (original.notna() if allow_missing else pd.Series(True, index=frame.index))
-    if not allow_missing:
-        invalid |= numeric.isna()
-    finite = numeric.notna() & ~np.isfinite(numeric)
-    if invalid.any() or finite.any():
-        requirement = "numeric and finite when present" if allow_missing else "numeric, nonmissing, and finite"
-        raise ValueError(f"Column {column!r} must be {requirement} for every selected row")
-    frame[column] = numeric
