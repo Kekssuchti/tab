@@ -23,6 +23,7 @@ from src.plotting.defaults import (
     model_styles,
     ordered_models,
 )
+from src.plotting.plot_utils import prepare_model_setting_plot_data, runtime_label
 
 _MODEL_COLUMNS = [
     "pipeline_mlflow_run_id",
@@ -360,6 +361,7 @@ def plot_over_training_size(
     *,
     metric: str = "roc_auc",
     datasets: Sequence[str] = ("mimic", "tudd"),
+    run_aggregation: Literal["average"] | None = None,
     log_x: bool = True,
     show_ci: bool = True,
     show_title: bool = True,
@@ -370,10 +372,16 @@ def plot_over_training_size(
     metric as the training sample size grows. Lines use the shared model styles
     from :func:`model_styles`. Confidence intervals are drawn as translucent
     bands around each line when available. Models listed in ``ignore_models``
-    are excluded from the plot.
+    are excluded from the plot. By default, repeated pipeline runs remain
+    separate points. Set ``run_aggregation="average"`` to average the metric
+    and available confidence interval bounds for each model instance, training
+    size, and test dataset. Instance IDs keep duplicate model configurations
+    separate while matching the same configuration across pipeline runs.
     """
     if metric not in data.columns:
         raise ValueError(f"Metric {metric!r} is not available in evaluation data")
+    if run_aggregation not in {None, "average"}:
+        raise ValueError("run_aggregation must be: average")
 
     ci_lower = f"{metric}_ci_lower"
     ci_upper = f"{metric}_ci_upper"
@@ -390,10 +398,12 @@ def plot_over_training_size(
     if data.empty:
         raise ValueError("No test rows are available for the requested datasets and metric")
 
-    # Collapse any duplicate model/dataset/size rows (e.g. repeated pipelines).
-    group_columns = ["model_name", "model_instance", "training_size", "dataset"]
-    value_columns = [metric] + ([ci_lower, ci_upper] if has_ci else [])
-    data = data.groupby(group_columns, dropna=False)[value_columns].mean().reset_index()
+    if run_aggregation == "average":
+        # A model_instance is stable across equivalent pipeline configurations;
+        # distinct duplicate configurations retain their __0/__1 instance IDs.
+        group_columns = ["model_name", "model_instance", "training_size", "dataset"]
+        value_columns = [metric] + ([ci_lower, ci_upper] if has_ci else [])
+        data = data.groupby(group_columns, sort=False, dropna=False)[value_columns].mean().reset_index()
 
     instances = data["model_instance"].drop_duplicates().tolist()
     styles = model_styles(data["model_name"].unique().tolist())
@@ -469,6 +479,153 @@ def plot_over_training_size(
 
     if show_title:
         fig.suptitle(f"{metric_label(metric)} vs training size", fontsize=13, y=0.99)
+    return fig
+
+
+def plot_model_setting_performance(
+    data: pd.DataFrame,
+    ignore_models: list[str] | None = None,
+    include_models: list[str] | None = None,
+    *,
+    metric: str = "roc_auc",
+    dataset: str = "tudd",
+    setting_labels: Sequence[str] | None = None,
+    show_ci: bool = True,
+    title: str | None = None,
+    legend_title: str = "Setting",
+) -> Figure:
+    """Plot adjacent performance bars for repeated settings of each model.
+
+    Selected ``scope='test'``/``statistic='point'`` rows are filtered to one
+    dataset before each model's occurrences are numbered in stable input order.
+    All model names must have equal occurrence counts, and occurrences are not
+    averaged. Because evaluation rows do not represent every model parameter,
+    setting differences cannot be inferred: occurrence order must consistently
+    identify settings across models. Use ``setting_labels`` to name them.
+    """
+    prepared = prepare_model_setting_plot_data(
+        data,
+        metric=metric,
+        dataset=dataset,
+        setting_labels=setting_labels,
+        include_models=include_models,
+        ignore_models=ignore_models,
+        show_ci=show_ci,
+    )
+    frame = prepared.frame
+    model_positions = np.arange(len(prepared.model_names), dtype=float)
+    bar_width = 0.8 / len(prepared.setting_labels)
+    fig, ax = plt.subplots(figsize=(max(7, 1.35 * len(prepared.model_names)), 5.5))
+
+    ci_lower = f"{metric}_ci_lower"
+    ci_upper = f"{metric}_ci_upper"
+    for setting_index, (setting_label, color) in enumerate(
+        zip(prepared.setting_labels, prepared.setting_colors, strict=True)
+    ):
+        rows = (
+            frame.loc[frame["setting_index"].eq(setting_index)]
+            .set_index("model_name")
+            .loc[list(prepared.model_names)]
+        )
+        positions = model_positions + (setting_index - (len(prepared.setting_labels) - 1) / 2) * bar_width
+        ax.bar(positions, rows[metric], width=bar_width, color=color, label=setting_label, zorder=3)
+        if prepared.has_ci:
+            _plot_vertical_ci(ax, positions, rows[metric], rows[ci_lower], rows[ci_upper], color)
+
+    labels = [model_styles([model])[model].label for model in prepared.model_names]
+    ax.set_xticks(model_positions, labels)
+    ax.set(
+        xlabel="Model",
+        ylabel=metric_label(metric),
+        title=title if title is not None else f"{metric_label(metric)} by model setting on {dataset_label(dataset)}",
+    )
+    ax.grid(axis="y", alpha=0.3)
+    ax.legend(title=legend_title, frameon=False)
+    fig.tight_layout()
+    return fig
+
+
+def plot_model_setting_performance_vs_runtime(
+    data: pd.DataFrame,
+    ignore_models: list[str] | None = None,
+    include_models: list[str] | None = None,
+    *,
+    metric: str = "roc_auc",
+    runtime_metric: str = "total_time",
+    dataset: str = "tudd",
+    setting_labels: Sequence[str] | None = None,
+    log_x: bool = True,
+    show_ci: bool = True,
+    title: str | None = None,
+    legend_title: str = "Setting",
+) -> Figure:
+    """Plot setting-level model performance against runtime.
+
+    Setting occurrences use the same filtering, stable ordering, equal-count
+    validation, and no-aggregation semantics as
+    :func:`plot_model_setting_performance`. Color identifies settings, while
+    canonical model labels annotate points and model markers are shared with
+    the other evaluation plots. The runtime axis is inverted so faster models
+    appear to the right; logarithmic scaling is used by default.
+    """
+    prepared = prepare_model_setting_plot_data(
+        data,
+        metric=metric,
+        dataset=dataset,
+        setting_labels=setting_labels,
+        include_models=include_models,
+        ignore_models=ignore_models,
+        show_ci=show_ci,
+        runtime_metric=runtime_metric,
+        log_x=log_x,
+    )
+    frame = prepared.frame
+    styles = model_styles(list(prepared.model_names))
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ci_lower = f"{metric}_ci_lower"
+    ci_upper = f"{metric}_ci_upper"
+
+    for _, row in frame.iterrows():
+        setting_index = int(row["setting_index"])
+        model = row["model_name"]
+        color = prepared.setting_colors[setting_index]
+        x = row[runtime_metric]
+        y = row[metric]
+        ax.scatter(x, y, color=color, marker=styles[model].marker, s=58, zorder=3)
+        if prepared.has_ci:
+            _plot_vertical_ci(
+                ax,
+                pd.Series([x]),
+                pd.Series([y]),
+                pd.Series([row[ci_lower]]),
+                pd.Series([row[ci_upper]]),
+                color,
+            )
+        ax.annotate(
+            styles[model].label,
+            (x, y),
+            xytext=(5, 4),
+            textcoords="offset points",
+            fontsize=8,
+        )
+
+    if log_x:
+        ax.set_xscale("log")
+    ax.invert_xaxis()
+    ax.set(
+        xlabel=runtime_label(runtime_metric, log_x=log_x),
+        ylabel=metric_label(metric),
+        title=title
+        if title is not None
+        else f"{metric_label(metric)} vs model runtime on {dataset_label(dataset)}",
+    )
+    ax.grid(alpha=0.3, which="both")
+    legend_handles = [
+        Line2D([], [], marker="o", linestyle="none", color=color, markersize=7, label=label)
+        for label, color in zip(prepared.setting_labels, prepared.setting_colors, strict=True)
+    ]
+    ax.legend(handles=legend_handles, title=legend_title, frameon=False)
+    fig.tight_layout()
     return fig
 
 
@@ -565,10 +722,12 @@ def _plot_vertical_ci(
         ax.errorbar(
             x[present],
             values[present],
-            yerr=[
-                values[present] - lower[present],
-                upper[present] - values[present],
-            ],
+            yerr=np.vstack(
+                [
+                    values[present] - lower[present],
+                    upper[present] - values[present],
+                ]
+            ),
             fmt="none",
             ecolor=color,
             capsize=2,

@@ -1,5 +1,5 @@
 dataset:
-  target: LOS7
+  target: mortality
   random_state: 1337
   train_size: 0.8
   train_on:
@@ -149,4 +149,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tudd_baseline_LOS7
+  experiment_name: tudd_baseline_mean_standardize_mortality
