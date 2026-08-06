@@ -29,5 +29,5 @@ fi
 for ((i = 0; i < REPEATS; i++)); do
     seed=$((BASE_SEED + i))
     echo "=== Baseline run $((i + 1))/${REPEATS} (SEED=${seed}) ==="
-    SEED="${seed}" uv run python -m src.run_pipeline -c "${BASELINE_CONFIG_NAME} --suite"
+    SEED="${seed}" uv run python -m src.run_pipeline -c "${BASELINE_CONFIG_NAME}" --suite
 done

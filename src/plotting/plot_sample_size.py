@@ -82,7 +82,7 @@ def _(data_readmission):
 
 
 @app.cell
-def _(data_los7, data_mortality, data_readmission, data_readmission_72):
+def _(data_los7, data_mortality, data_readmission_72):
     # change sample size plots
     import matplotlib.pyplot as plt
 
@@ -90,7 +90,7 @@ def _(data_los7, data_mortality, data_readmission, data_readmission_72):
 
     save_figs = True
     setups = {
-        "readmission": (data_readmission, "./plots/sample_size/readmission/"),
+        #"readmission": (data_readmission, "./plots/sample_size/readmission/"),
         "readmission_72": (data_readmission_72, "./plots/sample_size/readmission_72/"),
         "mortality": (data_mortality, "./plots/sample_size/mortality/"),
         "los7": (data_los7, "./plots/sample_size/LOS7/"),
@@ -134,7 +134,11 @@ def _(
     for exp_data, base_save_path in setups.values():
         for setting, included_models in model_setups.items():
             fig = plot_over_training_size(
-                data=exp_data, include_models=included_models, datasets=datasets_to_plot, show_title=False
+                data=exp_data,
+                include_models=included_models,
+                datasets=datasets_to_plot,
+                run_aggregation="average",
+                show_title=False,
             )
             if save_figs:
                 fig.savefig(f"{base_save_path}{setting}_models.svg")

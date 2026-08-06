@@ -63,7 +63,10 @@ def _():
     }
     common_kwargs = {
         "show_ci": False,
-        "setting_labels": ["Mean", "KNN (5)", "Native/Mean"],
+        "setting_labels": ["Mean", "KNN (5)", "Native"],
+        "excluded_models_by_setting": {
+            "Native": ["tabswift", "orion-msp", "tabfm", "logistic-regression"],
+        },
         "dataset": "tudd",
     }
     save_figs = True
@@ -84,7 +87,7 @@ def _(
             data_imputation,
             include_models=models,
             legend_title="Missing Value Imputation",
-            title="Preprocessing comparison",
+            title="",
             y_limits="auto",
             **common_kwargs,
         )
@@ -108,6 +111,7 @@ def _(
             data_imputation,
             include_models=models2,
             legend_title="Preprocessing",
+            title="",
             log_x=True,
             **common_kwargs,
         )

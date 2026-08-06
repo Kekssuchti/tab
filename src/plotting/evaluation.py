@@ -6,7 +6,8 @@ Shared style defaults (colors, markers, labels) come from
 
 from __future__ import annotations
 
-from typing import Literal, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -489,6 +490,7 @@ def plot_model_setting_performance(
     metric: str = "roc_auc",
     dataset: str = "tudd",
     setting_labels: Sequence[str] | None = None,
+    excluded_models_by_setting: Mapping[str, Sequence[str]] | None = None,
     show_ci: bool = True,
     title: str | None = None,
     legend_title: str = "Setting",
@@ -497,15 +499,22 @@ def plot_model_setting_performance(
     """Plot adjacent performance bars for repeated settings of each model.
 
     Selected ``scope='test'``/``statistic='point'`` rows are filtered to one
-    dataset before each model's occurrences are numbered in stable input order.
-    All model names must have equal occurrence counts, and occurrences are not
-    averaged. Because evaluation rows do not represent every model parameter,
-    setting differences cannot be inferred: occurrence order must consistently
-    identify settings across models. Use ``setting_labels`` to name them.
-    A setting-to-pipeline/model mapping for the prepared rows is printed once.
+    dataset before each model instance's occurrences are numbered in stable
+    input order. All instances must have equal occurrence counts, and
+    occurrences are not averaged. Because evaluation rows do not represent
+    every model parameter, setting differences cannot be inferred: occurrence
+    order must consistently identify settings across models. Use
+    ``setting_labels`` to name them.
+    ``excluded_models_by_setting`` can remove individual model/setting cells
+    after occurrence validation: keys are resolved setting labels, while each
+    selector matches either every instance of a ``model_name`` or one exact
+    ``model_instance``. Excluded cells remain gaps and settings are not
+    renumbered; selectors absent from the selected model subset have no effect.
+    A setting-to-pipeline/model mapping for retained rows is printed once.
     ``y_limits=None`` preserves matplotlib's zero-based bar baseline,
     ``y_limits="auto"`` zooms around displayed scores and confidence intervals,
-    and a two-number tuple applies exact limits.
+    and a two-number tuple applies exact limits. ``title=None`` or an empty
+    title suppresses the plot title.
     """
     prepared = prepare_model_setting_plot_data(
         data,
@@ -515,31 +524,33 @@ def plot_model_setting_performance(
         include_models=include_models,
         ignore_models=ignore_models,
         show_ci=show_ci,
+        excluded_models_by_setting=excluded_models_by_setting,
     )
     frame = prepared.frame
-    model_positions = np.arange(len(prepared.model_names), dtype=float)
+    model_positions = np.arange(len(prepared.model_instances), dtype=float)
+    instance_positions = dict(zip(prepared.model_instances, model_positions, strict=True))
     bar_width = 0.8 / len(prepared.setting_labels)
-    fig, ax = plt.subplots(figsize=(max(7, 1.35 * len(prepared.model_names)), 5.5))
+    fig, ax = plt.subplots(figsize=(max(7, 1.35 * len(prepared.model_instances)), 5.5))
 
     ci_lower = f"{metric}_ci_lower"
     ci_upper = f"{metric}_ci_upper"
     for setting_index, (setting_label, color) in enumerate(
         zip(prepared.setting_labels, prepared.setting_colors, strict=True)
     ):
-        rows = (
-            frame.loc[frame["setting_index"].eq(setting_index)].set_index("model_name").loc[list(prepared.model_names)]
-        )
-        positions = model_positions + (setting_index - (len(prepared.setting_labels) - 1) / 2) * bar_width
+        rows = frame.loc[frame["setting_index"].eq(setting_index)]
+        positions = rows["model_instance"].map(instance_positions).to_numpy(dtype=float)
+        # Global setting offsets deliberately preserve excluded horizontal slots.
+        positions += (setting_index - (len(prepared.setting_labels) - 1) / 2) * bar_width
         ax.bar(positions, rows[metric], width=bar_width, color=color, label=setting_label, zorder=3)
         if prepared.has_ci:
             _plot_ci(ax, positions, rows[metric], rows[ci_lower], rows[ci_upper], color)
 
-    labels = [model_styles([model])[model].label for model in prepared.model_names]
+    instance_styles = _instance_plot_styles(frame)
+    labels = [instance_styles[instance][1] for instance in prepared.model_instances]
     ax.set_xticks(model_positions, labels)
     ax.set(
         xlabel="Model",
         ylabel=metric_label(metric),
-        title=title if title is not None else f"{metric_label(metric)} by model setting on {dataset_label(dataset)}",
     )
     ci_lower_values = frame[ci_lower] if prepared.has_ci else None
     ci_upper_values = frame[ci_upper] if prepared.has_ci else None
@@ -553,14 +564,13 @@ def plot_model_setting_performance(
     if resolved_y_limits is not None:
         ax.set_ylim(resolved_y_limits)
     ax.grid(axis="y", alpha=0.3)
-    ax.legend(
-        title=legend_title,
-        loc="lower center",
-        bbox_to_anchor=(0.5, 1.16),
-        ncol=min(len(prepared.setting_labels), 4),
-        frameon=False,
+    _apply_model_setting_header(
+        fig,
+        ax,
+        title=title,
+        legend_title=legend_title,
+        legend_columns=min(len(prepared.setting_labels), 4),
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.78))
     print(format_model_setting_mapping(frame, prepared.setting_labels))
     return fig
 
@@ -574,6 +584,7 @@ def plot_model_setting_performance_vs_runtime(
     runtime_metric: str = "total_time",
     dataset: str = "tudd",
     setting_labels: Sequence[str] | None = None,
+    excluded_models_by_setting: Mapping[str, Sequence[str]] | None = None,
     log_x: bool = True,
     show_ci: bool = True,
     title: str | None = None,
@@ -587,8 +598,13 @@ def plot_model_setting_performance_vs_runtime(
     canonical model labels annotate points and model markers are shared with
     the other evaluation plots. The runtime axis is inverted so faster models
     appear to the right; logarithmic scaling is used by default. Occurrence
-    order must consistently identify settings across models. A
-    setting-to-pipeline/model mapping for the prepared rows is printed once.
+    order must consistently identify settings across models.
+    ``excluded_models_by_setting`` removes retained points after equal-count
+    validation, using resolved setting labels and selectors that match either a
+    whole ``model_name`` or one exact ``model_instance``. Settings are not
+    renumbered, and selectors absent from the selected model subset have no
+    effect. A setting-to-pipeline/model mapping for retained rows is printed once.
+    ``title=None`` or an empty title suppresses the plot title.
     """
     prepared = prepare_model_setting_plot_data(
         data,
@@ -598,22 +614,24 @@ def plot_model_setting_performance_vs_runtime(
         include_models=include_models,
         ignore_models=ignore_models,
         show_ci=show_ci,
+        excluded_models_by_setting=excluded_models_by_setting,
     )
     frame = prepared.frame
     if log_x and frame[runtime_metric].le(0).any():
         raise ValueError(f"{runtime_metric} must be strictly positive when log_x=True")
-    styles = model_styles(list(prepared.model_names))
+    instance_styles = _instance_plot_styles(frame)
     fig, ax = plt.subplots(figsize=(10, 6))
     ci_lower = f"{metric}_ci_lower"
     ci_upper = f"{metric}_ci_upper"
 
     for _, row in frame.iterrows():
         setting_index = int(row["setting_index"])
-        model = row["model_name"]
+        instance = row["model_instance"]
+        style, instance_label = instance_styles[instance]
         color = prepared.setting_colors[setting_index]
         x = row[runtime_metric]
         y = row[metric]
-        ax.scatter(x, y, color=color, marker=styles[model].marker, s=58, zorder=3)
+        ax.scatter(x, y, color=color, marker=style.marker, s=58, zorder=3)
         if prepared.has_ci:
             _plot_ci(
                 ax,
@@ -624,7 +642,7 @@ def plot_model_setting_performance_vs_runtime(
                 color,
             )
         ax.annotate(
-            styles[model].label,
+            instance_label,
             (x, y),
             xytext=(5, 4),
             textcoords="offset points",
@@ -636,17 +654,53 @@ def plot_model_setting_performance_vs_runtime(
     ax.set(
         xlabel=runtime_label(runtime_metric, log_x=log_x),
         ylabel=metric_label(metric),
-        title=title if title is not None else f"{metric_label(metric)} vs model runtime on {dataset_label(dataset)}",
     )
     ax.grid(alpha=0.3, which="both")
     legend_handles = [
         Line2D([], [], marker="o", linestyle="none", color=color, markersize=7, label=label)
         for label, color in zip(prepared.setting_labels, prepared.setting_colors, strict=True)
     ]
-    ax.legend(handles=legend_handles, title=legend_title, frameon=False)
-    fig.tight_layout()
+    _apply_model_setting_header(
+        fig,
+        ax,
+        title=title,
+        legend_title=legend_title,
+        legend_columns=min(len(prepared.setting_labels), 4),
+        legend_handles=legend_handles,
+    )
     print(format_model_setting_mapping(frame, prepared.setting_labels))
     return fig
+
+
+def _apply_model_setting_header(
+    fig: Figure,
+    ax: Axes,
+    *,
+    title: str | None,
+    legend_title: str,
+    legend_columns: int,
+    legend_handles: Sequence[Line2D] | None = None,
+) -> None:
+    if legend_handles is None:
+        handles, labels = ax.get_legend_handles_labels()
+    else:
+        handles = list(legend_handles)
+        labels = [handle.get_label() for handle in handles]
+
+    legend_y = 0.98
+    if title:
+        fig.suptitle(title, y=0.98, fontweight="bold")
+        legend_y = 0.92
+    fig.legend(
+        handles,
+        labels,
+        title=legend_title,
+        loc="upper center",
+        bbox_to_anchor=(0.5, legend_y),
+        ncol=legend_columns,
+        frameon=False,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
 
 
 def _test_scores(results: pd.DataFrame, metric: str) -> pd.DataFrame:
