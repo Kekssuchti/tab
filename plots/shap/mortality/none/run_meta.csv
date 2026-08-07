@@ -1,2 +1,2 @@
 ,model,fixed_params,fit_time_s,test_source,background_rows,explained_rows,transformed_features,class_index,budget_per_row,plots_saved_to
-0,tabpfn-3,"{'n_estimators': 4, 'fit_mode': 'fit_with_cache', 'random_state': 1337}",12.36622813899885,tudd,256,1000,30,1,2048,/var/home/keks/projects/tab/plots/shap/mortality/none
+0,tabpfn-3,"{'n_estimators': 4, 'fit_mode': 'fit_with_cache', 'random_state': 1337}",11.571457396996266,tudd,256,1000,30,1,2048,/var/home/keks/projects/tab/plots/shap/mortality/none

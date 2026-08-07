@@ -1,0 +1,5 @@
+name: feature_scaler
+base_config: ../pipeline/tudd_baseline_no_preprocessing.yaml
+matrix:
+  - path: dataset.imputer.imputation_method
+    values: ["mean", "none", "median", "most_frequent"]
