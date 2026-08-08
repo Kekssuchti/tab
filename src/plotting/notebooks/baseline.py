@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.23.16"
 app = marimo.App(width="full")
 
 
@@ -18,12 +18,14 @@ def _():
         load_evaluation_data,
     )
     from src.plotting.latex_table import performance_table_to_latex, multiple_latex_tables
+    from src.plotting.ablations import plot_model_setting_performance_vs_runtime
 
     return (
         list_pipeline_runs,
         load_evaluation_data,
         multiple_latex_tables,
         performance_table_to_latex,
+        plot_model_setting_performance_vs_runtime,
     )
 
 
@@ -76,6 +78,14 @@ def _(
 @app.cell
 def _(data_readmission):
     data_readmission
+    return
+
+
+@app.cell
+def _(data_los7, data_mortality, data_readmission):
+    for data in [data_mortality, data_los7, data_readmission]:
+        print(data["experiment_name"][0])
+        print(len(data["pipeline_id"].unique())) 
     return
 
 
@@ -140,6 +150,27 @@ def _(data_readmission, plot_performance_vs_runtime, plt):
     plot_performance_vs_runtime(data=data_readmission, test_dataset="tudd", show_ci=False)
 
     plt.show()
+    return
+
+
+@app.cell
+def _(
+    data_los7,
+    data_mortality,
+    data_readmission,
+    plot_model_setting_performance_vs_runtime,
+    plt,
+):
+    for df in [data_mortality, data_los7, data_readmission]: 
+        fig = plot_model_setting_performance_vs_runtime(
+            df,
+            run_aggregation="average",
+            runtime_metric="total_time",
+            show_ci=False,
+            ignore_models=["tabpfn-2.6"]
+        )
+    
+        plt.show()
     return
 
 

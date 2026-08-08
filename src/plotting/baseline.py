@@ -63,24 +63,18 @@ def calculate_comparative_generalizability(
     if lower_is_better:
         external["generalizability_loss"] = external["training_score"] - external["external_score"]
         external["best_external_score"] = external.groupby(groups, dropna=False)["external_score"].transform("min")
-        external["comparative_generalizability_loss"] = (
-            external["best_external_score"] - external["external_score"]
-        )
+        external["comparative_generalizability_loss"] = external["best_external_score"] - external["external_score"]
     else:
         external["generalizability_loss"] = external["external_score"] - external["training_score"]
         external["best_external_score"] = external.groupby(groups, dropna=False)["external_score"].transform("max")
-        external["comparative_generalizability_loss"] = (
-            external["external_score"] - external["best_external_score"]
-        )
+        external["comparative_generalizability_loss"] = external["external_score"] - external["best_external_score"]
     external["generalization_rank"] = (
         external.groupby(groups, dropna=False)["external_score"]
         .rank(method="min", ascending=lower_is_better)
         .astype(int)
     )
     external["model_specific_generalization_rank"] = (
-        external.groupby(groups, dropna=False)["generalizability_loss"]
-        .rank(method="min", ascending=False)
-        .astype(int)
+        external.groupby(groups, dropna=False)["generalizability_loss"].rank(method="min", ascending=False).astype(int)
     )
     return external[
         _MODEL_COLUMNS
@@ -293,21 +287,20 @@ def plot_performance_vs_runtime(
     *,
     include_models: Sequence[str] | None = None,
     metric: str = "roc_auc",
-    test_dataset: str | None = None,
+    test_dataset: str | None = "tudd",
     runtime_scope: str = "model",
     runtime_metric: str = "total_time",
     log_x: bool = True,
     show_ci: bool = True,
     title: str | None = None,
     ax: Axes | None = None,
+    aggregate: bool = False,
+    invert_x: bool = False,
 ) -> Axes:
     """Plot selected test performance against runtime, with score ranks."""
     data = _filter_models(data, include_models, ignore_models)
     scores = test_point_scores(data, metric)
-    if test_dataset is None:
-        scores = scores.loc[scores["dataset"].ne(scores["trained_on"])].copy()
-    else:
-        scores = scores.loc[scores["dataset"].eq(test_dataset)].copy()
+    scores = scores.loc[scores["dataset"].eq(test_dataset)].copy()
     scores = scores.rename(
         columns={
             "dataset": "external_dataset",
@@ -317,9 +310,11 @@ def plot_performance_vs_runtime(
         }
     )
     rank_groups = [column for column in ("target", "task_type", "external_dataset") if column in scores]
-    scores["generalization_rank"] = scores.groupby(rank_groups, dropna=False)["external_score"].rank(
-        method="min", ascending=metric_lower_is_better(metric)
-    ).astype(int)
+    scores["generalization_rank"] = (
+        scores.groupby(rank_groups, dropna=False)["external_score"]
+        .rank(method="min", ascending=metric_lower_is_better(metric))
+        .astype(int)
+    )
     timings = (
         data.loc[
             data["scope"].eq("test") & data[runtime_metric].notna(),

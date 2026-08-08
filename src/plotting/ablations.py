@@ -121,6 +121,7 @@ def plot_model_setting_performance_vs_runtime(
     setting_run_ids: Mapping[str, str | Sequence[str]] | None = None,
     setting_labels: Sequence[str] | None = None,
     excluded_models_by_setting: Mapping[str, Sequence[str]] | None = None,
+    run_aggregation: Literal["average"] | None = None,
     log_x: bool = True,
     show_ci: bool = True,
     title: str | None = None,
@@ -128,24 +129,50 @@ def plot_model_setting_performance_vs_runtime(
 ) -> Figure:
     """Plot setting-level model performance against runtime.
 
-    Prefer ``setting_run_ids`` to assign settings by pipeline MLflow run ID.
-    Multiple IDs may partition a setting's models across disjoint runs, but
-    cannot produce more than one row for the same model instance and setting
-    because this plot does not aggregate runs. The legacy occurrence-order
-    path remains available when it is omitted.
+    By default, prefer ``setting_run_ids`` to assign settings by pipeline
+    MLflow run ID. Multiple IDs may partition a setting's models across
+    disjoint runs, but cannot produce more than one row for the same model
+    instance and setting. The legacy occurrence-order path remains available
+    when it is omitted.
+
+    Set ``run_aggregation="average"`` to average repeated runs into one point
+    per model instance instead of comparing settings. This mode also averages
+    the selected runtime metric and available confidence interval bounds.
     """
-    prepared = prepare_model_setting_plot_data(
-        data,
-        metric=metric,
-        dataset=dataset,
+    _validate_run_aggregation_options(
+        run_aggregation,
         setting_run_ids=setting_run_ids,
         setting_labels=setting_labels,
-        include_models=include_models,
-        ignore_models=ignore_models,
-        show_ci=show_ci,
         excluded_models_by_setting=excluded_models_by_setting,
     )
-    frame = prepared.frame
+    _validate_required_columns(data, (metric, runtime_metric))
+
+    if run_aggregation == "average":
+        frame, has_ci = _prepare_averaged_run_plot_data(
+            data,
+            metric=metric,
+            runtime_metric=runtime_metric,
+            dataset=dataset,
+            include_models=include_models,
+            ignore_models=ignore_models,
+            show_ci=show_ci,
+        )
+        prepared = None
+    else:
+        prepared = prepare_model_setting_plot_data(
+            data,
+            metric=metric,
+            dataset=dataset,
+            setting_run_ids=setting_run_ids,
+            setting_labels=setting_labels,
+            include_models=include_models,
+            ignore_models=ignore_models,
+            show_ci=show_ci,
+            excluded_models_by_setting=excluded_models_by_setting,
+        )
+        frame = prepared.frame
+        has_ci = prepared.has_ci
+
     if log_x and frame[runtime_metric].le(0).any():
         raise ValueError(f"{runtime_metric} must be strictly positive when log_x=True")
     styles = instance_plot_styles(frame)
@@ -154,14 +181,13 @@ def plot_model_setting_performance_vs_runtime(
     ci_upper = f"{metric}_ci_upper"
 
     for _, row in frame.iterrows():
-        setting_index = int(row["setting_index"])
         instance = row["model_instance"]
         style, instance_label = styles[instance]
-        color = prepared.setting_colors[setting_index]
+        color = style.color if prepared is None else prepared.setting_colors[int(row["setting_index"])]
         x = row[runtime_metric]
         y = row[metric]
         ax.scatter(x, y, color=color, marker=style.marker, s=58, zorder=3)
-        if prepared.has_ci:
+        if has_ci:
             draw_confidence_intervals(
                 ax,
                 [x],
@@ -176,6 +202,12 @@ def plot_model_setting_performance_vs_runtime(
     ax.invert_xaxis()
     ax.set(xlabel=runtime_label(runtime_metric, log_x=log_x), ylabel=metric_label(metric))
     ax.grid(alpha=0.3, which="both")
+    if prepared is None:
+        if title:
+            ax.set_title(title, fontweight="bold", pad=10)
+        fig.tight_layout()
+        return fig
+
     legend_handles = [
         Line2D([], [], marker="o", linestyle="none", color=color, markersize=7, label=label)
         for label, color in zip(prepared.setting_labels, prepared.setting_colors, strict=True)
@@ -190,6 +222,127 @@ def plot_model_setting_performance_vs_runtime(
     )
     print(format_model_setting_mapping(frame, prepared.setting_labels))
     return fig
+
+
+def _validate_run_aggregation_options(
+    run_aggregation: Literal["average"] | None,
+    *,
+    setting_run_ids: Mapping[str, str | Sequence[str]] | None,
+    setting_labels: Sequence[str] | None,
+    excluded_models_by_setting: Mapping[str, Sequence[str]] | None,
+) -> None:
+    if run_aggregation not in (None, "average"):
+        raise ValueError(f"Unsupported run_aggregation {run_aggregation!r}; expected None or 'average'")
+    if run_aggregation is None:
+        return
+
+    conflicts = [
+        name
+        for name, value in (
+            ("setting_run_ids", setting_run_ids),
+            ("setting_labels", setting_labels),
+            ("excluded_models_by_setting", excluded_models_by_setting),
+        )
+        if value is not None
+    ]
+    if conflicts:
+        raise ValueError(
+            "run_aggregation='average' cannot be combined with setting-specific options: "
+            + ", ".join(conflicts)
+        )
+
+
+def _prepare_averaged_run_plot_data(
+    data: pd.DataFrame,
+    *,
+    metric: str,
+    runtime_metric: str,
+    dataset: str,
+    include_models: Sequence[str] | None,
+    ignore_models: Sequence[str] | None,
+    show_ci: bool,
+) -> tuple[pd.DataFrame, bool]:
+    _validate_required_columns(
+        data,
+        ("scope", "statistic", "dataset", "model_name", metric, runtime_metric),
+    )
+    frame = data.loc[
+        data["scope"].eq("test") & data["statistic"].eq("point") & data["dataset"].eq(dataset)
+    ].copy()
+    if ignore_models:
+        frame = frame.loc[~frame["model_name"].isin(ignore_models)]
+    if include_models:
+        frame = frame.loc[frame["model_name"].isin(include_models)]
+    if frame.empty:
+        raise ValueError(
+            f"No scope='test', statistic='point' rows are available for dataset {dataset!r} and the model filters"
+        )
+
+    selected_columns = list(dict.fromkeys((metric, runtime_metric)))
+    non_numeric = [column for column in selected_columns if not pd.api.types.is_numeric_dtype(frame[column])]
+    if non_numeric:
+        raise ValueError("Selected metric and runtime columns must be numeric: " + ", ".join(non_numeric))
+    infinite_selected = [
+        column
+        for column in selected_columns
+        if np.isinf(frame[column].dropna().to_numpy(dtype=float)).any()
+    ]
+    if infinite_selected:
+        raise ValueError(
+            "Selected metric and runtime columns must not contain infinite values: "
+            + ", ".join(infinite_selected)
+        )
+
+    frame = frame.dropna(subset=selected_columns)
+    if frame.empty:
+        raise ValueError(
+            f"No usable rows have both a finite {metric!r} metric and finite {runtime_metric!r} runtime"
+        )
+    if "model_instance" not in frame:
+        frame["model_instance"] = frame["model_name"]
+
+    names_per_instance = frame.groupby("model_instance", sort=False, dropna=False)["model_name"].nunique()
+    ambiguous_instances = names_per_instance[names_per_instance > 1]
+    if not ambiguous_instances.empty:
+        details = ", ".join(map(str, ambiguous_instances.index))
+        raise ValueError(f"Each model_instance must identify exactly one model_name; ambiguous: {details}")
+
+    ci_lower = f"{metric}_ci_lower"
+    ci_upper = f"{metric}_ci_upper"
+    has_ci = show_ci and ci_lower in frame.columns and ci_upper in frame.columns
+    average_columns = selected_columns.copy()
+    if has_ci:
+        ci_columns = [ci_lower, ci_upper]
+        non_numeric_ci = [column for column in ci_columns if not pd.api.types.is_numeric_dtype(frame[column])]
+        if non_numeric_ci:
+            raise ValueError("Confidence interval columns must be numeric: " + ", ".join(non_numeric_ci))
+        infinite_ci = [
+            column
+            for column in ci_columns
+            if np.isinf(frame[column].dropna().to_numpy(dtype=float)).any()
+        ]
+        if infinite_ci:
+            raise ValueError(
+                "Confidence interval columns must not contain infinite values when show_ci=True: "
+                + ", ".join(infinite_ci)
+            )
+        average_columns.extend(ci_columns)
+
+    frame = (
+        frame.groupby(["model_name", "model_instance"], sort=False, as_index=False, dropna=False)[average_columns]
+        .mean()
+    )
+    identities = frame[["model_name", "model_instance"]]
+    model_rank = {model: index for index, model in enumerate(ordered_models(identities["model_name"].tolist()))}
+    frame["_model_order"] = frame["model_name"].map(model_rank)
+    frame = frame.sort_values("_model_order", kind="stable").drop(columns="_model_order")
+    return frame, has_ci
+
+
+def _validate_required_columns(data: pd.DataFrame, required: Sequence[str]) -> None:
+    missing = sorted(set(required) - set(data.columns))
+    if missing:
+        raise ValueError(f"Missing required evaluation columns: {', '.join(missing)}")
 
 
 def prepare_model_setting_plot_data(

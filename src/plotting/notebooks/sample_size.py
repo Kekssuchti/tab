@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.23.16"
 app = marimo.App(width="full")
 
 
@@ -86,6 +86,14 @@ def _(data_readmission):
 
 @app.cell
 def _(data_los7, data_mortality, data_readmission_72):
+    for data in [data_mortality, data_los7, data_readmission_72]:
+        print(data["experiment_name"][0])
+        print(len(data["pipeline_id"].unique()) / 10) 
+    return
+
+
+@app.cell
+def _(data_los7, data_mortality, data_readmission_72):
     # change sample size plots
     import matplotlib.pyplot as plt
 
@@ -94,9 +102,9 @@ def _(data_los7, data_mortality, data_readmission_72):
     save_figs = True
     setups = {
         #"readmission": (data_readmission, "./plots/sample_size/readmission/"),
-        "readmission_72": (data_readmission_72, "./plots/sample_size/readmission_72/"),
         "mortality": (data_mortality, "./plots/sample_size/mortality/"),
         "los7": (data_los7, "./plots/sample_size/LOS7/"),
+        "readmission_72": (data_readmission_72, "./plots/sample_size/readmission_72/"),
     }
 
     model_setups = {
