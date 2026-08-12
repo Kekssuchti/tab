@@ -1,0 +1,5 @@
+name: target
+base_config: ../pipeline/temp.yaml
+matrix:
+  - path: dataset.target
+    values: ["mortality", "LOS7", "hours_to_readmit_72"]

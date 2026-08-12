@@ -4,7 +4,7 @@ dataset:
   train_size: 0.8
   train_on:
     - dataset: tudd
-      fraction: 0.5
+      fraction: 1.0
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
@@ -16,82 +16,16 @@ dataset:
     knn_neighbors: 5
 
 training:
-  - name: logistic-regression
-    preprocessing:
-      imputer:
-        imputation_method: mean
-      scaler_encoder:
-        type: standardization
+  - name: ebm
     tuning:
       method: optuna
       search_space: good
       scoring: roc_auc
       optuna:
-        n_trials: 50
+        n_trials: 100
         sampler: tpe
         n_startup_trials: 10
         timeout: null
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: xgboost
-    tuning:
-      method: optuna
-      search_space: good
-      scoring: roc_auc
-      optuna:
-        n_trials: 50
-        sampler: tpe
-        n_startup_trials: 10
-        timeout: null
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: tabpfn-3
-    tuning:
-      method: grid
-      search_space: best
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: tabicl-2
-    tuning:
-      method: grid
-      search_space: best
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: tabfm
-    preprocessing:
-      imputer:
-        imputation_method: mean
-    tuning:
-      method: grid
-      search_space: best
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-        random_state: 1337
-
-  - name: tabswift
-    preprocessing:
-      imputer:
-        imputation_method: mean
-    tuning:
-      method: grid
-      search_space: best
-      scoring: roc_auc
       cv:
         n_splits: 5
         shuffle: true
@@ -101,4 +35,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tudd_baseline_testing
+  experiment_name: ebm_search_space

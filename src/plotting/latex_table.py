@@ -10,7 +10,6 @@ from src.plotting.defaults import (
     DATASET_ORDER,
     MODEL_LABELS,
     MODEL_ORDER,
-    metric_lower_is_better,
 )
 
 CAPTION = r"Model performance (AUROC [95\% CI]) for the three ICU classification tasks across train and test set combinations. Gray fields show scenarios with external test sets. $\Delta_{\mathrm{spec}}$ shows model-specific and and $\Delta_{\mathrm{comp}}$ comparative generalizability loss"
@@ -193,7 +192,7 @@ def performance_table_to_latex(
         for instance in instances
         for dataset in datasets
     }
-    best = min if metric_lower_is_better(metric) else max
+    best = max if metric != "rmse" else min
     best_metric_values = {
         dataset: best(metric_values[(instance, dataset)] for instance in instances) for dataset in datasets
     }

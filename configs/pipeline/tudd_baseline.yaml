@@ -149,4 +149,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tudd_baseline_mortality
+  experiment_name: tudd_sample_size_mortality

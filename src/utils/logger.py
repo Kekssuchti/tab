@@ -1,4 +1,5 @@
 import logging
+import warnings
 from functools import lru_cache
 from logging.handlers import RotatingFileHandler
 
@@ -12,6 +13,13 @@ ACTIVE_LOG_FILE = "active.log"
 APPEND_LOG_FILE = "app.log"
 MAX_APPEND_LOG_BYTES = 10 * 1024 * 1024
 APPEND_LOG_BACKUP_COUNT = 10
+
+
+warnings.filterwarnings(
+    "ignore",
+    message="Missing values detected. Our visualizations do not currently display missing values.*",
+    category=UserWarning,
+)
 
 
 @lru_cache

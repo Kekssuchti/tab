@@ -189,7 +189,19 @@ SEARCH_SPACES = {
             "outer_bags": [8, 14],
             "inner_bags": [0, 4],
             "min_samples_leaf": [4, 10],
-        }
+        },
+        "good": {
+            "max_leaves": IntUniform(2, 3, 1),
+            "smoothing_rounds": IntUniform(0, 1000, 25),
+            "learning_rate": LogUniform(0.0025, 0.2),
+            # "interactions": Uniform(0.95, 0.99),
+            "interaction_smoothing_rounds": IntUniform(0, 200, 25),
+            "min_hessian": LogUniform(1 * 10**-10, 1 * 10**-2),
+            "validation_size": Uniform(0.05, 0.25),
+            "min_samples_leaf": IntUniform(2, 20, 1),
+            "early_stopping_tolerance": LogUniform(1 * 10**-10, 1 * 10**-5),
+            "gain_scale": LogUniform(0.5, 5),
+        },
     },
     "tabpfn": {
         "default": {

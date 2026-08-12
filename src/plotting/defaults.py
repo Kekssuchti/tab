@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import to_hex
 
-# --- Metric defaults -------------------------------------------------------
+# Metric alias
 
 METRIC_LABELS = {
     "roc_auc": "AUROC",
@@ -23,21 +23,15 @@ METRIC_LABELS = {
     "r2": "R²",
 }
 
-LOWER_IS_BETTER_METRICS = frozenset({"mae", "mse", "rmse"})
 
-
+# helper
 def metric_label(metric: str) -> str:
     return METRIC_LABELS.get(metric, metric.replace("_", " ").title())
 
 
-def metric_lower_is_better(metric: str) -> bool:
-    """Return whether smaller values represent better performance."""
-    return metric in LOWER_IS_BETTER_METRICS
-
-
 # --- Dataset defaults ------------------------------------------------------
 
-DATASET_COLORS = {"mimic": "#315C73", "tudd": "#D17A3F"}
+DATASET_COLORS = {"mimic": "#EB4A25", "tudd": "#3B82F6"}
 DATASET_NAMES = {"mimic": "MIMIC-IV", "tudd": "EUH"}
 DATASET_ORDER = ["tudd", "mimic"]
 
@@ -53,6 +47,7 @@ def ordered_datasets(dataset_names: Sequence[str]) -> list[str]:
     known = [name for name in DATASET_ORDER if name in present]
     unknown = [name for name in dict.fromkeys(dataset_names) if name not in DATASET_ORDER]
     return known + unknown
+
 
 # --- Model defaults --------------------------------------------------------
 
@@ -146,3 +141,42 @@ def set_plot_style() -> None:
             "ytick.labelsize": 9,
         }
     )
+
+
+# Feature aliases
+
+FEATURE_ALIASES: dict[str, str] = {
+    "mortality": "Mortality",
+    "LOS": "Length of Stay",
+    "Age": "Age",
+    "Sex": "Sex",
+    "Height+100%mean": "Height",
+    "Weight+100%mean": "Weight",
+    "ALAT+100%mean": "ALAT",
+    "ASAT+100%mean": "ASAT",
+    "Albumin+100%mean": "Albumin",
+    "AnionGAP+100%mean": "AnionGAP",
+    "Bilirubin+100%mean": "Bilirubin",
+    "FiO2+100%mean": "FiO2",
+    "GCST+100%mean": "GCST",
+    "GLU+100%mean": "GLU",
+    "HCO3+100%mean": "HCO3",
+    "HR+100%mean": "HR",
+    "Urea+100%mean": "Urea",
+    "Hb+100%mean": "Hb",
+    "Kalium+100%mean": "Kalium",
+    "Kreatinin+100%mean": "Kreatinin",
+    "Lactate+100%mean": "Lactate",
+    "Leukocyten+100%mean": "Leukocyten",
+    "MBP+100%mean": "MBP",
+    "Natrium+100%mean": "Natrium",
+    "PaCO2+100%mean": "PaCO2",
+    "PaO2+100%mean": "PaO2",
+    "Quick+100%mean": "Quick",
+    "RR+100%mean": "RR",
+    "Temp+100%mean": "Temp",
+    "Thrombocyten+100%mean": "Thrombocyten",
+    "Ph+100%mean": "Ph",
+    "Bmi+100%mean": "BMI",
+    "hours_to_readmit": "Hours to Readmit",
+}

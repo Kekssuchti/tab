@@ -32,8 +32,6 @@ def plot_over_training_size(
     ``run_aggregation="average"`` to average scores and available confidence
     bounds by model instance, training size, and test dataset.
     """
-    if metric not in data.columns:
-        raise ValueError(f"Metric {metric!r} is not available in evaluation data")
     if run_aggregation not in {None, "average"}:
         raise ValueError("run_aggregation must be: average")
 
@@ -49,8 +47,6 @@ def plot_over_training_size(
 
     data["training_size"] = pd.to_numeric(data["training_size"], errors="coerce")
     data = data.dropna(subset=["training_size"])
-    if data.empty:
-        raise ValueError("No test rows are available for the requested datasets and metric")
 
     if run_aggregation == "average":
         group_columns = ["model_name", "model_instance", "training_size", "dataset"]
@@ -94,9 +90,10 @@ def plot_over_training_size(
             ax.set_xscale("log")
         ax.set_xticks(sizes)
         ax.set_xticklabels([f"{int(size):,}" for size in sizes], rotation=45, ha="right", fontsize=8)
-        ax.set_xlabel("Training sample size")
+        ax.set_xlabel("Training Sample Count")
         ax.set_ylabel(metric_label(metric))
-        ax.set_title(dataset_label(dataset))
+        if show_title:
+            ax.set_title(dataset_label(dataset))
         ax.grid(alpha=0.3, which="both")
         ax.margins(y=0.08)
 

@@ -15,7 +15,8 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
 from src.plotting.defaults import metric_label, model_label, ordered_models
-from src.plotting.plot_support import draw_confidence_intervals, instance_plot_styles, runtime_label
+from src.plotting.plot_support import draw_confidence_intervals, instance_plot_styles
+from src.plotting.plot_utils import runtime_label
 
 _UNIT_INTERVAL_METRICS = frozenset({"roc_auc", "prc_auc", "f1", "accuracy", "precision", "sensitivity"})
 
@@ -247,8 +248,7 @@ def _validate_run_aggregation_options(
     ]
     if conflicts:
         raise ValueError(
-            "run_aggregation='average' cannot be combined with setting-specific options: "
-            + ", ".join(conflicts)
+            "run_aggregation='average' cannot be combined with setting-specific options: " + ", ".join(conflicts)
         )
 
 
@@ -266,9 +266,7 @@ def _prepare_averaged_run_plot_data(
         data,
         ("scope", "statistic", "dataset", "model_name", metric, runtime_metric),
     )
-    frame = data.loc[
-        data["scope"].eq("test") & data["statistic"].eq("point") & data["dataset"].eq(dataset)
-    ].copy()
+    frame = data.loc[data["scope"].eq("test") & data["statistic"].eq("point") & data["dataset"].eq(dataset)].copy()
     if ignore_models:
         frame = frame.loc[~frame["model_name"].isin(ignore_models)]
     if include_models:
@@ -283,21 +281,16 @@ def _prepare_averaged_run_plot_data(
     if non_numeric:
         raise ValueError("Selected metric and runtime columns must be numeric: " + ", ".join(non_numeric))
     infinite_selected = [
-        column
-        for column in selected_columns
-        if np.isinf(frame[column].dropna().to_numpy(dtype=float)).any()
+        column for column in selected_columns if np.isinf(frame[column].dropna().to_numpy(dtype=float)).any()
     ]
     if infinite_selected:
         raise ValueError(
-            "Selected metric and runtime columns must not contain infinite values: "
-            + ", ".join(infinite_selected)
+            "Selected metric and runtime columns must not contain infinite values: " + ", ".join(infinite_selected)
         )
 
     frame = frame.dropna(subset=selected_columns)
     if frame.empty:
-        raise ValueError(
-            f"No usable rows have both a finite {metric!r} metric and finite {runtime_metric!r} runtime"
-        )
+        raise ValueError(f"No usable rows have both a finite {metric!r} metric and finite {runtime_metric!r} runtime")
     if "model_instance" not in frame:
         frame["model_instance"] = frame["model_name"]
 
@@ -316,11 +309,7 @@ def _prepare_averaged_run_plot_data(
         non_numeric_ci = [column for column in ci_columns if not pd.api.types.is_numeric_dtype(frame[column])]
         if non_numeric_ci:
             raise ValueError("Confidence interval columns must be numeric: " + ", ".join(non_numeric_ci))
-        infinite_ci = [
-            column
-            for column in ci_columns
-            if np.isinf(frame[column].dropna().to_numpy(dtype=float)).any()
-        ]
+        infinite_ci = [column for column in ci_columns if np.isinf(frame[column].dropna().to_numpy(dtype=float)).any()]
         if infinite_ci:
             raise ValueError(
                 "Confidence interval columns must not contain infinite values when show_ci=True: "
@@ -328,10 +317,9 @@ def _prepare_averaged_run_plot_data(
             )
         average_columns.extend(ci_columns)
 
-    frame = (
-        frame.groupby(["model_name", "model_instance"], sort=False, as_index=False, dropna=False)[average_columns]
-        .mean()
-    )
+    frame = frame.groupby(["model_name", "model_instance"], sort=False, as_index=False, dropna=False)[
+        average_columns
+    ].mean()
     identities = frame[["model_name", "model_instance"]]
     model_rank = {model: index for index, model in enumerate(ordered_models(identities["model_name"].tolist()))}
     frame["_model_order"] = frame["model_name"].map(model_rank)
@@ -412,11 +400,15 @@ def prepare_model_setting_plot_data(
             for run_id in run_ids
         }
         frame = frame.loc[frame["pipeline_mlflow_run_id"].astype(str).isin(assignment)].copy()
-        frame["setting_index"] = frame["pipeline_mlflow_run_id"].astype(str).map(
-            {run_id: identity[0] for run_id, identity in assignment.items()}
+        frame["setting_index"] = (
+            frame["pipeline_mlflow_run_id"]
+            .astype(str)
+            .map({run_id: identity[0] for run_id, identity in assignment.items()})
         )
-        frame["setting_label"] = frame["pipeline_mlflow_run_id"].astype(str).map(
-            {run_id: identity[1] for run_id, identity in assignment.items()}
+        frame["setting_label"] = (
+            frame["pipeline_mlflow_run_id"]
+            .astype(str)
+            .map({run_id: identity[1] for run_id, identity in assignment.items()})
         )
         _validate_explicit_setting_matrix(frame, labels, excluded_models_by_setting)
 
@@ -569,8 +561,7 @@ def _normalize_setting_run_ids(
         duplicate_run_ids = [run_id for run_id in dict.fromkeys(run_ids) if run_ids.count(run_id) > 1]
         if duplicate_run_ids:
             raise ValueError(
-                f"Pipeline run IDs must not repeat within setting {label!r}: "
-                + ", ".join(duplicate_run_ids)
+                f"Pipeline run IDs must not repeat within setting {label!r}: " + ", ".join(duplicate_run_ids)
             )
         duplicates = seen.intersection(run_ids)
         if duplicates:
@@ -604,7 +595,6 @@ def _validate_explicit_setting_matrix(
     labels: Sequence[str],
     excluded_models_by_setting: Mapping[str, Sequence[str]] | None,
 ) -> None:
-    _validate_exclusion_setting_labels(labels, excluded_models_by_setting)
     if frame.empty:
         raise ValueError("No rows match setting_run_ids after applying model filters")
     counts = frame.groupby(["model_instance", "setting_index"], sort=False).size()
@@ -614,8 +604,7 @@ def _validate_explicit_setting_matrix(
         raise ValueError(
             "Each model instance must have at most one row per explicit setting because setting plots do not "
             "aggregate runs; multiple run IDs may partition models but cannot repeat a model instance. "
-            "Found duplicates: "
-            + details
+            "Found duplicates: " + details
         )
     observed = set(counts.index)
     instances = frame["model_instance"].drop_duplicates().tolist()
@@ -626,9 +615,7 @@ def _validate_explicit_setting_matrix(
         .agg(set)
         .to_dict()
     )
-    excluded_selectors = {
-        label: set(selectors) for label, selectors in (excluded_models_by_setting or {}).items()
-    }
+    excluded_selectors = {label: set(selectors) for label, selectors in (excluded_models_by_setting or {}).items()}
     missing = [
         f"{instance}/{label}"
         for instance in instances
@@ -657,27 +644,12 @@ def _exclude_model_setting_rows(
 ) -> pd.DataFrame:
     if not excluded_models_by_setting:
         return frame
-    _validate_exclusion_setting_labels(setting_labels, excluded_models_by_setting)
     excluded = pd.Series(False, index=frame.index)
     for setting_label, selectors in excluded_models_by_setting.items():
         excluded |= frame["setting_label"].eq(setting_label) & (
             frame["model_name"].isin(selectors) | frame["model_instance"].isin(selectors)
         )
     return frame.loc[~excluded].copy()
-
-
-def _validate_exclusion_setting_labels(
-    setting_labels: Sequence[str],
-    excluded_models_by_setting: Mapping[str, Sequence[str]] | None,
-) -> None:
-    if not excluded_models_by_setting:
-        return
-    if len(set(setting_labels)) != len(setting_labels):
-        raise ValueError("setting_labels must be unique when excluding models by setting")
-    unknown_labels = [label for label in excluded_models_by_setting if label not in setting_labels]
-    if unknown_labels:
-        labels = ", ".join(repr(label) for label in unknown_labels)
-        raise ValueError(f"Unknown setting label(s): {labels}")
 
 
 def _setting_colors(setting_count: int) -> tuple[str, ...]:

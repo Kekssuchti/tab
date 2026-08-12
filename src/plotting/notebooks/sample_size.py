@@ -152,6 +152,7 @@ def _(
                 show_title=False,
             )
             if save_figs:
+                fig.tight_layout()
                 fig.savefig(f"{base_save_path}{setting}_models.svg")
             plt.show()
     return
