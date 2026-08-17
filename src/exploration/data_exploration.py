@@ -24,13 +24,11 @@ def _():
 @app.cell
 def _(df_mimic, dtale):
     dtale.show(df_mimic)
-    return
 
 
 @app.cell
 def _(df_tudd, dtale):
     dtale.show(df_tudd)
-    return
 
 
 @app.cell

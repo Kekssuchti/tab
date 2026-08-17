@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 import numpy as np
 import pytest
 
@@ -6,7 +8,7 @@ from src.interfaces.model_interface import LogTargetModelAdapter, TimedPredictio
 
 class _RecordingRegressionAdapter:
     task_type = "regression"
-    kwargs = {}
+    kwargs: ClassVar[dict] = {}
     model = object()
 
     def __init__(self, predictions):

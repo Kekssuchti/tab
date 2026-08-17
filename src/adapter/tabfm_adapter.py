@@ -77,7 +77,3 @@ class TabfmAdapter(ModelAdapter):
         if hasattr(X, "iloc"):
             return X.iloc[start:stop]
         return X[start:stop]
-
-
-if __name__ == "__main__":
-    TabfmAdapter()

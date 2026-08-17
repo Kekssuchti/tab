@@ -9,7 +9,6 @@ def _():
     import sys
     from pathlib import Path
 
-    import marimo as mo
     import pandas as pd
 
     project_root = Path(__file__).resolve().parents[2]
@@ -59,7 +58,6 @@ def _(
         if save_plots:
             fig.savefig(f"{plots_output_dir}/{feature_name}.svg")
         plt.show()
-    return
 
 
 @app.cell
@@ -100,7 +98,6 @@ def _(
         if save_plots:
             fig_r.savefig(f"{plots_output_dir_read}/{feature_name_r}.svg")
         plt.show()
-    return
 
 
 if __name__ == "__main__":

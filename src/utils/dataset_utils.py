@@ -42,7 +42,7 @@ def remove_impossible_values(df, json_file_path):
             upper_bound = bounds["upper_bound"]
 
             before_count = df[column].notna().sum()
-            df[column] = df[column].apply(lambda x: x if lower_bound <= x <= upper_bound else None)
+            df[column] = df[column].where(df[column].between(lower_bound, upper_bound))
             after_count = df[column].notna().sum()
 
             removed_counts[column] = before_count - after_count
@@ -53,12 +53,10 @@ def remove_impossible_values(df, json_file_path):
 def remove_unused_columns(df, cols):
     # this assumes all cols we dont filter for are not worth keeping
     cols_before = df.columns.tolist()
+    columns_to_drop = [column for column in cols_before if column not in cols]
+    df = df.drop(columns=columns_to_drop)
 
-    for column in cols_before:
-        if column not in cols:
-            df = df.drop(columns=[column], errors="ignore")
-
-    logger.info(f"dropped columns: {set(cols_before) - set(df.columns.tolist())}")
+    logger.info(f"dropped columns: {set(columns_to_drop)}")
 
     return df
 
@@ -84,12 +82,13 @@ def _get_feature_cols(cols, is_readmission):
     return feature_cols
 
 
+UREA_TO_BUN = 2.1428  # conversion factor from total urea to blood urea nitrogen (BUN)
+
+
 def _convert_units(df, dataset_origin):
-    # most of this is already done from the data I recieve
-    # only urea is not correctly converted
-    # this is also only applied to tudd datasets to convert TOTAL UREA to BUN
-    if dataset_origin == "tudd":
-        df["Urea+100%mean"] = df["Urea+100%mean"] / 2.1428
+    # only applied to tudd datasets to convert TOTAL UREA to BUN
+    if dataset_origin == "tudd" and "Urea+100%mean" in df.columns:
+        df["Urea+100%mean"] = df["Urea+100%mean"] / UREA_TO_BUN
     return df
 
 
@@ -117,14 +116,14 @@ def _filter_reasonable_los(df, min_h, max_h):
     logger.debug(f"shape before LOS filter {df.shape}")
     df = df[df["LOS"] > min_h]
     df = df[df["LOS"] < max_h]
-    logger.debug(f"shape before LOS filter {df.shape}")
+    logger.debug(f"shape after LOS filter {df.shape}")
     return df
 
 
 def _filter_childs(df, min_age):
     logger.debug(f"shape before min age filter {df.shape}")
     df = df[df["Age"] >= min_age]
-    logger.debug(f"shape before min age filter {df.shape}")
+    logger.debug(f"shape after min age filter {df.shape}")
     return df
 
 
@@ -158,14 +157,12 @@ def standard_preprocessing(
         df: data
         readmission: bool if this is readmission dataset
         threshold_row: float threshold when missing data removes the row (sample)
-        threshold_col: float threshold when missing data removes the col (feature)
         data_limit_config_path: path for json limits enforced
 
     This is task agnostic preprocessing from extracted to filtered datasets
     It removes unrealistic values based on "data_limits.json" (by making them null)
     It filters for minimum LOS 24h
     It removes rows (samples) with more missing values than threshold_row (default 50%)
-    It removes cols (features) with more missing values than threshold_col (default 50%)
     It clips max age to max_age_filter (default 91) - confirms with MIMIC Age tracking
     """
     logger.debug(f"starting df len: {df.shape}")
@@ -196,7 +193,6 @@ def standard_preprocessing(
     df = _clean_dtypes(df)
     logger.debug(f"df len after _clean_dtypes: {len(df)}")
 
-    # still wip, we have minimally less rows than expected
     return df
 
 

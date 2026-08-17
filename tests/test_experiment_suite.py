@@ -4,6 +4,7 @@ import pytest
 
 from src.classes.experiment_suite import ExperimentSuite
 from src.run_pipeline import run_suite
+from src.schemas.suite_schemas import OverrideRangeConfig
 from src.utils.config_io import load_experiment_suite_config
 
 
@@ -121,3 +122,11 @@ def test_run_suite_dry_run_and_execution_use_concrete_configs(
     assert [call["fraction"] for call in calls] == [500, 1000, 1500]
     assert "fraction: 500" in calls[0]["config_text"]
     assert "run_id: base-run_training-size_fraction-500" in calls[0]["config_text"]
+
+
+def test_override_range_values_include_stop_on_float_steps():
+    values = OverrideRangeConfig(start=0.0, stop=0.3, step=0.1).values()
+
+    assert len(values) == 4
+    assert values[0] == pytest.approx(0.0)
+    assert values[-1] == pytest.approx(0.3)

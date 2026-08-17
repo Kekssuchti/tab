@@ -75,7 +75,6 @@ def _(
 @app.cell
 def _(data_readmission):
     data_readmission
-    return
 
 
 @app.cell
@@ -83,7 +82,6 @@ def _(data_los7, data_mortality, data_readmission):
     for data in [data_mortality, data_los7, data_readmission]:
         print(data["experiment_name"][0])
         print(len(data["pipeline_id"].unique()))
-    return
 
 
 @app.cell
@@ -120,7 +118,6 @@ def _(
             fig.savefig(f"{output_path}/{subdir}/performance_time.svg")
 
         plt.show()
-    return
 
 
 @app.cell
@@ -148,7 +145,6 @@ def _(
             fig2.savefig(f"{output_path}/{subdir2}/performance_test_time.svg")
 
         plt.show()
-    return
 
 
 @app.cell
@@ -305,7 +301,6 @@ def _(data_los7, data_mortality, data_readmission, performance_table_to_latex):
         metrics = ["prc_auc"]
     )
     print(table)
-    return
 
 
 if __name__ == "__main__":

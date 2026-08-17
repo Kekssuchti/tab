@@ -59,7 +59,7 @@ def classification_prediction_batch(
 def classification_score(metrics: ClassificationMetrics, scoring: ClassificationScoring) -> float:
     score = metrics.scores.get(scoring)
     if score is None:
-        raise ValueError(f"Scoring method '{scoring}' requires 2D class probabilities")
+        raise ValueError(f"Scoring method '{scoring}' is unavailable for these predictions")
     return score
 
 
@@ -72,9 +72,11 @@ def mean_classification_metrics(metrics: list[ClassificationMetrics]) -> Classif
         raise ValueError("Cannot average an empty metric list")
 
     confusion_matrices = [metric.confusion_matrix for metric in metrics if metric.confusion_matrix is not None]
+    roc_auc_values = [metric.roc_auc for metric in metrics if metric.roc_auc is not None]
+    prc_auc_values = [metric.prc_auc for metric in metrics if metric.prc_auc is not None]
     return ClassificationMetrics(
-        roc_auc=float(np.mean([metric.roc_auc for metric in metrics if metric.roc_auc is not None])),
-        prc_auc=float(np.mean([metric.prc_auc for metric in metrics if metric.prc_auc is not None])),
+        roc_auc=float(np.mean(roc_auc_values)) if roc_auc_values else None,
+        prc_auc=float(np.mean(prc_auc_values)) if prc_auc_values else None,
         f1=float(np.mean([metric.f1 for metric in metrics])),
         accuracy=float(np.mean([metric.accuracy for metric in metrics])),
         sensitivity=float(np.mean([metric.sensitivity for metric in metrics])),

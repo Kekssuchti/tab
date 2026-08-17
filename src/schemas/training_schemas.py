@@ -11,6 +11,10 @@ RegressionScoring = Literal["r2", "mae", "mse", "rmse"]
 ScoringMethod = ClassificationScoring | RegressionScoring
 TuningMethod = Literal["grid", "optuna"]
 
+# Metrics where a lower value is better; everything else is maximized.
+LOWER_IS_BETTER_SCORING = frozenset({"mae", "mse", "rmse"})
+HIGHER_IS_BETTER_SCORING = frozenset({"roc_auc", "f1", "accuracy", "r2"})
+
 
 class CrossValidationConfig(StrictConfig):
     """

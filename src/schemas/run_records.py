@@ -13,7 +13,6 @@ from src.schemas.metrics import (
 )
 from src.schemas.training_schemas import ScoringMethod, TuningMethod
 
-
 MetricT = TypeVar("MetricT", ClassificationMetrics, RegressionMetrics)
 ConfidenceMetricT = TypeVar(
     "ConfidenceMetricT",

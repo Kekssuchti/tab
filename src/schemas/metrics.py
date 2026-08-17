@@ -214,6 +214,8 @@ def calculate_metric_diff(
     Calculate the difference between two sets of metrics.
 
     Both inputs must be matching classification or regression metric variants.
+    Classification diffs always report confusion_matrix as None since it is not
+    subtracted.
     """
 
     if isinstance(mimic_metrics, BootstrapClassificationMetrics) and isinstance(

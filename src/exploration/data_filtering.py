@@ -12,9 +12,10 @@ def _():
 
     sys.path.append("/var/home/keks/projects/tab")
 
+    import dtale
+
     from src.config import config
     from src.utils.dataset_utils import standard_preprocessing
-    import dtale
 
     return config, dtale, pd, standard_preprocessing
 
@@ -35,19 +36,16 @@ def _(config, pd):
 @app.cell
 def _(df_tudd, dtale):
     dtale.show(df_tudd)
-    return
 
 
 @app.cell
 def _(df_mimic_read, dtale):
     dtale.show(df_mimic_read)
-    return
 
 
 @app.cell
 def _(df_tudd_read, dtale):
     dtale.show(df_tudd_read)
-    return
 
 
 @app.cell
@@ -68,31 +66,26 @@ def _(config, df_tudd, pd, standard_preprocessing):
 @app.cell
 def _(df_tudd):
     df_tudd["Urea+100%mean"].describe()
-    return
 
 
 @app.cell
 def _(df_tudd_filt):
     df_tudd_filt["Urea+100%mean"].describe()
-    return
 
 
 @app.cell
 def _(df_tudd_filter):
     df_tudd_filter["Urea+100%mean"].describe()
-    return
 
 
 @app.cell
 def _(df_mimic):
     df_mimic["Urea+100%mean"].describe()
-    return
 
 
 @app.cell
 def _(df_tudd_filt):
     df_tudd_filt.columns
-    return
 
 
 @app.cell
@@ -113,33 +106,28 @@ def _(config, df_tudd_read, pd, standard_preprocessing):
 @app.cell
 def _(df_tudd_read_filter, dtale):
     dtale.show(df_tudd_read_filter)
-    return
 
 
 @app.cell
 def _(df_tudd_filt, df_tudd_filter):
     missing_cols = df_tudd_filt.columns[~df_tudd_filt.columns.isin(df_tudd_filter.columns)]
     missing_cols
-    return
 
 
 @app.cell
 def _(df_tudd_filt):
     df_tudd_filt["Sex"].unique()
     df_tudd_filt["Sex"] = (df_tudd_filt["Sex"] == "F").astype(int)
-    return
 
 
 @app.cell
 def _(df_tudd_filt):
     df_tudd_filt.dtypes
-    return
 
 
 @app.cell
 def _(df_tudd_filter):
     df_tudd_filter.isna()
-    return
 
 
 @app.cell

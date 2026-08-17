@@ -19,6 +19,8 @@ def _():
     import shap
     from tabpfn_extensions.interpretability import (
         shapiq as tabpfn_shapiq,
+    )
+    from tabpfn_extensions.interpretability import (
         shapiq_to_shap_explanation,
     )
 
@@ -29,7 +31,7 @@ def _():
     from src.classes.data_registry import dataset_task_for_target
     from src.classes.dataset import Dataset
     from src.classes.trainer import Trainer
-    from src.schemas.dataset_schemas import DataSplitConfig, DatasetConfig
+    from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig
     from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
     from src.schemas.training_schemas import ModelConfig
     from src.utils.model_lifecycle import release_model
@@ -370,7 +372,6 @@ def _(importance_table, mo, plot_figures, run_summary, scatter_figures):
             ],
         ]
     )
-    return
 
 
 if __name__ == "__main__":

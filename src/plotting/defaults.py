@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import NamedTuple, Sequence
+from collections.abc import Sequence
+from typing import NamedTuple
 
 import matplotlib.pyplot as plt
 import numpy as np

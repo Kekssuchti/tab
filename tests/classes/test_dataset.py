@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from src.classes import dataset as dataset_module
-from src.classes.data_registry import DatasetTask, TARGET_LIKE_COLUMNS, dataset_task_for_target
+from src.classes.data_registry import TARGET_LIKE_COLUMNS, DatasetTask, dataset_task_for_target
 from src.classes.dataset import Dataset
 from src.schemas.dataset_schemas import (
     ClassificationTargetSummary,
@@ -62,8 +62,6 @@ def _dataset_params(
 def _labels_by_record_id(df: pd.DataFrame, target: str) -> dict[int, int | float]:
     if target == "hours_to_readmit":
         return df.set_index("record_id")[target].notna().astype(int).to_dict()
-    if target == "LOS7":
-        return (df.set_index("record_id")["LOS"] > 7 * 24).astype(int).to_dict()
     return df.set_index("record_id")[target].to_dict()
 
 
@@ -120,12 +118,10 @@ def test_dataset_task_has_only_target_as_dataclass_field():
 
 def test_feature_selection_does_not_mutate_target_like_columns():
     df = _make_rows("mimic", 1, 2)
-    original_columns = TARGET_LIKE_COLUMNS
 
     normal_features = dataset_task_for_target("mortality").features_from(df)
     readmission_features = dataset_task_for_target("hours_to_readmit").features_from(df)
 
-    assert TARGET_LIKE_COLUMNS == original_columns
     assert isinstance(TARGET_LIKE_COLUMNS, tuple)
     assert "LOS" not in normal_features
     assert "LOS" in readmission_features
@@ -296,7 +292,7 @@ def test_dataset_summarize_uses_target_task_type(monkeypatch):
     )
     part = XYDataset(X=pd.DataFrame(index=range(2)), y=pd.Series([48.0, 72.0]))
     bundle = DatasetBundle(train_data=part, test_mimic=part, test_tudd=part)
-    monkeypatch.setattr(dataset, "_summarize_data_files", lambda: [])
+    monkeypatch.setattr(dataset, "_summarize_data_files", list)
 
     summary = dataset.summarize(bundle)
 

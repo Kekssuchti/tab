@@ -22,8 +22,8 @@ def _():
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    from src.classes.dataset import Dataset
     from src.classes.data_registry import dataset_task_for_target
+    from src.classes.dataset import Dataset
     from src.classes.trainer import Trainer
     from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig
     from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
@@ -301,7 +301,6 @@ def _(evaluation_table, mo, speed_table):
             evaluation_table,
         ]
     )
-    return
 
 
 @app.cell
@@ -311,7 +310,6 @@ def _(TEST_SETS, speed_table):
         speeds = " / ".join(f"{round(row[f'rows_per_second_{dataset}']):,}" for dataset in TEST_SETS)
         latex_line = f"{row['model']} & {params_s} & {row['fit_time_s']:.2f} & {speeds} " + r"\\"
         print(latex_line)
-    return
 
 
 if __name__ == "__main__":

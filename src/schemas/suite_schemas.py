@@ -35,12 +35,10 @@ class OverrideRangeConfig(StrictConfig):
         return self
 
     def values(self) -> tuple[int | float, ...]:
-        values = []
-        current = self.start
-        while current <= self.stop:
-            values.append(current)
-            current += self.step
-        return tuple(values)
+        # Count-based generation avoids floating-point accumulation drift, which
+        # can otherwise drop the final value (e.g. start=0, stop=0.3, step=0.1).
+        count = round((self.stop - self.start) / self.step) + 1
+        return tuple(self.start + index * self.step for index in range(count))
 
 
 class SuiteOverrideConfig(StrictConfig):

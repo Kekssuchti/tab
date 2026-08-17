@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from src.classes import dataset as dataset_module
 from src.classes.pipeline import Pipeline
@@ -38,6 +39,7 @@ def _write_filtered_data(tmp_path) -> None:
     tudd.to_csv(filtered_path / "tudd_readmission.csv", index=False)
 
 
+@pytest.mark.integration
 def test_pipeline_runs_end_to_end_with_tuned_sklearn_and_tfm_models(tmp_path, monkeypatch):
     _write_filtered_data(tmp_path)
     monkeypatch.setattr(dataset_module, "config", SimpleNamespace(dir_data=tmp_path))

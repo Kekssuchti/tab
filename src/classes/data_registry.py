@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, NamedTuple
+from typing import NamedTuple
 
 import pandas as pd
 
@@ -10,7 +11,7 @@ TARGET_LIKE_COLUMNS = (
     "mortality",
     "LOS",  # regression
     "LOS3",  # binary, true if LOS <= 3 days
-    "LOS7",  # binary, true if LOS <= 7 days
+    "LOS7",  # binary, true if LOS > 7 days
     "hours_to_readmit",  # binary, did or didnt
     "hours_to_readmit_72",  # binary, true if readmitted within <= 72 hours
 )

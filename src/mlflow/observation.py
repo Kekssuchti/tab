@@ -22,7 +22,6 @@ from src.mlflow.tracking_contract import (
     RUN_TYPE_PIPELINE,
     STATUS_FAILED,
     STATUS_SUCCESS,
-    TAG_TRACKING_SCHEMA_VERSION,
     TAG_MODEL_INSTANCE,
     TAG_MODEL_NAME,
     TAG_PIPELINE_ID,
@@ -30,6 +29,7 @@ from src.mlflow.tracking_contract import (
     TAG_STATUS,
     TAG_TARGET,
     TAG_TASK_TYPE,
+    TAG_TRACKING_SCHEMA_VERSION,
     TAG_TRAIN_SOURCES,
     TAG_TRAINED_ON,
     TRACKING_SCHEMA_VERSION,
@@ -40,6 +40,7 @@ from src.mlflow.tracking_contract import (
     test_score_ci_metric,
     test_score_metric,
 )
+from src.mlflow.validation import validate_pipeline_projection
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import ClassificationTargetSummary, RegressionTargetSummary
 from src.schemas.metrics import (
@@ -58,7 +59,7 @@ from src.schemas.run_records import (
     PipelineRunRecord,
     TuningRecord,
 )
-from src.schemas.training_schemas import ModelConfig
+from src.schemas.training_schemas import LOWER_IS_BETTER_SCORING, ModelConfig
 from src.utils.evaluation_utils import (
     classification_score,
     mean_classification_metrics,
@@ -66,7 +67,6 @@ from src.utils.evaluation_utils import (
     regression_score,
 )
 from src.utils.model_identity import model_instance_ids
-from src.mlflow.validation import validate_pipeline_projection
 
 
 @dataclass(frozen=True)
@@ -240,8 +240,8 @@ def table_rows_to_columns(
         "value": [],
     }
     for row in rows:
-        for key in columns:
-            columns[key].append(getattr(row, key))
+        for key, values in columns.items():
+            values.append(getattr(row, key))
     return columns
 
 
@@ -295,7 +295,7 @@ def _cv_candidate_observations(
     candidate_summaries = _candidate_summaries(tuning_result, task_type)
     ranks = _candidate_ranks(
         [candidate.mean_score for candidate in candidate_summaries],
-        maximize=tuning_result.scoring not in {"mae", "mse", "rmse"},
+        maximize=tuning_result.scoring not in LOWER_IS_BETTER_SCORING,
     )
     observations = []
     for position, candidate in enumerate(candidate_summaries):
@@ -643,7 +643,7 @@ def _metric_logs_from_values(
 
 def _metric_log(
     name: str,
-    value: float | int | None,
+    value: float | None,
     *,
     step: int | None = None,
 ) -> MetricLog | None:

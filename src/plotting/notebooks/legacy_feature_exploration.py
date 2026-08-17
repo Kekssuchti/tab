@@ -6,10 +6,11 @@ app = marimo.App()
 
 @app.cell
 def _():
-    import pandas as pd
-    import numpy as np
-    import sys
     import pathlib
+    import sys
+
+    import numpy as np
+    import pandas as pd
 
     project_root = pathlib.Path(__file__).resolve().parents[3]
     if str(project_root) not in sys.path:
@@ -130,7 +131,6 @@ def _(df_mimic_cleaned, df_tudd_cleaned, plot_feature_comparision):
 @app.cell
 def _(df_mimic_read):
     df_mimic_read.columns
-    return
 
 
 @app.cell
@@ -179,7 +179,6 @@ def _(df_mimic_read_cleaned, df_tudd_read_cleaned, plot_feature_comparision):
             save=True,
             path_addition="features_read",
         )
-    return
 
 
 @app.cell
@@ -207,7 +206,7 @@ def _(features, pd):
                 print(f"{feature:<30} {missing_pct:10.2f} {'(categorical)':>15} {'':>15}")
                 value_counts = df[feature].value_counts(dropna=False)
                 for val, count in value_counts.items():
-                    print(f"{'':<30} {str(val):<15} {count} instances")
+                    print(f"{'':<30} {val!s:<15} {count} instances")
 
     return (describe_features,)
 
@@ -215,7 +214,6 @@ def _(features, pd):
 @app.cell
 def _(describe_features, df_mimic):
     describe_features(df_mimic, "mimic")
-    return
 
 
 if __name__ == "__main__":

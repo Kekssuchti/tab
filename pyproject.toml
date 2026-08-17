@@ -65,6 +65,11 @@ explicit = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+markers = [
+    "gpu: tests that require a CUDA/HIP-capable GPU",
+    "slow: tests that are slow or download model weights",
+    "integration: end-to-end pipeline tests",
+]
 filterwarnings = [
     "ignore:Flash Efficient attention on Current AMD GPU is still experimental:UserWarning",
     "ignore:Mem Efficient attention on Current AMD GPU is still experimental:UserWarning",
@@ -80,3 +85,9 @@ filterwarnings = [
 exclude = ["external"]
 fix = true
 line-length = 120
+
+[tool.ruff.lint.per-file-ignores]
+# marimo notebooks: a bare expression is a cell's output, and cell variables
+# are consumed by the marimo runtime rather than static analysis.
+"src/plotting/notebooks/**" = ["B006", "B018", "F841"]
+"src/exploration/data_filtering.py" = ["B018"]

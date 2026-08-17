@@ -30,6 +30,8 @@ ADAPTER_MODULES = {
 }
 CLASSIFICATION_MODELS = [name for name in model_registry.MODEL_REGISTRY_CLS]
 LIGHTWEIGHT_REGRESSION_MODELS = ["xgboost", "tabswift"]
+# Models whose adapters hard-require a CUDA/HIP device and cannot run on CPU.
+GPU_ONLY_MODELS = {"limix-2m", "limix-16m", "mitra", "tabfm"}
 
 
 @pytest.mark.parametrize("removed_field", ["task_type", "params"])
@@ -73,18 +75,22 @@ def _load_regression_data_for_model_smoke_test():
 
 
 def test_model_catalog_lookup_and_search_spaces_are_lazy():
-    for module_name in ADAPTER_MODULES:
-        sys.modules.pop(module_name, None)
+    # Remove adapters from sys.modules so the laziness assertion below proves
+    # lookups did not import them; restore them afterwards to avoid leaking
+    # global import state into later tests.
+    removed = {name: sys.modules.pop(name) for name in ADAPTER_MODULES if name in sys.modules}
+    try:
+        importlib.reload(model_registry)
 
-    importlib.reload(model_registry)
+        spec = model_registry.get_model_spec(ModelConfig(name="logistic-regression"), "classification")
+        candidates = spec.tuning_candidates(search_space=None, overrides=None)
 
-    spec = model_registry.get_model_spec(ModelConfig(name="logistic-regression"), "classification")
-    candidates = spec.tuning_candidates(search_space=None, overrides=None)
-
-    assert ADAPTER_MODULES.isdisjoint(sys.modules)
-    assert spec.adapter_path == "src.adapter.sklearn_adapter:LinearModelAdapter"
-    # dont want exact candidates / counts but should have some
-    assert len(candidates) > 5
+        assert ADAPTER_MODULES.isdisjoint(sys.modules)
+        assert spec.adapter_path == "src.adapter.sklearn_adapter:LinearModelAdapter"
+        # The candidate count is registry-defined; only assert a non-trivial grid expanded.
+        assert len(candidates) > 5
+    finally:
+        sys.modules.update(removed)
 
 
 def test_model_catalog_reports_task_specific_unknown_models():
@@ -255,8 +261,20 @@ def test_tuning_distributions_reject_invalid_domains(distribution, message):
         distribution()
 
 
-@pytest.mark.parametrize("model_name", CLASSIFICATION_MODELS)
+@pytest.mark.parametrize("model_name", [n for n in CLASSIFICATION_MODELS if n not in GPU_ONLY_MODELS])
 def test_registered_classification_models_fit_and_predict(model_name):
+    X, y = load_toy_classification_data()
+    model = _make_model(model_name, "classification")
+
+    try:
+        _assert_valid_fit_and_predict(model_name, model, X, y, "classification")
+    finally:
+        release_model(model)
+
+
+@pytest.mark.gpu
+@pytest.mark.parametrize("model_name", sorted(GPU_ONLY_MODELS))
+def test_registered_gpu_classification_models_fit_and_predict(model_name):
     X, y = load_toy_classification_data()
     model = _make_model(model_name, "classification")
 

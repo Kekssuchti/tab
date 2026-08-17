@@ -39,25 +39,13 @@ class Preprocessor:
         # we only need imputation for numerical values
         method = self.imputer_config.imputation_method
 
-        if method == "mean":
+        if method in ("mean", "median"):
             return Pipeline(
                 [
                     (
                         "imputer",
                         SimpleImputer(
-                            strategy="mean",
-                            add_indicator=self.imputer_config.flag_missing,
-                        ),
-                    ),
-                ]
-            )
-        elif method == "median":
-            return Pipeline(
-                [
-                    (
-                        "imputer",
-                        SimpleImputer(
-                            strategy="median",
+                            strategy=method,
                             add_indicator=self.imputer_config.flag_missing,
                         ),
                     ),

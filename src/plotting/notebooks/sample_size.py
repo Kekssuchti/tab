@@ -81,7 +81,6 @@ def _(
 @app.cell
 def _(data_readmission):
     data_readmission
-    return
 
 
 @app.cell
@@ -89,7 +88,6 @@ def _(data_los7, data_mortality, data_readmission_72):
     for data in [data_mortality, data_los7, data_readmission_72]:
         print(data["experiment_name"][0])
         print(len(data["pipeline_id"].unique()) / 10) 
-    return
 
 
 @app.cell
@@ -155,7 +153,6 @@ def _(
                 fig.tight_layout()
                 fig.savefig(f"{base_save_path}{setting}_models.svg")
             plt.show()
-    return
 
 
 if __name__ == "__main__":

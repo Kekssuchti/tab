@@ -17,6 +17,7 @@ from src.mlflow.tracking_contract import (
     ARTIFACT_PIPELINE_RESULT,
     TRACKING_SCHEMA_VERSION,
 )
+from src.mlflow.validation import validate_pipeline_result, validate_tuning_record, validate_tuning_settings
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import (
     ClassificationTargetSummary,
@@ -45,7 +46,6 @@ from src.schemas.run_records import (
     TuningRecord,
 )
 from src.schemas.training_schemas import ScoringMethod, TuningMethod
-from src.mlflow.validation import validate_pipeline_result, validate_tuning_record, validate_tuning_settings
 
 JsonScalar: TypeAlias = None | bool | int | float | str
 JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]

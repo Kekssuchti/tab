@@ -13,7 +13,7 @@ class OrionBixAdapter(ModelAdapter):
         super().__init__()
         if task_type != "classification":
             logger.error("Got wrong task type for Orion Bix model")
-            raise ValueError
+            raise ValueError(f"task_type must be 'classification', got {task_type!r}")
         self.task_type = "classification"  # regression not supported
         default_kwargs = {
             "random_state": config.seed,

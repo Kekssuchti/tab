@@ -13,7 +13,14 @@ from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
-from src.schemas.training_schemas import ClassificationScoring, ModelConfig, RegressionScoring, TuningMethod
+from src.schemas.training_schemas import (
+    HIGHER_IS_BETTER_SCORING,
+    LOWER_IS_BETTER_SCORING,
+    ClassificationScoring,
+    ModelConfig,
+    RegressionScoring,
+    TuningMethod,
+)
 from src.utils.evaluation import evaluate_trained_model_bootstrap
 from src.utils.evaluation_utils import (
     classification_score,
@@ -190,10 +197,10 @@ class Trainer:
 
         evaluations: list[_CandidateEvaluation] = []
 
-        if tuning.scoring in ["roc_auc", "f1", "accuracy", "r2"]:
-            direction = "maximize"
-        elif tuning.scoring in ["rmse", "mae", "mse"]:
+        if tuning.scoring in LOWER_IS_BETTER_SCORING:
             direction = "minimize"
+        elif tuning.scoring in HIGHER_IS_BETTER_SCORING:
+            direction = "maximize"
         else:
             raise ValueError(f"Unsupported scoring metric: {tuning.scoring}")
 
@@ -301,7 +308,6 @@ class Trainer:
                     )
                 )
             finally:
-                prediction = None
                 release_model(fold_model)
 
         return _CandidateEvaluation(
@@ -344,7 +350,7 @@ class Trainer:
         else:
             fold_scores_by_candidate = [evaluation.fold_scores for evaluation in evaluations]
             mean_scores = [float(np.mean(scores)) for scores in fold_scores_by_candidate]
-            if tuning_config.scoring in ("mae", "mse", "rmse"):
+            if tuning_config.scoring in LOWER_IS_BETTER_SCORING:
                 best_index = int(np.argmin(mean_scores))
             else:
                 best_index = int(np.argmax(mean_scores))
@@ -401,8 +407,6 @@ class Trainer:
 
     @staticmethod
     def _build_optuna_sampler(tuning):
-        import optuna
-
         seed = tuning.cv.random_state
         if tuning.optuna.sampler == "tpe":
             return optuna.samplers.TPESampler(

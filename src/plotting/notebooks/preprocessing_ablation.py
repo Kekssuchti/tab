@@ -13,13 +13,14 @@ def _():
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
     from src.mlflow.evaluation_data import (
         list_pipeline_runs,
         load_evaluation_data,
     )
     from src.plotting.ablations import plot_model_setting_performance, plot_model_setting_performance_vs_runtime
-    import pandas as pd
-    import matplotlib.pyplot as plt
 
     return (
         list_pipeline_runs,
@@ -142,7 +143,6 @@ def _(
         if save_figs:
             fig.savefig(f"plots/preprocessing_comparision/imputer/performance_bar_{model_group}.svg")
         plt.show()
-    return
 
 
 @app.cell
@@ -166,7 +166,6 @@ def _(
         if save_figs:
             fig2.savefig(f"plots/preprocessing_comparision/imputer/time_performance_{model_group2}.svg")
         plt.show()
-    return
 
 
 @app.cell
@@ -208,7 +207,6 @@ def _(load_evaluation_data, runs_scaler, scaler_exp_name):
 @app.cell
 def _(data_scaler):
     data_scaler["pipeline_mlflow_run_id"].unique()
-    return
 
 
 @app.cell
@@ -243,7 +241,6 @@ def _(
         if save_figs:
             fig_s.savefig(f"plots/preprocessing_comparision/scaler/performance_bar_{model_group_s}.svg")
         plt.show()
-    return
 
 
 @app.cell
@@ -267,7 +264,6 @@ def _(
         if save_figs:
             fig_s2.savefig(f"plots/preprocessing_comparision/scaler/time_performance_{model_group_s2}.svg")
         plt.show()
-    return
 
 
 if __name__ == "__main__":

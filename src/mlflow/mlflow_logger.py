@@ -11,8 +11,6 @@ from tempfile import TemporaryDirectory
 import mlflow
 from mlflow.entities import Run
 from mlflow.evaluation import Evaluation, log_evaluations
-
-from src.schemas.run_records import ModelRunRecord, PipelineRunRecord
 from src.config import config
 from src.mlflow.observation import (
     EvaluationLog,
@@ -44,6 +42,7 @@ from src.mlflow.tracking_contract import (
     TRACKING_SCHEMA_VERSION,
 )
 from src.schemas.pipeline_schemas import PipelineConfig
+from src.schemas.run_records import ModelRunRecord, PipelineRunRecord
 
 
 @dataclass(frozen=True)

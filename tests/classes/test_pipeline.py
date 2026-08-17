@@ -2,16 +2,13 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
-from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 
 from src.classes import pipeline as pipeline_module
 from src.classes.pipeline import Pipeline
-from src.schemas.metrics import (
-    BootstrapClassificationMetrics,
-    BootstrapFinalTestMetrics,
-    ClassificationMetrics,
-)
+from src.schemas.dataset_schemas import DatasetBundle, XYDataset
+from src.schemas.metrics import BootstrapFinalTestMetrics
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
+from tests.factories import bootstrap_classification_metrics, classification_metrics
 
 
 def _test_set(labels, signal=None):
@@ -20,23 +17,15 @@ def _test_set(labels, signal=None):
     return XYDataset(X=pd.DataFrame({"signal": signal}), y=y)
 
 
-def _metrics(value: float) -> ClassificationMetrics:
-    return ClassificationMetrics(
-        roc_auc=value,
-        prc_auc=value,
-        f1=value,
-        accuracy=value,
-        sensitivity=value,
-        precision=value,
-        confusion_matrix=np.array([[value, 0.0], [0.0, value]]),
-        n_classes=2,
+def _bundle():
+    return DatasetBundle(
+        train_data=_test_set([0, 1]),
+        test_mimic=_test_set([0, 1, 0, 1]),
+        test_tudd=_test_set([1, 0, 1, 0], signal=[0, 1, 0, 1]),
     )
 
 
 def _tuned_training_result(model_name: str) -> ModelTrainingResult:
-    mimic = _bootstrap_metrics(1.0)
-    tudd = _bootstrap_metrics(0.0)
-    mean_metrics = _metrics(1.0)
     return ModelTrainingResult(
         model_name=model_name,
         task_type="classification",
@@ -46,33 +35,55 @@ def _tuned_training_result(model_name: str) -> ModelTrainingResult:
             best_params={},
             scoring="accuracy",
             final_test_metrics=BootstrapFinalTestMetrics(
-                mimic_test=mimic,
+                mimic_test=bootstrap_classification_metrics(1.0),
                 mimic_prediction_time=0.1,
-                tudd_test=tudd,
+                tudd_test=bootstrap_classification_metrics(0.0),
                 tudd_prediction_time=0.2,
             ),
-            fold_results=[FoldRecord(0, 0, mean_metrics, 0.0, {})],
+            fold_results=[FoldRecord(0, 0, classification_metrics(1.0), 0.0, {})],
         ),
     )
 
 
-def _bootstrap_metrics(value: float) -> BootstrapClassificationMetrics:
-    return BootstrapClassificationMetrics(
-        metrics=_metrics(value),
-        ci_95_roc_auc_lower=value,
-        ci_95_roc_auc_upper=value,
-        ci_95_prc_auc_lower=value,
-        ci_95_prc_auc_upper=value,
-        ci_95_f1_lower=value,
-        ci_95_f1_upper=value,
-        ci_95_accuracy_lower=value,
-        ci_95_accuracy_upper=value,
-        ci_95_sensitivity_lower=value,
-        ci_95_sensitivity_upper=value,
-        ci_95_precision_lower=value,
-        ci_95_precision_upper=value,
-        n_bootstrap=100,
+def _build_pipeline(monkeypatch, train_fn):
+    """Build a Pipeline whose Trainer is a fake that delegates to train_fn."""
+    bundle = _bundle()
+
+    class FakeDataset:
+        def get_dataset(self):
+            return bundle
+
+        def summarize(self, data):
+            return SimpleNamespace()
+
+    class FakeTrainer:
+        def __init__(self, task_type, default_imputer, default_scaler, log_transform_target):
+            self.task_type = task_type
+
+        def validate_model_configs(self):
+            pass
+
+        def validate_training_data(self, X_train, y_train):
+            pass
+
+        def train_evaluate_model(self, model_params, data):
+            return train_fn(model_params)
+
+    monkeypatch.setattr(pipeline_module, "Trainer", FakeTrainer)
+
+    pipeline = object.__new__(Pipeline)
+    pipeline.dataset = FakeDataset()
+    pipeline.pipeline_config = SimpleNamespace(
+        run_id="run",
+        dataset=SimpleNamespace(
+            target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False
+        ),
+        training=(
+            SimpleNamespace(name="model-a"),
+            SimpleNamespace(name="model-b"),
+        ),
     )
+    return pipeline
 
 
 def test_pipeline_exposes_tuned_test_metrics_as_model_result():
@@ -92,53 +103,12 @@ def test_pipeline_exposes_tuned_test_metrics_as_model_result():
 
 
 def test_pipeline_records_do_not_own_live_models(monkeypatch):
-    bundle = DatasetBundle(
-        train_data=_test_set([0, 1]),
-        test_mimic=_test_set([0, 1, 0, 1]),
-        test_tudd=_test_set([1, 0, 1, 0], signal=[0, 1, 0, 1]),
-    )
+    def train_fn(model_params):
+        return ModelTrainingResult(
+            model_name=model_params.name, task_type="classification", tuned=False, fit_time=0.2
+        )
 
-    class _FakeDataset:
-        def get_dataset(self):
-            return bundle
-
-        def summarize(self, data):
-            return SimpleNamespace()
-
-    class _FakeTrainer:
-        def __init__(self, task_type, default_imputer, default_scaler, log_transform_target):
-            self.task_type = task_type
-
-        def validate_model_configs(self):
-            pass
-
-        def validate_training_data(self, X_train, y_train):
-            pass
-
-        def train_evaluate_model(self, model_params, data):
-            return ModelTrainingResult(
-                model_name=model_params.name,
-                task_type="classification",
-                tuned=False,
-                fit_time=0.2,
-            )
-
-    monkeypatch.setattr(pipeline_module, "Trainer", _FakeTrainer)
-
-    pipeline = object.__new__(Pipeline)
-    pipeline.dataset = _FakeDataset()
-    pipeline.pipeline_config = SimpleNamespace(
-        run_id="run",
-        dataset=SimpleNamespace(
-            target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False
-        ),
-        training=(
-            SimpleNamespace(name="model-a"),
-            SimpleNamespace(name="model-b"),
-        ),
-    )
-
-    result = pipeline.run()
+    result = _build_pipeline(monkeypatch, train_fn).run()
 
     assert result.model_results == ()
     assert len(result.training_results) == 2
@@ -146,50 +116,12 @@ def test_pipeline_records_do_not_own_live_models(monkeypatch):
 
 
 def test_pipeline_records_failed_model_and_continues(monkeypatch):
-    bundle = DatasetBundle(
-        train_data=_test_set([0, 1]),
-        test_mimic=_test_set([0, 1, 0, 1]),
-        test_tudd=_test_set([1, 0, 1, 0], signal=[0, 1, 0, 1]),
-    )
+    def train_fn(model_params):
+        if model_params.name == "model-a":
+            raise ValueError("bad params")
+        return _tuned_training_result(model_params.name)
 
-    class _FakeDataset:
-        def get_dataset(self):
-            return bundle
-
-        def summarize(self, data):
-            return SimpleNamespace()
-
-    class _FakeTrainer:
-        def __init__(self, task_type, default_imputer, default_scaler, log_transform_target):
-            self.task_type = task_type
-
-        def validate_model_configs(self):
-            pass
-
-        def validate_training_data(self, X_train, y_train):
-            pass
-
-        def train_evaluate_model(self, model_params, data):
-            if model_params.name == "model-a":
-                raise ValueError("bad params")
-            return _tuned_training_result(model_params.name)
-
-    monkeypatch.setattr(pipeline_module, "Trainer", _FakeTrainer)
-
-    pipeline = object.__new__(Pipeline)
-    pipeline.dataset = _FakeDataset()
-    pipeline.pipeline_config = SimpleNamespace(
-        run_id="run",
-        dataset=SimpleNamespace(
-            target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False
-        ),
-        training=(
-            SimpleNamespace(name="model-a"),
-            SimpleNamespace(name="model-b"),
-        ),
-    )
-
-    result = pipeline.run()
+    result = _build_pipeline(monkeypatch, train_fn).run()
 
     assert [tr.model_name for tr in result.training_results] == ["model-a", "model-b"]
     assert result.training_results[0].failure_stage == "training_evaluation"
@@ -200,47 +132,12 @@ def test_pipeline_records_failed_model_and_continues(monkeypatch):
 
 
 def test_pipeline_records_evaluation_failure_and_continues(monkeypatch):
-    bundle = DatasetBundle(
-        train_data=_test_set([0, 1]),
-        test_mimic=_test_set([0, 1, 0, 1]),
-        test_tudd=_test_set([1, 0, 1, 0], signal=[0, 1, 0, 1]),
-    )
+    def train_fn(model_params):
+        if model_params.name == "model-a":
+            raise RuntimeError("bad evaluation")
+        return _tuned_training_result(model_params.name)
 
-    class _FakeDataset:
-        def get_dataset(self):
-            return bundle
-
-        def summarize(self, data):
-            return SimpleNamespace()
-
-    class _FakeTrainer:
-        def __init__(self, task_type, default_imputer, default_scaler, log_transform_target):
-            self.task_type = task_type
-
-        def validate_model_configs(self):
-            pass
-
-        def train_evaluate_model(self, model_params, data):
-            if model_params.name == "model-a":
-                raise RuntimeError("bad evaluation")
-            return _tuned_training_result(model_params.name)
-
-    monkeypatch.setattr(pipeline_module, "Trainer", _FakeTrainer)
-
-    pipeline = object.__new__(Pipeline)
-    pipeline.dataset = _FakeDataset()
-    pipeline.pipeline_config = SimpleNamespace(
-        run_id="run",
-        dataset=SimpleNamespace(
-            target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False
-        ),
-        training=(
-            SimpleNamespace(name="model-a"),
-            SimpleNamespace(name="model-b"),
-        ),
-    )
-
-    result = pipeline.run()
+    result = _build_pipeline(monkeypatch, train_fn).run()
 
     assert result.training_results[0].failure_stage == "training_evaluation"
     assert result.training_results[0].error == "RuntimeError: bad evaluation"

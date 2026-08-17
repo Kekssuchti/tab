@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import astuple, dataclass, fields
-from typing import Literal, Sequence
+from typing import Literal
 
 import pandas as pd
 
@@ -36,6 +37,7 @@ from src.mlflow.tracking_contract import (
     test_score_ci_metric,
     test_score_metric,
 )
+from src.schemas.training_schemas import LOWER_IS_BETTER_SCORING
 
 DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
 DEFAULT_EXPERIMENT_NAME = "tab"
@@ -551,7 +553,7 @@ def _add_generalizability_losses(
         )
         external_scores = frame.loc[external_rows, metric]
         training_for_external = frame.loc[external_rows, "model_mlflow_run_id"].map(training_scores)
-        lower_is_better = metric in {"mae", "mse", "rmse"}
+        lower_is_better = metric in LOWER_IS_BETTER_SCORING
         if lower_is_better:
             frame.loc[external_rows, generalizability] = training_for_external - external_scores
             best_external = (

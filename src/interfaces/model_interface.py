@@ -47,7 +47,6 @@ class ModelAdapter(ABC):
         Returns:
             Fit time in seconds.
         """
-        pass
 
     @abstractmethod
     def predict(self, X_test) -> TimedPrediction:
@@ -60,7 +59,6 @@ class ModelAdapter(ABC):
         Returns:
             Prediction values and prediction time in seconds.
         """
-        pass
 
     def release(self) -> None:
         estimator = getattr(self, "model", None)

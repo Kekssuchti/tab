@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from time import perf_counter
-from typing import Callable
 
 from src.classes.data_registry import dataset_task_for_target
 from src.classes.dataset import Dataset
@@ -64,7 +64,7 @@ class Pipeline:
                 tr = trainer.train_evaluate_model(model_config, data)
                 mr = self._model_result_from_training_result(tr)
                 logger.info(f"Model {model_instance_id} trained and evaluated successfully")
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - one model's failure must not abort the run
                 logger.exception(f"Model {model_config.name} failed during {failure_stage}; continuing")
                 if tr is None:
                     tr = self._failed_training_result(

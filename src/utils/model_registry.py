@@ -36,11 +36,11 @@ class ModelSpec:
         adapter_path: str
             Import path of the adapter class.
 
-        default_params: dict, default={}
-            Parameters always applied before user parameters.
+        default_params: dict
+            Parameters always applied before user parameters. Defaults to empty.
 
-        search_spaces: mapping, default={}
-            Named categorical and distribution-based spaces available for tuning.
+        search_spaces: mapping
+            Named categorical and distribution-based spaces available for tuning. Defaults to empty.
     """
 
     adapter_path: str
@@ -151,7 +151,6 @@ SEARCH_SPACES = {
             "C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0],
             "solver": ["lbfgs", "newton-cg", "saga"],
             "max_iter": [300, 500, 1000],
-            # "l1_ratio": [0.0, 0.25, 0.5, 0.75, 1.0],
         },
         "good": {
             "C": LogUniform(0.001, 1000.0),
@@ -194,7 +193,6 @@ SEARCH_SPACES = {
             "max_leaves": IntUniform(2, 3, 1),
             "smoothing_rounds": IntUniform(0, 1000, 25),
             "learning_rate": LogUniform(0.0025, 0.2),
-            # "interactions": Uniform(0.95, 0.99),
             "interaction_smoothing_rounds": IntUniform(0, 200, 25),
             "min_hessian": LogUniform(1 * 10**-10, 1 * 10**-2),
             "validation_size": Uniform(0.05, 0.25),
@@ -225,14 +223,6 @@ SEARCH_SPACES = {
         },
         "best_2_6": {
             "n_estimators": [4],
-        },
-        "tabpfn2.5": {
-            "n_estimators": [1, 2],  # oom else
-            "softmax_temperature": Uniform(0.7, 1.1),
-            "balance_probabilities": [True, False],
-            "inference_config.SUBSAMPLE_SAMPLES": UniformChoice(None, DiscreteUniform(0.1, 0.8, 0.1)),
-            "inference_config.POLYNOMIAL_FEATURES": UniformChoice("no", DiscreteUniform(1, 20, 1)),
-            "inference_config.ENABLE_GPU_PREPROCESSING": [True],
         },
         "best_2_5": {
             "n_estimators": [2],
@@ -291,7 +281,7 @@ SEARCH_SPACES = {
     },
     "tabfm": {
         "default": {
-            "n_estimators": [1, 2],  # 4, 8
+            "n_estimators": [1, 2],
             "softmax_temperature": Uniform(0.7, 1.1),
         },
         "best": {
@@ -312,11 +302,7 @@ SEARCH_SPACES = {
 # Note that search spaces with parameters that have only 1 value are still worth it
 # since we use the 1 value as the "default" for the hyperparameter
 # While adjusting the other hyperparameters with multiple values
-MODEL_REGISTRY_CLS = {
-    "logistic-regression": ModelSpec(
-        f"{SKLEARN_ADAPTER}:LinearModelAdapter",
-        search_spaces=SEARCH_SPACES["logistic-regression"],
-    ),
+_COMMON_REGISTRY = {
     "xgboost": ModelSpec(
         f"{SKLEARN_ADAPTER}:XGBoostAdapter",
         search_spaces=SEARCH_SPACES["xgboost"],
@@ -358,53 +344,25 @@ MODEL_REGISTRY_CLS = {
         search_spaces=SEARCH_SPACES["limix"],
     ),
     "mitra": ModelSpec(MITRA_ADAPTER, search_spaces=SEARCH_SPACES["mitra"]),
-    "orion-msp": ModelSpec(ORION_MSP_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
-    "orion-bix": ModelSpec(ORION_BIX_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
-    "tabfm": ModelSpec(TABFM_ADAPTER, search_spaces=SEARCH_SPACES["tabfm"]),
     "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=SEARCH_SPACES["tabswift"]),
 }
 
+MODEL_REGISTRY_CLS = {
+    **_COMMON_REGISTRY,
+    "logistic-regression": ModelSpec(
+        f"{SKLEARN_ADAPTER}:LinearModelAdapter",
+        search_spaces=SEARCH_SPACES["logistic-regression"],
+    ),
+    "orion-msp": ModelSpec(ORION_MSP_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
+    "orion-bix": ModelSpec(ORION_BIX_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
+    "tabfm": ModelSpec(TABFM_ADAPTER, search_spaces=SEARCH_SPACES["tabfm"]),
+}
 
 MODEL_REGISTRY_REG = {
+    **_COMMON_REGISTRY,
     "linear-regression": ModelSpec(
         f"{SKLEARN_ADAPTER}:LinearModelAdapter", search_spaces=SEARCH_SPACES["linear-regression"]
     ),
-    "xgboost": ModelSpec(
-        f"{SKLEARN_ADAPTER}:XGBoostAdapter",
-        search_spaces=SEARCH_SPACES["xgboost"],
-    ),
-    "ebm": ModelSpec(
-        f"{SKLEARN_ADAPTER}:EBMAdapter",
-        search_spaces=SEARCH_SPACES["ebm"],
-    ),
-    "tabpfn-3": ModelSpec(TABPFN_ADAPTER, search_spaces=SEARCH_SPACES["tabpfn"]),
-    "tabpfn-2.5": ModelSpec(
-        TABPFN_ADAPTER,
-        default_params={"version": "v2.5"},
-        search_spaces=SEARCH_SPACES["tabpfn"],
-    ),
-    "tabpfn-2.6": ModelSpec(
-        TABPFN_ADAPTER,
-        default_params={
-            "version": "v2.6",
-            "predict_batch_size": 8192,
-            "fit_mode": "fit_preprocessors",
-        },
-        search_spaces=SEARCH_SPACES["tabpfn"],
-    ),
-    "tabicl-2": ModelSpec(TABICL_ADAPTER, search_spaces=SEARCH_SPACES["tabicl"]),
-    "limix-2m": ModelSpec(
-        LIMIX_ADAPTER,
-        default_params={"size": "2M"},
-        search_spaces=SEARCH_SPACES["limix"],
-    ),
-    "limix-16m": ModelSpec(
-        LIMIX_ADAPTER,
-        default_params={"size": "16M"},
-        search_spaces=SEARCH_SPACES["limix"],
-    ),
-    "mitra": ModelSpec(MITRA_ADAPTER, search_spaces=SEARCH_SPACES["mitra"]),
-    "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=SEARCH_SPACES["tabswift"]),
 }
 
 MODEL_CATALOG = ModelCatalog(

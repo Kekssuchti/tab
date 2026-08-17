@@ -84,7 +84,7 @@ class DatasetSummary:
 
     ---
     Attributes:
-        target: {"mortality", "LOS7", "hours_to_readmit", "LOS"}
+        target: {"mortality", "LOS7", "hours_to_readmit", "hours_to_readmit_72", "LOS"}
             Prediction target used by the run.
 
         train: DatasetPartSummary
@@ -142,7 +142,7 @@ class DataSplitConfig(StrictConfig):
 
     @field_validator("fraction")
     @classmethod
-    def valid_fraction(cls, v: float | int) -> float | int:
+    def valid_fraction(cls, v: float) -> float | int:
         if isinstance(v, float) and v > 1.0:
             raise ValueError("fraction must be <= 1.0 when float")
         return v
@@ -154,7 +154,7 @@ class DatasetConfig(StrictConfig):
 
     ---
     Attributes:
-        target: {"mortality", "LOS7", "hours_to_readmit", "LOS"}
+        target: {"mortality", "LOS7", "hours_to_readmit", "hours_to_readmit_72", "LOS"}
             Prediction target.
 
         random_state: int, default=config.seed
