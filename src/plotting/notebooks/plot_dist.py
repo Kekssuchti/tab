@@ -11,9 +11,8 @@ def _():
 
     import pandas as pd
 
-    project_root = Path(__file__).resolve().parents[2]
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
+    project_root = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(project_root))
 
     import matplotlib.pyplot as plt
 
@@ -28,7 +27,13 @@ def _(config, pd):
     filtered_data_dir = config.dir_data / "filtered"
     tudd_data = pd.read_csv(filtered_data_dir / "tudd_mean_100_full.csv")
     mimic_data = pd.read_csv(filtered_data_dir / "mimic4_mean_100_full.csv")
-    return filtered_data_dir, mimic_data
+    return filtered_data_dir, mimic_data, tudd_data
+
+
+@app.cell
+def _(tudd_data):
+    tudd_data
+    return
 
 
 @app.cell
@@ -58,6 +63,7 @@ def _(
         if save_plots:
             fig.savefig(f"{plots_output_dir}/{feature_name}.svg")
         plt.show()
+    return
 
 
 @app.cell
@@ -71,6 +77,19 @@ def _(config, filtered_data_dir, pd):
 
     plots_output_dir_read = config.dir_plots / "feature_distributions" / "mimic"
     return exclude_cols, plots_output_dir_read, read_mimic_data
+
+
+@app.cell
+def _(read_mimic_data):
+    read_mimic_data
+    return
+
+
+@app.cell
+def _(read_mimic_data):
+    read_mimic_data["hours_to_readmit"].gt(3*24).sum()
+
+    return
 
 
 @app.cell
@@ -98,6 +117,7 @@ def _(
         if save_plots:
             fig_r.savefig(f"{plots_output_dir_read}/{feature_name_r}.svg")
         plt.show()
+    return
 
 
 if __name__ == "__main__":

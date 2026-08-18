@@ -3,6 +3,7 @@
 Centralizes the metric and pipeline-result builders that were previously
 copy-pasted across the observability, trainer, and pipeline tests.
 """
+
 from dataclasses import replace
 
 import numpy as np

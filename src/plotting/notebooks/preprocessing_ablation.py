@@ -48,7 +48,7 @@ def _(list_pipeline_runs):
         "Mean": ("35174cd2e5414f04a8e0ac59e7f553ad"),
         "Median": ("2ac501a577254560af7ca01d8706206f"),
         "Most Frequent": ("a14ec50990da4cf087b9c66e7958e672"),
-        "Native": ("ade91770433244aaa2877ecf7d0d331e")
+        "Native": ("ade91770433244aaa2877ecf7d0d331e"),
     }
     selected_run_ids = {
         run_id
@@ -172,15 +172,10 @@ def _(
 def _(list_pipeline_runs):
     scaler_exp_name = "tudd_ablation_scaler_mortality"
     scaler_setting_run_ids = {
-        "None": ("5999b4b649ab4033824da3f43898e42b",
-                 "90a1808f717d4a529c723536f828dc57"),
-        "standardization": ("6bb1c0c0a7c64087b3193217dc18393d", 
-            "a68a825193b343cfb001caa47508e324"),
-        "robust": ("8af8da8ee87e40ccaf8b2346bb55f376",
-                   "20c35b97b88f4429bb8126ca9417d519"),
-        "power": ("6303c0526493488990c5df6e4d854cb4",
-                  "b576c6260ee64e8aaf98a7876c1083a7"),
-
+        "None": ("5999b4b649ab4033824da3f43898e42b", "90a1808f717d4a529c723536f828dc57"),
+        "standardization": ("6bb1c0c0a7c64087b3193217dc18393d", "a68a825193b343cfb001caa47508e324"),
+        "robust": ("8af8da8ee87e40ccaf8b2346bb55f376", "20c35b97b88f4429bb8126ca9417d519"),
+        "power": ("6303c0526493488990c5df6e4d854cb4", "b576c6260ee64e8aaf98a7876c1083a7"),
     }
     selected_run_ids_scaler = {
         run_id

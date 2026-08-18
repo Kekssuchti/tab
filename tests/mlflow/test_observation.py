@@ -1,4 +1,3 @@
-
 import pytest
 
 from src.mlflow.observation import assemble_pipeline_observation

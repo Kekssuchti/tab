@@ -443,8 +443,7 @@ class Trainer:
             _, class_counts = np.unique(np.asarray(y_train), return_counts=True)
             if class_counts.size < 2:
                 raise ValueError(
-                    f"Cannot run {tuning.cv.n_splits}-fold cross-validation: "
-                    "training data contains only one class"
+                    f"Cannot run {tuning.cv.n_splits}-fold cross-validation: training data contains only one class"
                 )
 
             minority_count = int(class_counts.min())

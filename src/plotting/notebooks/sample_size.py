@@ -81,13 +81,15 @@ def _(
 @app.cell
 def _(data_readmission):
     data_readmission
+    return
 
 
 @app.cell
 def _(data_los7, data_mortality, data_readmission_72):
     for data in [data_mortality, data_los7, data_readmission_72]:
         print(data["experiment_name"][0])
-        print(len(data["pipeline_id"].unique()) / 10) 
+        print(len(data["pipeline_id"].unique()) / 10)
+    return
 
 
 @app.cell
@@ -97,9 +99,9 @@ def _(data_los7, data_mortality, data_readmission_72):
 
     from src.plotting.sample_size import plot_over_training_size
 
-    save_figs = True
+    save_figs = False
     setups = {
-        #"readmission": (data_readmission, "./plots/sample_size/readmission/"),
+        # "readmission": (data_readmission, "./plots/sample_size/readmission/"),
         "mortality": (data_mortality, "./plots/sample_size/mortality/"),
         "los7": (data_los7, "./plots/sample_size/LOS7/"),
         "readmission_72": (data_readmission_72, "./plots/sample_size/readmission_72/"),
@@ -148,11 +150,13 @@ def _(
                 datasets=datasets_to_plot,
                 run_aggregation="average",
                 show_title=False,
+                metric="prc_auc"
             )
             if save_figs:
                 fig.tight_layout()
                 fig.savefig(f"{base_save_path}{setting}_models.svg")
             plt.show()
+    return
 
 
 if __name__ == "__main__":

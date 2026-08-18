@@ -51,6 +51,8 @@ def plot_feature_distributions(
     else:
         features = [col for col in mimic.columns if col not in (exclude_features or [])]
     return {
-        FEATURE_ALIASES.get(feature, feature): plot_feature_distribution(feature, mimic=mimic, tudd=tudd, alias=FEATURE_ALIASES.get(feature))
+        FEATURE_ALIASES.get(feature, feature): plot_feature_distribution(
+            feature, mimic=mimic, tudd=tudd, alias=FEATURE_ALIASES.get(feature)
+        )
         for feature in features
     }

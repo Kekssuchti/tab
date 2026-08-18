@@ -67,9 +67,7 @@ def _():
     # Dataset settings. Training sources are origins; the target selects the file kind.
     TARGET = "mortality"
     imputation_method = "none"
-    TRAIN_ON = (
-        ("tudd", 1.0),
-    )
+    TRAIN_ON = (("tudd", 1.0),)
     RANDOM_STATE = 1337
     TRAIN_SIZE = 0.8
     FORCE_REPREPROCESS = False
@@ -90,7 +88,7 @@ def _():
     BACKGROUND_ROWS = 256
     NUMBER_EXPLANATION_ROWS = 1000
     CLASS_INDEX = 1
-    SHAP_BUDGET = 2048 
+    SHAP_BUDGET = 2048
     return (
         BACKGROUND_ROWS,
         CLASS_INDEX,
@@ -244,8 +242,7 @@ def _(
             }
         )
         .sort_values("mean_abs_shap", ascending=False, ignore_index=True)
-        .assign(rank=lambda frame: frame.index + 1)
-        [["rank", "feature", "mean_abs_shap"]]
+        .assign(rank=lambda frame: frame.index + 1)[["rank", "feature", "mean_abs_shap"]]
     )
     return fit_time, importance_table, shap_explanation, shap_values
 
@@ -319,8 +316,7 @@ def _(
         beeswarm_figure.savefig(output_dir / "beeswarm.svg", bbox_inches="tight", pad_inches=0.2)
         for feature_index, (feature_name, scatter_figure) in enumerate(scatter_figures):
             feature_slug = "".join(
-                character if character.isalnum() or character in "-_." else "_"
-                for character in feature_name
+                character if character.isalnum() or character in "-_." else "_" for character in feature_name
             )
             scatter_figure.savefig(
                 output_dir / f"scatter_{feature_index:02d}_{feature_slug}.svg",
@@ -349,7 +345,7 @@ def _(
 
     if SAVE_PLOTS:
         run_summary.to_csv(output_dir / "run_meta.csv")
-        importance_table.to_csv(output_dir / "importance_table.csv")    
+        importance_table.to_csv(output_dir / "importance_table.csv")
     return plot_figures, run_summary, scatter_figures
 
 

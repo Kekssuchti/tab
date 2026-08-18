@@ -1,6 +1,7 @@
 """Create a LaTeX descriptive-statistics table from filtered cohort data."""
 
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 
@@ -37,9 +38,12 @@ _FEATURES = (
     ("Kreatinin+100%mean", "Creatinine"),
 )
 
+readmission_extra_feature = (("LOS", "Length of Stay (h)"),)
+
 
 def descriptive_statistics_table_to_latex(
     filtered_dir: str | Path | None = None,
+    type: Literal["normal", "readmission"] = "normal",
 ) -> str:
     """Return a ready-to-paste LaTeX table for the filtered MIMIC-IV and EUH data.
 
@@ -85,25 +89,37 @@ def descriptive_statistics_table_to_latex(
         ]
 
     rows = []
-    for column, label in _FEATURES:
-        cells = feature_cells("mimic", column) + feature_cells("tudd", column)
+    if type == "normal":
+        data_tudd_name = "tudd"
+        data_mimic_name = "mimic"
+    else:
+        data_tudd_name = "tudd_readmission"
+        data_mimic_name = "mimic_readmission"
+
+    if type == "readmission":
+        features = _FEATURES + readmission_extra_feature
+    else:
+        features = _FEATURES
+
+    for column, label in features:
+        cells = feature_cells(data_mimic_name, column) + feature_cells(data_tudd_name, column)
         rows.append(f"        {label} & " + " & ".join(cells) + r" \\")
 
     outcomes = (
         (
             "Mortality (\\%)",
-            data["mimic"]["mortality"].mean() * 100,
-            data["tudd"]["mortality"].mean() * 100,
+            data[data_mimic_name]["mortality"].mean() * 100,
+            data[data_tudd_name]["mortality"].mean() * 100,
         ),
         (
             "Length of stay \\textgreater 7 days (\\%)",
-            data["mimic"]["LOS"].gt(7 * 24).mean() * 100,
-            data["tudd"]["LOS"].gt(7 * 24).mean() * 100,
+            data[data_mimic_name]["LOS"].gt(7 * 24).mean() * 100,
+            data[data_tudd_name]["LOS"].gt(7 * 24).mean() * 100,
         ),
         (
             "Readmission (\\%)",
-            (1 - data["mimic_readmission"]["hours_to_readmit"].isna().mean()) * 100,
-            (1 - data["tudd_readmission"]["hours_to_readmit"].isna().mean()) * 100,
+            data["mimic_readmission"]["hours_to_readmit"].le(3 * 24).mean() * 100,
+            data["tudd_readmission"]["hours_to_readmit"].le(3 * 24).mean() * 100,
         ),
     )
     for label, mimic_value, tudd_value in outcomes:
@@ -130,5 +146,110 @@ def descriptive_statistics_table_to_latex(
     return "\n".join(lines)
 
 
+def single_df_descriptive_statistics_table_to_latex(
+    name: Literal["mimic", "tudd"],
+    filtered_dir: str | Path | None = None,
+    type: Literal["normal", "readmission"] = "normal",
+) -> str:
+    """Return a LaTeX descriptive-statistics table for one filtered cohort.
+
+    Feature and mortality/length-of-stay statistics use the selected cohort
+    variant. Readmission is calculated from the source's separately filtered
+    readmission data. The table requires the LaTeX ``booktabs`` and
+    ``graphicx`` packages.
+    """
+    data_dir = Path(filtered_dir) if filtered_dir is not None else config.dir_data / "filtered"
+    if name == "mimic":
+        source_label = "MIMIC-IV"
+        files = {
+            "normal": data_dir / "mimic4_mean_100_full.csv",
+            "readmission": data_dir / "mimic4_readmission.csv",
+        }
+    else:
+        source_label = "EUH"
+        files = {
+            "normal": data_dir / "tudd_mean_100_full.csv",
+            "readmission": data_dir / "tudd_readmission.csv",
+        }
+
+    data = {name: pd.read_csv(path) for name, path in files.items()}
+
+    def format_number(value: float) -> str:
+        return "--" if pd.isna(value) else f"{value:.2f}"
+
+    def feature_cells(dataset: str, column: str) -> list[str]:
+        values = pd.to_numeric(data[dataset][column], errors="coerce")
+        missing_percentage = values.isna().mean() * 100
+        if column == "Sex":
+            return [
+                format_number(values.mean() * 100),
+                "--",
+                f"{missing_percentage:.2f}",
+            ]
+        return [
+            format_number(values.mean()),
+            format_number(values.std()),
+            f"{missing_percentage:.2f}",
+        ]
+
+    rows = []
+
+    if type == "readmission":
+        features = _FEATURES + readmission_extra_feature
+    else:
+        features = _FEATURES
+
+    for column, label in features:
+        cells = feature_cells(type, column)
+        rows.append(f"        {label} & " + " & ".join(cells) + r" \\")
+
+    if type == "readmission":
+        outcomes = (
+            (
+                "Readmission (\\%)",
+                data["readmission"]["hours_to_readmit"].le(3 * 24).mean() * 100,
+            ),
+        )
+    else:
+        outcomes = (
+            (
+                "Mortality (\\%)",
+                data[type]["mortality"].mean() * 100,
+            ),
+            (
+                "Length of stay \\textgreater 7 days (\\%)",
+                data[type]["LOS"].gt(7 * 24).mean() * 100,
+            ),
+            (
+                "Readmission (\\%)",
+                data["readmission"]["hours_to_readmit"].le(3 * 24).mean() * 100,
+            ),
+        )
+
+    for label, value in outcomes:
+        rows.append(f"        {label} & {value:.2f} & -- & 0.00" + r" \\")
+
+    lines = [
+        r"\begin{table}[htbp]",
+        r"    \centering",
+        r"    \resizebox{\linewidth}{!}{%",
+        r"    \begin{tabular}{lrrr}",
+        r"        \toprule",
+        f"        & \\multicolumn{{3}}{{c}}{{\\textbf{{{source_label}}}}} " + r"\\",
+        r"        \cmidrule(lr){2-4}",
+        r"        \textbf{Feature} & Mean & Std & Missing (\%) \\",
+        r"        \midrule",
+        *rows,
+        r"        \bottomrule",
+        r"    \end{tabular}%",
+        r"    }",
+        f"    \\caption{{Descriptive statistics of the filtered {source_label} {type} cohort. Length of stay denotes stays longer than seven days; readmission denotes readmission within 72 hours.}}",
+        f"    \\label{{tab:cohort-descriptive-statistics-{name}-{type}}}",
+        r"\end{table}",
+    ]
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     print(descriptive_statistics_table_to_latex())
+    print(single_df_descriptive_statistics_table_to_latex("tudd", type="readmission"))

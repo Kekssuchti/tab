@@ -132,7 +132,11 @@ def _(
 ):
     for df2 in [data_mortality, data_los7, data_readmission]:
         fig2 = plot_model_setting_performance_vs_runtime(
-            df2, run_aggregation="average", runtime_metric="predict_time_tudd", show_ci=False, ignore_models=["tabpfn-2.6"]
+            df2,
+            run_aggregation="average",
+            runtime_metric="predict_time_tudd",
+            show_ci=False,
+            ignore_models=["tabpfn-2.6"],
         )
         if save_figs:
             if df2.equals(data_mortality):
@@ -245,7 +249,11 @@ def _():
             header = " & ".join(
                 [r"\textbf{Model}", *[rf"\multicolumn{{2}}{{c}}{{\textbf{{{_escape_latex(task)}}}}}" for task in tasks]]
             )
-            metric_header = [" & ".join(["", *[rf"\textbf{{{metric_label(metric)}}}" for _ in tasks for metric in metrics]]) + " " + r"\\"]
+            metric_header = [
+                " & ".join(["", *[rf"\textbf{{{metric_label(metric)}}}" for _ in tasks for metric in metrics]])
+                + " "
+                + r"\\"
+            ]
         display_metrics = " and ".join(metric_label(metric) for metric in metrics)
         lines = [
             r"\begin{table*}[htbp]",
@@ -298,7 +306,7 @@ def _(data_los7, data_mortality, data_readmission, performance_table_to_latex):
         },
         exclude_models=["tabpfn-2.6"],
         show_ci=True,
-        metrics = ["prc_auc"]
+        metrics=["prc_auc"],
     )
     print(table)
 

@@ -116,8 +116,6 @@ def performance_table_to_latex(
         unknown_datasets = sorted(set(datasets) - set(available_datasets))
         if unknown_datasets:
             raise ValueError(f"Datasets not present after filtering: {', '.join(unknown_datasets)}")
-    if not datasets:
-        raise ValueError("No test datasets are available")
     table_data = table_data.loc[table_data["dataset"].astype(str).isin(datasets)]
 
     if include_ci:

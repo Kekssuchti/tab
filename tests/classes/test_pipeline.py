@@ -75,9 +75,7 @@ def _build_pipeline(monkeypatch, train_fn):
     pipeline.dataset = FakeDataset()
     pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
-        dataset=SimpleNamespace(
-            target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False
-        ),
+        dataset=SimpleNamespace(target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False),
         training=(
             SimpleNamespace(name="model-a"),
             SimpleNamespace(name="model-b"),
@@ -104,9 +102,7 @@ def test_pipeline_exposes_tuned_test_metrics_as_model_result():
 
 def test_pipeline_records_do_not_own_live_models(monkeypatch):
     def train_fn(model_params):
-        return ModelTrainingResult(
-            model_name=model_params.name, task_type="classification", tuned=False, fit_time=0.2
-        )
+        return ModelTrainingResult(model_name=model_params.name, task_type="classification", tuned=False, fit_time=0.2)
 
     result = _build_pipeline(monkeypatch, train_fn).run()
 
