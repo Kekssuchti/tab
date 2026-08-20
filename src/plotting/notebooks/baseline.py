@@ -75,80 +75,103 @@ def _(
 @app.cell
 def _(data_readmission):
     data_readmission
+    return
 
 
 @app.cell
 def _(data_los7, data_mortality, data_readmission):
-    for data in [data_mortality, data_los7, data_readmission]:
-        print(data["experiment_name"][0])
-        print(len(data["pipeline_id"].unique()))
+    for daa in [data_mortality, data_los7, data_readmission]:
+        print(daa["experiment_name"][0])
+        print(len(daa["pipeline_id"].unique()))
+    return
 
 
 @app.cell
-def _():
+def _(data_los7, data_mortality, data_readmission):
     import matplotlib.pyplot as plt
 
     save_figs = True
-    output_path = "./plots/baseline/"
-    return output_path, plt, save_figs
+    figure_size = (6, 6)
+    setups = {
+        "mortality": (data_mortality, "./plots/baseline/mortality/"),
+        "los7": (data_los7, "./plots/baseline/LOS7/"),
+        "readmission": (data_readmission, "./plots/baseline/readmission/"),
+    }
+    model_setups = {
+        "all": [
+            "ebm",
+            "orion-msp",
+            "limix-16m",
+            "tabswift",
+            "tabpfn-3",
+            "xgboost",
+            "logistic-regression",
+            "tabicl-2",
+            "tabfm",
+        ],
+        "main": ["tabpfn-3", "xgboost", "logistic-regression", "tabicl-2", "tabfm"],
+    }
+
+    # Adjust total time since MIMIC prediction is not relevant right now.
+    for ds, _ in setups.values():
+        ds["total_time"] = ds["total_time"] - ds["predict_time_mimic"]
+        ds["training_time"] = ds["cv_time"] + ds["fit_time"]
+    
+    return figure_size, model_setups, plt, save_figs, setups
 
 
 @app.cell
 def _(
-    data_los7,
-    data_mortality,
-    data_readmission,
-    output_path,
+    figure_size,
+    model_setups,
     plot_model_setting_performance_vs_runtime,
     plt,
     save_figs,
+    setups,
 ):
-    for df in [data_mortality, data_los7, data_readmission]:
-        fig = plot_model_setting_performance_vs_runtime(
-            df, run_aggregation="average", runtime_metric="total_time", show_ci=False, ignore_models=["tabpfn-2.6"]
-        )
-        if save_figs:
-            if df.equals(data_mortality):
-                subdir = "mortality"
-            if df.equals(data_los7):
-                subdir = "LOS7"
-            if df.equals(data_readmission):
-                subdir = "readmission"
-
-            fig.savefig(f"{output_path}/{subdir}/performance_time.svg")
-
-        plt.show()
+    for data, save_path in setups.values():
+        for setting, included_models in model_setups.items():
+            fig = plot_model_setting_performance_vs_runtime(
+                data,
+                include_models=included_models,
+                run_aggregation="average",
+                metric="prc_auc",
+                runtime_metric="training_time",
+                show_ci=False,
+                x_axis_label="Training time (s, log scale)"
+            )
+            fig.set_size_inches(*figure_size, forward=True)
+            if save_figs:
+                fig.savefig(f"{save_path}{setting}_performance_training_time.svg")
+            plt.show()
+    return
 
 
 @app.cell
 def _(
-    data_los7,
-    data_mortality,
-    data_readmission,
-    output_path,
+    figure_size,
+    model_setups,
     plot_model_setting_performance_vs_runtime,
     plt,
     save_figs,
+    setups,
 ):
-    for df2 in [data_mortality, data_los7, data_readmission]:
-        fig2 = plot_model_setting_performance_vs_runtime(
-            df2,
-            run_aggregation="average",
-            runtime_metric="predict_time_tudd",
-            show_ci=False,
-            ignore_models=["tabpfn-2.6"],
-        )
-        if save_figs:
-            if df2.equals(data_mortality):
-                subdir2 = "mortality"
-            if df2.equals(data_los7):
-                subdir2 = "LOS7"
-            if df2.equals(data_readmission):
-                subdir2 = "readmission"
-
-            fig2.savefig(f"{output_path}/{subdir2}/performance_test_time.svg")
-
-        plt.show()
+    for _data, _save_path in setups.values():
+        for _setting, _included_models in model_setups.items():
+            _fig = plot_model_setting_performance_vs_runtime(
+                _data,
+                include_models=_included_models,
+                run_aggregation="average",
+                metric="prc_auc",
+                runtime_metric="predict_time_tudd",
+                show_ci=False,
+                x_axis_label="Predict time (s, log scale)"
+            )
+            _fig.set_size_inches(*figure_size, forward=True)
+            if save_figs:
+                _fig.savefig(f"{_save_path}{_setting}_performance_test_time.svg")
+            plt.show()
+    return
 
 
 @app.cell
@@ -309,6 +332,7 @@ def _(data_los7, data_mortality, data_readmission, performance_table_to_latex):
         metrics=["prc_auc"],
     )
     print(table)
+    return
 
 
 if __name__ == "__main__":

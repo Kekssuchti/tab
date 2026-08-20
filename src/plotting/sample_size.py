@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
-from src.plotting.defaults import dataset_label, metric_label
+from src.plotting.defaults import dataset_label, metric_label, metric_scale
 from src.plotting.plot_support import instance_plot_styles
 
 
@@ -25,12 +25,15 @@ def plot_over_training_size(
     log_x: bool = True,
     show_ci: bool = True,
     show_title: bool = True,
+    y_label: str | None = None,
 ) -> Figure:
     """Plot a metric against training sample size for each test dataset.
 
     Repeated pipeline runs remain separate by default. Set
     ``run_aggregation="average"`` to average scores and available confidence
-    bounds by model instance, training size, and test dataset.
+    bounds by model instance, training size, and test dataset. Bounded
+    classification scores and confidence bounds are displayed as points on a
+    0--100 scale.
     """
     if run_aggregation not in {None, "average"}:
         raise ValueError("run_aggregation must be: average")
@@ -52,6 +55,9 @@ def plot_over_training_size(
         group_columns = ["model_name", "model_instance", "training_size", "dataset"]
         value_columns = [metric] + ([ci_lower, ci_upper] if has_ci else [])
         data = data.groupby(group_columns, sort=False, dropna=False)[value_columns].mean().reset_index()
+
+    value_columns = [metric] + ([ci_lower, ci_upper] if has_ci else [])
+    data.loc[:, value_columns] = data[value_columns] * metric_scale(metric)
 
     styles = instance_plot_styles(data)
     datasets = tuple(datasets)
@@ -92,6 +98,9 @@ def plot_over_training_size(
         ax.set_xticklabels([f"{int(size):,}" for size in sizes], rotation=45, ha="right", fontsize=8)
         ax.set_xlabel("Training Sample Count")
         ax.set_ylabel(metric_label(metric))
+        if "time" in metric:
+            ax.set_yscale("log")
+            ax.set_ylabel(y_label)
         if show_title:
             ax.set_title(dataset_label(dataset))
         ax.grid(alpha=0.3, which="both")

@@ -11,6 +11,8 @@ from matplotlib.colors import to_hex
 
 # Metric alias
 
+POINT_SCALE_METRICS = frozenset({"roc_auc", "prc_auc", "f1", "accuracy", "precision", "sensitivity"})
+
 METRIC_LABELS = {
     "roc_auc": "AUROC",
     "prc_auc": "AUPRC",
@@ -28,6 +30,13 @@ METRIC_LABELS = {
 # helper
 def metric_label(metric: str) -> str:
     return METRIC_LABELS.get(metric, metric.replace("_", " ").title())
+
+
+def metric_scale(metric: str) -> int:
+    """Return the display scale, leaving time metrics in their original units."""
+    if "time" in metric.lower():
+        return 1
+    return 100 if metric in POINT_SCALE_METRICS else 1
 
 
 # --- Dataset defaults ------------------------------------------------------

@@ -66,7 +66,7 @@ def _():
 
     # Dataset settings. Training sources are origins; the target selects the file kind.
     TARGET = "mortality"
-    imputation_method = "none"
+    imputation_method = "mean"
     TRAIN_ON = (("tudd", 1.0),)
     RANDOM_STATE = 1337
     TRAIN_SIZE = 0.8
@@ -368,6 +368,7 @@ def _(importance_table, mo, plot_figures, run_summary, scatter_figures):
             ],
         ]
     )
+    return
 
 
 if __name__ == "__main__":

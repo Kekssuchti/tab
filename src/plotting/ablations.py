@@ -14,11 +14,9 @@ from matplotlib.colors import to_hex
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
-from src.plotting.defaults import metric_label, model_label, ordered_models
+from src.plotting.defaults import POINT_SCALE_METRICS, metric_label, metric_scale, model_label, ordered_models
 from src.plotting.plot_support import draw_confidence_intervals, instance_plot_styles
 from src.plotting.plot_utils import runtime_label
-
-_UNIT_INTERVAL_METRICS = frozenset({"roc_auc", "prc_auc", "f1", "accuracy", "precision", "sensitivity"})
 
 
 @dataclass(frozen=True)
@@ -68,7 +66,7 @@ def plot_model_setting_performance(
         show_ci=show_ci,
         excluded_models_by_setting=excluded_models_by_setting,
     )
-    frame = prepared.frame
+    frame = _scale_metric_columns(prepared.frame, metric, prepared.has_ci)
     model_positions = np.arange(len(prepared.model_instances), dtype=float)
     instance_positions = dict(zip(prepared.model_instances, model_positions, strict=True))
     bar_width = 0.8 / len(prepared.setting_labels)
@@ -95,7 +93,7 @@ def plot_model_setting_performance(
         y_limits,
         ci_lower=frame[ci_lower] if prepared.has_ci else None,
         ci_upper=frame[ci_upper] if prepared.has_ci else None,
-        natural_bounds=(0.0, 1.0) if metric in _UNIT_INTERVAL_METRICS else None,
+        natural_bounds=(0.0, 100.0) if metric in POINT_SCALE_METRICS else None,
     )
     if resolved_y_limits is not None:
         ax.set_ylim(resolved_y_limits)
@@ -127,6 +125,9 @@ def plot_model_setting_performance_vs_runtime(
     show_ci: bool = True,
     title: str | None = None,
     legend_title: str = "Setting",
+    invert_x: bool = False,
+    x_axis_label: str | None = None,
+    keep_labels_inside: bool = True,
 ) -> Figure:
     """Plot setting-level model performance against runtime.
 
@@ -138,7 +139,9 @@ def plot_model_setting_performance_vs_runtime(
 
     Set ``run_aggregation="average"`` to average repeated runs into one point
     per model instance instead of comparing settings. This mode also averages
-    the selected runtime metric and available confidence interval bounds.
+    the selected runtime metric and available confidence interval bounds. When
+    ``keep_labels_inside`` is true, labels at the visual right edge are placed
+    to the left of their points.
     """
     _validate_run_aggregation_options(
         run_aggregation,
@@ -174,12 +177,14 @@ def plot_model_setting_performance_vs_runtime(
         frame = prepared.frame
         has_ci = prepared.has_ci
 
+    frame = _scale_metric_columns(frame, metric, has_ci)
     if log_x and frame[runtime_metric].le(0).any():
         raise ValueError(f"{runtime_metric} must be strictly positive when log_x=True")
     styles = instance_plot_styles(frame)
     fig, ax = plt.subplots(figsize=(10, 6))
     ci_lower = f"{metric}_ci_lower"
     ci_upper = f"{metric}_ci_upper"
+    right_edge_x = frame[runtime_metric].min() if invert_x else frame[runtime_metric].max()
 
     for _, row in frame.iterrows():
         instance = row["model_instance"]
@@ -197,11 +202,22 @@ def plot_model_setting_performance_vs_runtime(
                 [row[ci_upper]],
                 color,
             )
-        ax.annotate(instance_label, (x, y), xytext=(5, 4), textcoords="offset points", fontsize=8)
+        label_on_left = keep_labels_inside and x == right_edge_x
+        ax.annotate(
+            instance_label,
+            (x, y),
+            xytext=((-5 if label_on_left else 5), 4),
+            textcoords="offset points",
+            ha="right" if label_on_left else "left",
+            fontsize=8,
+        )
     if log_x:
         ax.set_xscale("log")
-    ax.invert_xaxis()
+    if invert_x:
+        ax.invert_xaxis()
     ax.set(xlabel=runtime_label(runtime_metric, log_x=log_x), ylabel=metric_label(metric))
+    if x_axis_label:
+        ax.set_xlabel(x_axis_label)
     ax.grid(alpha=0.3, which="both")
     if prepared is None:
         if title:
@@ -223,6 +239,19 @@ def plot_model_setting_performance_vs_runtime(
     )
     print(format_model_setting_mapping(frame, prepared.setting_labels))
     return fig
+
+
+def _scale_metric_columns(frame: pd.DataFrame, metric: str, has_ci: bool) -> pd.DataFrame:
+    """Copy plot data and convert bounded classification scores to points."""
+    scale = metric_scale(metric)
+    if scale == 1:
+        return frame
+    columns = [metric]
+    if has_ci:
+        columns.extend((f"{metric}_ci_lower", f"{metric}_ci_upper"))
+    scaled = frame.copy()
+    scaled.loc[:, columns] = scaled[columns] * scale
+    return scaled
 
 
 def _validate_run_aggregation_options(
