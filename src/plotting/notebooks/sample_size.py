@@ -127,7 +127,6 @@ def _(data_los7, data_mortality, data_readmission_72):
 
     for ds, _ in setups.values():
         ds["training_time"] = ds["cv_time"] + ds["fit_time"]
-
     return (
         datasets_to_plot,
         model_setups,
@@ -148,22 +147,27 @@ def _(
     save_figs,
     setups,
 ):
-    y_axis_metric="training_time"
-    for exp_data, base_save_path in setups.values():
-        for setting, included_models in model_setups.items():
-            fig = plot_over_training_size(
-                data=exp_data,
-                include_models=included_models,
-                datasets=datasets_to_plot,
-                run_aggregation="average",
-                show_title=False,
-                metric=y_axis_metric,
-                y_label= "Training time (s, log scale)"
-            )
-            if save_figs:
-                fig.tight_layout()
-                fig.savefig(f"{base_save_path}{setting}_{y_axis_metric}.svg")
-            plt.show()
+    y_axis_metrics = {
+        "training_time": "Training time (s, log scale)",
+        "predict_time_tudd": "Prediction time (s, log scale)",   
+    }
+
+    for use_metric, use_label in y_axis_metrics.items():
+        for exp_data, base_save_path in setups.values():
+            for setting, included_models in model_setups.items():
+                fig = plot_over_training_size(
+                    data=exp_data,
+                    include_models=included_models,
+                    datasets=datasets_to_plot,
+                    run_aggregation="average",
+                    show_title=False,
+                    metric=use_metric,
+                    y_label= use_label
+                )
+                if save_figs:
+                    fig.tight_layout()
+                    fig.savefig(f"{base_save_path}{setting}_{use_metric}.svg")
+                plt.show()
     return
 
 
