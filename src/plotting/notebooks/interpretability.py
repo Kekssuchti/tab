@@ -52,7 +52,7 @@ def _():
     # Dataset settings. Training sources are origins; the target selects the file kind.
     TARGET = "mortality"
     IMPUTATION_METHOD = "none"
-    TRAIN_ON = (("tudd", 0.3),)
+    TRAIN_ON = (("tudd", 1.0),)
     RANDOM_STATE = 1337
     TRAIN_SIZE = 0.8
     FORCE_REPREPROCESS = False
@@ -84,7 +84,7 @@ def _():
             "subsample": 0.5591716150759687
         },
         "tabpfn-3": {
-            "n_estimators": 4,
+            "n_estimators": 32,
             "fit_mode": "fit_with_cache",
             "random_state": RANDOM_STATE,
         },
@@ -96,6 +96,11 @@ def _():
     EXPLANATION_ROWS = 1000
     CLASS_INDEX = 1
     TABPFN_SHAP_BUDGET = 2048
+
+    # Reuse TabPFN effects while the data, parameters, and SHAP settings match.
+    # Set this once to True when you deliberately want to replace the cache.
+    TABPFN_CACHE_PATH = f"plots/interpretability/{TARGET.lower()}/{IMPUTATION_METHOD}/tabpfn_effects.npz"
+    RECOMPUTE_TABPFN = False
 
     # Plot settings. Use None to render every transformed feature.
     FEATURES_TO_PLOT = None
@@ -112,8 +117,10 @@ def _():
         MODEL_PARAMS,
         PLOT_OUTPUT_DIR,
         RANDOM_STATE,
+        RECOMPUTE_TABPFN,
         RUN_INTERPRETABILITY,
         SAVE_PLOTS,
+        TABPFN_CACHE_PATH,
         TABPFN_SHAP_BUDGET,
         TARGET,
         TEST_SOURCE,
@@ -177,10 +184,13 @@ def _(
     EXPLANATION_ROWS,
     MODEL_PARAMS,
     RANDOM_STATE,
+    RECOMPUTE_TABPFN,
+    TABPFN_CACHE_PATH,
     TABPFN_SHAP_BUDGET,
     TEST_SOURCE,
     compute_interpretability_comparison,
     data,
+    project_root,
     trainer,
 ):
     comparison = compute_interpretability_comparison(
@@ -193,6 +203,8 @@ def _(
         class_index=CLASS_INDEX,
         tabpfn_shap_budget=TABPFN_SHAP_BUDGET,
         random_state=RANDOM_STATE,
+        tabpfn_cache_path=project_root / TABPFN_CACHE_PATH,
+        recompute_tabpfn=RECOMPUTE_TABPFN,
     )
     return (comparison,)
 
@@ -211,6 +223,7 @@ def _(
         comparison,
         features=FEATURES_TO_PLOT,
         output_dir=output_dir,
+        figsize=(10,6)
     )
     return feature_figures, output_dir
 

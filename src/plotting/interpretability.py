@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,6 +50,13 @@ class InterpretabilityComparison:
     xgboost: PointEffects
     tabpfn: PointEffects
     fit_times: Mapping[str, float]
+    tabpfn_cache_hit: bool = False
+
+
+@dataclass(frozen=True)
+class _CachedTabPFN:
+    effects: PointEffects
+    fit_time: float
 
 
 def compute_interpretability_comparison(
@@ -62,12 +71,15 @@ def compute_interpretability_comparison(
     tabpfn_shap_budget: int = 2_048,
     random_state: int = 1_337,
     model_preprocessing: ModelPreprocessingConfig | None = None,
+    tabpfn_cache_path: str | Path | None = None,
+    recompute_tabpfn: bool = False,
 ) -> InterpretabilityComparison:
     """Train EBM, XGBoost, and TabPFNv3 sequentially and calculate feature effects.
 
     EBM contributes its native global main-effect curves. XGBoost contributes
     TreeSHAP values, and TabPFNv3 contributes first-order ShapIQ SHAP values.
-    Models are released immediately after their effects have been copied.
+    Models are released immediately after their effects have been copied. When
+    ``tabpfn_cache_path`` is set, compatible TabPFN effects are reused from disk.
     """
     missing = [name for name in _MODEL_NAMES if name not in model_params]
     if missing:
@@ -84,14 +96,38 @@ def compute_interpretability_comparison(
     background_raw = _sample_rows(data.train_data.X, background_rows, random_state)
     explain_raw = _sample_rows(test_data.X, explanation_rows, random_state + 1)
     y_train = data.train_data.y.to_numpy()
+    cache_path = Path(tabpfn_cache_path) if tabpfn_cache_path is not None else None
+    cache_key = _tabpfn_cache_key(
+        X_train=data.train_data.X,
+        y_train=data.train_data.y,
+        explain_raw=explain_raw,
+        model_params=model_params["tabpfn-3"],
+        task_type=trainer.task_type,
+        test_source=test_source,
+        background_rows=background_rows,
+        explanation_rows=explanation_rows,
+        class_index=class_index,
+        budget=tabpfn_shap_budget,
+        random_state=random_state,
+        model_preprocessing=model_preprocessing,
+    )
 
     fit_times: dict[str, float] = {}
     feature_names: tuple[str, ...] | None = None
     ebm_effects: tuple[EBMTermEffect, ...] | None = None
     xgboost_effects: PointEffects | None = None
     tabpfn_effects: PointEffects | None = None
+    tabpfn_cache_hit = False
 
     for model_name in _MODEL_NAMES:
+        if model_name == "tabpfn-3" and cache_path is not None and cache_path.exists() and not recompute_tabpfn:
+            cached = _load_tabpfn_cache(cache_path, cache_key)
+            if cached is not None and cached.effects.feature_names == feature_names:
+                tabpfn_effects, cached_fit_time = cached.effects, cached.fit_time
+                fit_times[model_name] = cached_fit_time
+                tabpfn_cache_hit = True
+                continue
+
         trained_model = None
         try:
             model_config = ModelConfig(name=model_name, preprocessing=model_preprocessing)
@@ -137,6 +173,8 @@ def compute_interpretability_comparison(
                         random_state=random_state,
                     ),
                 )
+                if cache_path is not None:
+                    _save_tabpfn_cache(cache_path, cache_key, tabpfn_effects, fit_time)
         finally:
             release_model(trained_model)
 
@@ -150,6 +188,7 @@ def compute_interpretability_comparison(
         xgboost=xgboost_effects,
         tabpfn=tabpfn_effects,
         fit_times=fit_times,
+        tabpfn_cache_hit=tabpfn_cache_hit,
     )
 
 
@@ -158,7 +197,7 @@ def plot_interpretability_comparison(
     *,
     features: Sequence[str] | None = None,
     output_dir: str | Path | None = None,
-    figsize: tuple[float, float] = (8.0, 5.5),
+    figsize: tuple[float, float] = (10.0, 6.0),
     point_size: float = 12.0,
     point_alpha: float = 0.35,
 ) -> tuple[tuple[str, plt.Figure], ...]:
@@ -237,6 +276,7 @@ def comparison_summary(comparison: InterpretabilityComparison) -> pd.DataFrame:
                 "model": MODEL_STYLES[name].label,
                 "explanation": explanation_types[name],
                 "fit_time_s": comparison.fit_times[name],
+                "cache": "hit" if name == "tabpfn-3" and comparison.tabpfn_cache_hit else "computed",
             }
             for name in _MODEL_NAMES
         ]
@@ -245,6 +285,79 @@ def comparison_summary(comparison: InterpretabilityComparison) -> pd.DataFrame:
 
 def _sample_rows(frame, requested_rows: int, random_state: int):
     return frame.sample(n=min(requested_rows, len(frame)), random_state=random_state)
+
+
+def _tabpfn_cache_key(
+    *,
+    X_train,
+    y_train,
+    explain_raw,
+    model_params: Mapping[str, Any],
+    task_type: str,
+    test_source: str,
+    background_rows: int,
+    explanation_rows: int,
+    class_index: int,
+    budget: int,
+    random_state: int,
+    model_preprocessing: ModelPreprocessingConfig | None,
+) -> str:
+    settings = {
+        "model_params": model_params,
+        "task_type": task_type,
+        "test_source": test_source,
+        "background_rows": background_rows,
+        "explanation_rows": explanation_rows,
+        "class_index": class_index,
+        "budget": budget,
+        "random_state": random_state,
+        "model_preprocessing": (None if model_preprocessing is None else model_preprocessing.model_dump(mode="json")),
+    }
+    digest = hashlib.sha256(json.dumps(settings, sort_keys=True, default=repr).encode())
+    for frame in (X_train, y_train, explain_raw):
+        row_hashes = pd.util.hash_pandas_object(frame, index=True).to_numpy()
+        digest.update(row_hashes.tobytes())
+    return digest.hexdigest()
+
+
+def _load_tabpfn_cache(path: Path, expected_key: str) -> _CachedTabPFN | None:
+    try:
+        with np.load(path, allow_pickle=False) as cached:
+            if str(cached["cache_key"].item()) != expected_key:
+                return None
+            feature_names = tuple(str(name) for name in cached["feature_names"].tolist())
+            feature_values = np.asarray(cached["feature_values"])
+            effects = np.asarray(cached["effects"])
+            if (
+                feature_values.ndim != 2
+                or feature_values.shape != effects.shape
+                or feature_values.shape[1] != len(feature_names)
+            ):
+                return None
+            return _CachedTabPFN(
+                effects=PointEffects(
+                    feature_names=feature_names,
+                    feature_values=feature_values,
+                    effects=effects,
+                ),
+                fit_time=float(cached["fit_time"].item()),
+            )
+    except (KeyError, OSError, ValueError):
+        return None
+
+
+def _save_tabpfn_cache(path: Path, cache_key: str, effects: PointEffects, fit_time: float) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_name(f".{path.name}.tmp.npz")
+    np.savez_compressed(
+        temporary_path,
+        cache_key=np.asarray(cache_key),
+        feature_names=np.asarray(effects.feature_names),
+        feature_values=effects.feature_values,
+        effects=effects.effects,
+        fit_time=np.asarray(fit_time),
+    )
+    temporary_path.replace(path)
 
 
 def _extract_ebm_effects(estimator, feature_names: tuple[str, ...]) -> tuple[EBMTermEffect, ...]:
@@ -320,7 +433,7 @@ def _plot_ebm_line(axis, effect: EBMTermEffect) -> None:
     style = MODEL_STYLES["ebm"]
     x_values = effect.feature_values
     line_options = {
-        "color": "#B3B3B3",
+        "color": MODEL_STYLES["xgboost"].color,
         "linestyle": style.linestyle,
         "linewidth": 2.2,
         "label": style.label,
