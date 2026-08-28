@@ -397,24 +397,31 @@ def global_feature_importance(comparisons: Sequence[InterpretabilityComparison])
 def global_ranking_correlation_matrix(
     comparisons: Sequence[InterpretabilityComparison],
 ) -> pd.DataFrame:
-    """Return all model-run Spearman correlations of global feature rankings."""
-    importance = global_feature_importance(comparisons)
-    run_numbers = tuple(range(1, len(comparisons) + 1))
-    column_order = pd.MultiIndex.from_tuples(
-        [(model_name, run) for model_name in _MODEL_NAMES for run in run_numbers],
-        names=["model", "run"],
-    )
-    wide = (
-        importance.set_index(["feature", "model", "run"])["mean_absolute_effect"]
-        .unstack(["model", "run"])
-        .reindex(index=comparisons[0].feature_names, columns=column_order)
-    )
-    correlations = wide.corr(method="spearman")
-    if not np.isfinite(correlations.to_numpy()).all():
-        raise ValueError("A global feature-ranking correlation is undefined; check for constant rankings")
-    labels = [f"{MODEL_STYLES[model_name].label} · run {run}" for model_name, run in correlations.columns]
-    correlations.index = labels
-    correlations.columns = labels
+    """Return the median between-model ranking correlation across runs.
+
+    The diagonal is one by definition. Each off-diagonal cell is the median of
+    the run-specific Spearman correlations for that pair of model families.
+    Within-model stability across reruns remains available separately through
+    :func:`ranking_correlation_table`.
+    """
+    details = ranking_correlation_table(comparisons)
+    agreement = details[details["scope"] == "model agreement"]
+    labels = [MODEL_STYLES[model_name].label for model_name in _MODEL_NAMES]
+    correlations = pd.DataFrame(np.eye(len(_MODEL_NAMES)), index=labels, columns=labels)
+
+    for model_a, model_b in combinations(_MODEL_NAMES, 2):
+        label_a = MODEL_STYLES[model_a].label
+        label_b = MODEL_STYLES[model_b].label
+        comparison_label = f"{label_a} vs {label_b}"
+        values = agreement.loc[agreement["comparison"] == comparison_label, "spearman_rho"]
+        if values.empty:
+            raise ValueError(f"No model-agreement correlations available for {comparison_label}")
+        median_rho = float(values.median())
+        if not np.isfinite(median_rho):
+            raise ValueError(f"Median feature-ranking correlation is undefined for {comparison_label}")
+        correlations.loc[label_a, label_b] = median_rho
+        correlations.loc[label_b, label_a] = median_rho
+
     return correlations
 
 
@@ -466,16 +473,18 @@ def plot_global_ranking_correlations(
     *,
     output_path: str | Path | None = None,
 ) -> tuple[plt.Figure, pd.DataFrame]:
-    """Plot the model-run Spearman correlation matrix for global rankings."""
+    """Plot median between-model Spearman correlations of global rankings."""
     set_plot_style()
     correlations = global_ranking_correlation_matrix(comparisons)
-    size = max(7.0, 0.8 * len(correlations.columns))
-    figure, axis = plt.subplots(figsize=(size, size), constrained_layout=True)
+    figure, axis = plt.subplots(figsize=(5.0, 5.0), constrained_layout=True)
     image = axis.imshow(correlations.to_numpy(), cmap="coolwarm", vmin=-1.0, vmax=1.0)
     tick_positions = np.arange(len(correlations.columns))
-    axis.set_xticks(tick_positions, correlations.columns, rotation=45, ha="right")
+    axis.set_xticks(tick_positions, correlations.columns)
     axis.set_yticks(tick_positions, correlations.index)
-    axis.set_title("Global feature-ranking correlation")
+    axis.tick_params(axis="both", which="both", length=0)
+    axis.set_xlabel("")
+    axis.set_ylabel("")
+    axis.grid(False)
 
     for row_index, column_index in np.ndindex(correlations.shape):
         value = correlations.iat[row_index, column_index]
