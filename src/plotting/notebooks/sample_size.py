@@ -33,6 +33,11 @@ def _(list_pipeline_runs):
     runs_readmission_72 = list_pipeline_runs(readmission_72_exp_name)
     runs_los7 = list_pipeline_runs(los_exp_name)
     runs_moratlity = runs_moratlity[runs_moratlity["run_name"].str.contains(r"training-size", na=False)]
+
+    runs_moratlity = runs_moratlity[~runs_moratlity["run_name"].str.contains(r"-50", na=False)]
+    runs_readmission = runs_readmission[~runs_readmission["run_name"].str.contains(r"-50", na=False)]
+    runs_readmission_72 = runs_readmission_72[~runs_readmission_72["run_name"].str.contains(r"-50", na=False)]
+    runs_los7 = runs_los7[~runs_los7["run_name"].str.contains(r"-50", na=False)]
     runs_moratlity
     return (
         los_exp_name,
@@ -88,7 +93,7 @@ def _(data_readmission):
 def _(data_los7, data_mortality, data_readmission_72):
     for data in [data_mortality, data_los7, data_readmission_72]:
         print(data["experiment_name"][0])
-        print(len(data["pipeline_id"].unique()) / 10)
+        print(len(data["pipeline_id"].unique()) / 9)
     return
 
 
@@ -148,11 +153,18 @@ def _(
     setups,
 ):
     y_axis_metrics = {
-        "training_time": "Training time (s, log scale)",
-        "predict_time_tudd": "Prediction time (s, log scale)",   
+        "training_time": "Model preparation time (s, log scale)",
+        "predict_time_tudd": "Prediction time (s, log scale)",
+        "roc_auc": None,
+        "prc_auc": None,
     }
 
     for use_metric, use_label in y_axis_metrics.items():
+        if use_metric in ["roc_auc", "prc_auc"]:
+            use_ci = True
+        else:
+            use_ci = False
+        
         for exp_data, base_save_path in setups.values():
             for setting, included_models in model_setups.items():
                 fig = plot_over_training_size(
@@ -162,7 +174,8 @@ def _(
                     run_aggregation="average",
                     show_title=False,
                     metric=use_metric,
-                    y_label= use_label
+                    y_label= use_label,
+                    show_ci=use_ci
                 )
                 if save_figs:
                     fig.tight_layout()
@@ -183,20 +196,21 @@ def _(
     _baseline_model = "xgboost"
     for _exp_data, _base_save_path in setups.values():
         for _setting, _included_models in model_setups.items():
-            _comparison_models = [_model for _model in _included_models if _model != _baseline_model]
-            _difference_fig = plot_difference_training_size(
-                data=_exp_data,
-                baseline_model=_baseline_model,
-                compare_models=_comparison_models,
-                datasets=datasets_to_plot,
-                run_aggregation="average",
-                show_title=False,
-                metric="prc_auc",
-            )
-            if save_figs:
-                _difference_fig.tight_layout()
-                _difference_fig.savefig(f"{_base_save_path}{_setting}_difference_xgboost.svg")
-            plt.show()
+            for metr in ["roc_auc", "prc_auc"]:
+                _comparison_models = [_model for _model in _included_models if _model != _baseline_model]
+                _difference_fig = plot_difference_training_size(
+                    data=_exp_data,
+                    baseline_model=_baseline_model,
+                    compare_models=_comparison_models,
+                    datasets=datasets_to_plot,
+                    run_aggregation="average",
+                    show_title=False,
+                    metric=metr,
+                )
+                if save_figs:
+                    _difference_fig.tight_layout()
+                    _difference_fig.savefig(f"{_base_save_path}{_setting}_difference_xgboost_{metr}.svg")
+                plt.show()
     return
 
 

@@ -91,3 +91,6 @@ line-length = 120
 # are consumed by the marimo runtime rather than static analysis.
 "src/plotting/notebooks/**" = ["B006", "B018", "F841"]
 "src/exploration/data_filtering.py" = ["B018"]
+
+[tool.marimo.runtime]
+output_max_bytes = 10_000_000

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.23.16"
 app = marimo.App()
 
 
@@ -39,7 +39,15 @@ def _(config, pd):
 
 
 @app.cell
-def _(df_mimic, df_mimic_read, df_tudd, df_tudd_read, np, outlier_json, remove_impossible_values):
+def _(
+    df_mimic,
+    df_mimic_read,
+    df_tudd,
+    df_tudd_read,
+    np,
+    outlier_json,
+    remove_impossible_values,
+):
     cleaned = {}
     for name, frame in {
         "mimic": df_mimic,
@@ -54,7 +62,12 @@ def _(df_mimic, df_mimic_read, df_tudd, df_tudd_read, np, outlier_json, remove_i
     df_mimic_read_cleaned = cleaned["mimic_read"]
     df_tudd_cleaned = cleaned["tudd"]
     df_tudd_read_cleaned = cleaned["tudd_read"]
-    return df_mimic_cleaned, df_mimic_read_cleaned, df_tudd_cleaned, df_tudd_read_cleaned
+    return (
+        df_mimic_cleaned,
+        df_mimic_read_cleaned,
+        df_tudd_cleaned,
+        df_tudd_read_cleaned,
+    )
 
 
 @app.cell
@@ -131,6 +144,7 @@ def _(df_mimic_cleaned, df_tudd_cleaned, plot_feature_comparision):
 @app.cell
 def _(df_mimic_read):
     df_mimic_read.columns
+    return
 
 
 @app.cell
@@ -179,6 +193,7 @@ def _(df_mimic_read_cleaned, df_tudd_read_cleaned, plot_feature_comparision):
             save=True,
             path_addition="features_read",
         )
+    return
 
 
 @app.cell
@@ -212,8 +227,9 @@ def _(features, pd):
 
 
 @app.cell
-def _(describe_features, df_mimic):
-    describe_features(df_mimic, "mimic")
+def _(describe_features, df_tudd):
+    describe_features(df_tudd, "tudd")
+    return
 
 
 if __name__ == "__main__":

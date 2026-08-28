@@ -116,7 +116,7 @@ def _(data_los7, data_mortality, data_readmission):
     for ds, _ in setups.values():
         ds["total_time"] = ds["total_time"] - ds["predict_time_mimic"]
         ds["training_time"] = ds["cv_time"] + ds["fit_time"]
-    
+
     return figure_size, model_setups, plt, save_figs, setups
 
 
@@ -138,7 +138,7 @@ def _(
                 metric="prc_auc",
                 runtime_metric="training_time",
                 show_ci=False,
-                x_axis_label="Training time (s, log scale)"
+                x_axis_label="Model preparation time (s, log scale)"
             )
             fig.set_size_inches(*figure_size, forward=True)
             if save_figs:

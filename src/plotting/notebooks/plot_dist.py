@@ -27,7 +27,7 @@ def _(config, pd):
     filtered_data_dir = config.dir_data / "filtered"
     tudd_data = pd.read_csv(filtered_data_dir / "tudd_mean_100_full.csv")
     mimic_data = pd.read_csv(filtered_data_dir / "mimic4_mean_100_full.csv")
-    return filtered_data_dir, mimic_data, tudd_data
+    return filtered_data_dir, tudd_data
 
 
 @app.cell
@@ -40,22 +40,22 @@ def _(tudd_data):
 def _(config):
     exclude_features = None
     save_plots = True
-    plots_output_dir = config.dir_plots / "feature_distributions" / "mimic"
+    plots_output_dir = config.dir_plots / "feature_distributions" / "tudd"
     return exclude_features, plots_output_dir, save_plots
 
 
 @app.cell
 def _(
     exclude_features,
-    mimic_data,
     plot_feature_distributions,
     plots_output_dir,
     plt,
     save_plots,
+    tudd_data,
 ):
     figs = plot_feature_distributions(
-        # tudd=tudd_data,
-        mimic=mimic_data,
+        tudd=tudd_data,
+        # mimic=mimic_data,
         exclude_features=exclude_features,
     )
 
@@ -76,7 +76,7 @@ def _(config, filtered_data_dir, pd):
     exclude_cols.remove("hours_to_readmit")
 
     plots_output_dir_read = config.dir_plots / "feature_distributions" / "mimic"
-    return exclude_cols, plots_output_dir_read, read_mimic_data
+    return exclude_cols, plots_output_dir_read, read_mimic_data, read_tudd_data
 
 
 @app.cell
@@ -88,14 +88,13 @@ def _(read_mimic_data):
 @app.cell
 def _(read_mimic_data):
     read_mimic_data["hours_to_readmit"].gt(3*24).sum()
-
     return
 
 
 @app.cell
 def _(read_mimic_data):
     read_mimic_data_c = read_mimic_data[read_mimic_data["hours_to_readmit"] < 24000]
-    return (read_mimic_data_c,)
+    return
 
 
 @app.cell
@@ -104,12 +103,12 @@ def _(
     plot_feature_distributions,
     plots_output_dir_read,
     plt,
-    read_mimic_data_c,
+    read_tudd_data,
     save_plots,
 ):
     figs_r = plot_feature_distributions(
-        # tudd=read_tudd_data,
-        mimic=read_mimic_data_c,
+        tudd=read_tudd_data,
+        #mimic=read_mimic_data_c,
         exclude_features=exclude_cols,
     )
 

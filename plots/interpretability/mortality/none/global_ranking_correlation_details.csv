@@ -1,0 +1,19 @@
+scope,comparison,context,spearman_rho
+run stability,EBM,run 1 vs run 2,0.9875417130144604
+run stability,EBM,run 1 vs run 3,0.9919911012235817
+run stability,EBM,run 2 vs run 3,0.9906562847608454
+run stability,XGBoost,run 1 vs run 2,0.9982202447163514
+run stability,XGBoost,run 1 vs run 3,0.9933259176863181
+run stability,XGBoost,run 2 vs run 3,0.9884315906562846
+run stability,TabPFNv3,run 1 vs run 2,0.986206896551724
+run stability,TabPFNv3,run 1 vs run 3,0.9733036707452726
+run stability,TabPFNv3,run 2 vs run 3,0.9750834260289211
+model agreement,EBM vs XGBoost,run 1,0.8985539488320357
+model agreement,EBM vs TabPFNv3,run 1,0.7744160177975528
+model agreement,XGBoost vs TabPFNv3,run 1,0.8843159065628475
+model agreement,EBM vs XGBoost,run 2,0.8936596218020022
+model agreement,EBM vs TabPFNv3,run 2,0.7459399332591768
+model agreement,XGBoost vs TabPFNv3,run 2,0.8812013348164627
+model agreement,EBM vs XGBoost,run 3,0.9065628476084538
+model agreement,EBM vs TabPFNv3,run 3,0.7508342602892103
+model agreement,XGBoost vs TabPFNv3,run 3,0.8576195773081201

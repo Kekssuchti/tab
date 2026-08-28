@@ -70,8 +70,6 @@ def plot_difference_training_size(
     missing_models = [name for name in selected_models if name not in available_models]
     if missing_models:
         raise ValueError("No usable rows for models: " + ", ".join(missing_models))
-    if log_x and frame["training_size"].le(0).any():
-        raise ValueError("training_size must be strictly positive when log_x=True")
 
     baseline_instances = frame.loc[frame["model_name"].eq(baseline_model), "model_instance"].unique()
     if len(baseline_instances) != 1:
@@ -133,9 +131,12 @@ def plot_difference_training_size(
         axis.axhline(0, color="#757575", linewidth=0.8, alpha=0.7)
         if log_x:
             axis.set_xscale("log")
+            x_label_ext = " (log scale)"
+        else:
+            x_label_ext = ""
         axis.set_xticks(sizes)
         axis.set_xticklabels([f"{int(size):,}" for size in sizes], rotation=45, ha="right", fontsize=8)
-        axis.set_xlabel("Training Sample Count")
+        axis.set_xlabel("Training sample count" + x_label_ext)
         axis.set_ylabel(f"Δ {metric_label(metric)}")
         if show_title:
             axis.set_title(dataset_label(dataset))

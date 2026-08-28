@@ -94,9 +94,10 @@ def plot_over_training_size(
         sizes = np.unique(data["training_size"].to_numpy())
         if log_x:
             ax.set_xscale("log")
+            x_label_ext = " (log scale)"
         ax.set_xticks(sizes)
         ax.set_xticklabels([f"{int(size):,}" for size in sizes], rotation=45, ha="right", fontsize=8)
-        ax.set_xlabel("Training Sample Count")
+        ax.set_xlabel("Training sample count" + x_label_ext)
         ax.set_ylabel(metric_label(metric))
         if "time" in metric:
             ax.set_yscale("log")

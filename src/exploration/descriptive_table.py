@@ -10,6 +10,8 @@ from src.config import config
 _FEATURES = (
     ("Age", "Age"),
     ("Weight+100%mean", "Weight"),
+    ("Height+100%mean", "Height"),
+    ("BMI", "BMI"),
     ("Temp+100%mean", "Temperature"),
     ("RR+100%mean", "Respiratory Rate"),
     ("HR+100%mean", "Heart Rate"),
@@ -63,6 +65,8 @@ def descriptive_statistics_table_to_latex(
         "tudd_readmission": data_dir / "tudd_readmission.csv",
     }
     data = {name: pd.read_csv(path) for name, path in files.items()}
+
+    data = _add_bmi(data)
 
     required_features = {column for column, _ in _FEATURES} | {"mortality", "LOS"}
     for dataset in ("mimic", "tudd"):
@@ -174,6 +178,8 @@ def single_df_descriptive_statistics_table_to_latex(
 
     data = {name: pd.read_csv(path) for name, path in files.items()}
 
+    data = _add_bmi(data)
+
     def format_number(value: float) -> str:
         return "--" if pd.isna(value) else f"{value:.2f}"
 
@@ -250,6 +256,13 @@ def single_df_descriptive_statistics_table_to_latex(
     return "\n".join(lines)
 
 
+def _add_bmi(data: dict) -> dict:
+    for name, df in data.items():
+        if "Height+100%mean" in df.columns and "Weight+100%mean" in df.columns:
+            df["BMI"] = df["Weight+100%mean"] / (df["Height+100%mean"] / 100) ** 2
+    return data
+
+
 if __name__ == "__main__":
     print(descriptive_statistics_table_to_latex())
-    print(single_df_descriptive_statistics_table_to_latex("tudd", type="readmission"))
+    print(single_df_descriptive_statistics_table_to_latex("tudd", type="normal"))

@@ -6,6 +6,7 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -42,14 +43,26 @@ class EBMTermEffect:
 
 
 @dataclass(frozen=True)
+class InterpretabilitySeeds:
+    """Independent random states for one interpretability run."""
+
+    model: int
+    background: int
+    explanation: int
+    explainer: int
+
+
+@dataclass(frozen=True)
 class InterpretabilityComparison:
-    """Model effects needed to render the three-model feature plots."""
+    """Model effects and run metadata for one three-model comparison."""
 
     feature_names: tuple[str, ...]
     ebm: tuple[EBMTermEffect, ...]
+    ebm_points: PointEffects
     xgboost: PointEffects
     tabpfn: PointEffects
     fit_times: Mapping[str, float]
+    seeds: InterpretabilitySeeds
     tabpfn_cache_hit: bool = False
 
 
@@ -66,26 +79,34 @@ def compute_interpretability_comparison(
     model_params: Mapping[str, Mapping[str, Any]],
     test_source: str = "tudd",
     background_rows: int = 256,
-    explanation_rows: int = 1_000,
+    explanation_rows: int = 1000,
     class_index: int = 1,
-    tabpfn_shap_budget: int = 2_048,
-    random_state: int = 1_337,
+    tabpfn_shap_budget: int = 2048,
+    model_random_state: int = 1337,
+    background_random_state: int = 2337,
+    explanation_random_state: int = 3337,
+    explainer_random_state: int = 4337,
     model_preprocessing: ModelPreprocessingConfig | None = None,
     tabpfn_cache_path: str | Path | None = None,
     recompute_tabpfn: bool = False,
 ) -> InterpretabilityComparison:
-    """Train EBM, XGBoost, and TabPFNv3 sequentially and calculate feature effects.
+    """Train EBM, XGBoost, and TabPFNv3 and calculate one run of feature effects.
 
-    EBM contributes its native global main-effect curves. XGBoost contributes
-    TreeSHAP values, and TabPFNv3 contributes first-order ShapIQ SHAP values.
-    Models are released immediately after their effects have been copied. When
-    ``tabpfn_cache_path`` is set, compatible TabPFN effects are reused from disk.
+    EBM contributes native global main-effect curves and per-row native term
+    contributions. XGBoost contributes TreeSHAP values, and TabPFNv3 contributes
+    first-order ShapIQ SHAP values. Separate random states control model fitting,
+    the TabPFN background sample, the fixed explanation sample, and the TabPFN
+    explainer. Models are released immediately after their effects have been
+    copied. When ``tabpfn_cache_path`` is set, compatible TabPFN effects are
+    reused from disk.
     """
     missing = [name for name in _MODEL_NAMES if name not in model_params]
     if missing:
         raise ValueError(f"model_params is missing: {', '.join(missing)}")
     if background_rows < 1 or explanation_rows < 1:
         raise ValueError("background_rows and explanation_rows must be positive")
+    if class_index != 1:
+        raise ValueError("This binary-classification comparison currently supports class_index=1 only")
 
     test_sets = {"mimic": data.test_mimic, "tudd": data.test_tudd}
     try:
@@ -93,28 +114,45 @@ def compute_interpretability_comparison(
     except KeyError as exc:
         raise ValueError("test_source must be 'mimic' or 'tudd'") from exc
 
-    background_raw = _sample_rows(data.train_data.X, background_rows, random_state)
-    explain_raw = _sample_rows(test_data.X, explanation_rows, random_state + 1)
+    seeds = InterpretabilitySeeds(
+        model=model_random_state,
+        background=background_random_state,
+        explanation=explanation_random_state,
+        explainer=explainer_random_state,
+    )
+    effective_model_params = {
+        name: {**dict(model_params[name]), "random_state": model_random_state} for name in _MODEL_NAMES
+    }
+    background_raw = _sample_rows(data.train_data.X, background_rows, background_random_state)
+    explain_raw = _sample_rows(test_data.X, explanation_rows, explanation_random_state)
     y_train = data.train_data.y.to_numpy()
+    preprocessing_settings = {
+        "model_preprocessing": (None if model_preprocessing is None else model_preprocessing.model_dump(mode="json")),
+        "default_imputer": trainer.default_imputer.model_dump(mode="json"),
+        "default_scaler": trainer.default_scaler.model_dump(mode="json"),
+        "log_transform_target": trainer.log_transform_target,
+    }
     cache_path = Path(tabpfn_cache_path) if tabpfn_cache_path is not None else None
     cache_key = _tabpfn_cache_key(
         X_train=data.train_data.X,
         y_train=data.train_data.y,
+        background_raw=background_raw,
         explain_raw=explain_raw,
-        model_params=model_params["tabpfn-3"],
+        model_params=effective_model_params["tabpfn-3"],
         task_type=trainer.task_type,
         test_source=test_source,
         background_rows=background_rows,
         explanation_rows=explanation_rows,
         class_index=class_index,
         budget=tabpfn_shap_budget,
-        random_state=random_state,
-        model_preprocessing=model_preprocessing,
+        seeds=seeds,
+        preprocessing_settings=preprocessing_settings,
     )
 
     fit_times: dict[str, float] = {}
     feature_names: tuple[str, ...] | None = None
     ebm_effects: tuple[EBMTermEffect, ...] | None = None
+    ebm_point_effects: PointEffects | None = None
     xgboost_effects: PointEffects | None = None
     tabpfn_effects: PointEffects | None = None
     tabpfn_cache_hit = False
@@ -135,7 +173,7 @@ def compute_interpretability_comparison(
             trained_model, fit_time = trainer._fit_model(
                 model_config,
                 spec,
-                dict(model_params[model_name]),
+                effective_model_params[model_name],
                 data.train_data.X,
                 y_train,
             )
@@ -153,6 +191,11 @@ def compute_interpretability_comparison(
 
             if model_name == "ebm":
                 ebm_effects = _extract_ebm_effects(estimator, current_names)
+                ebm_point_effects = PointEffects(
+                    feature_names=current_names,
+                    feature_values=explained.copy(),
+                    effects=_ebm_term_contributions(estimator, explained, class_index),
+                )
             elif model_name == "xgboost":
                 xgboost_effects = PointEffects(
                     feature_names=current_names,
@@ -170,7 +213,7 @@ def compute_interpretability_comparison(
                         feature_names=current_names,
                         class_index=class_index,
                         budget=tabpfn_shap_budget,
-                        random_state=random_state,
+                        random_state=explainer_random_state,
                     ),
                 )
                 if cache_path is not None:
@@ -180,14 +223,17 @@ def compute_interpretability_comparison(
 
     assert feature_names is not None
     assert ebm_effects is not None
+    assert ebm_point_effects is not None
     assert xgboost_effects is not None
     assert tabpfn_effects is not None
     return InterpretabilityComparison(
         feature_names=feature_names,
         ebm=ebm_effects,
+        ebm_points=ebm_point_effects,
         xgboost=xgboost_effects,
         tabpfn=tabpfn_effects,
         fit_times=fit_times,
+        seeds=seeds,
         tabpfn_cache_hit=tabpfn_cache_hit,
     )
 
@@ -225,7 +271,19 @@ def plot_interpretability_comparison(
         ebm_effect = ebm_by_name[feature_name]
         figure, axis = plt.subplots(figsize=figsize, constrained_layout=True)
 
-        _plot_ebm_line(axis, ebm_effect)
+        plotted_feature_values = np.concatenate(
+            (
+                comparison.xgboost.feature_values[:, index],
+                comparison.tabpfn.feature_values[:, index],
+            )
+        )
+        finite_feature_values = plotted_feature_values[np.isfinite(plotted_feature_values)]
+        plotted_range = (
+            (float(finite_feature_values.min()), float(finite_feature_values.max()))
+            if finite_feature_values.size
+            else None
+        )
+        _plot_ebm_line(axis, ebm_effect, plotted_range=plotted_range)
         axis.scatter(
             comparison.xgboost.feature_values[:, index],
             comparison.xgboost.effects[:, index],
@@ -250,7 +308,7 @@ def plot_interpretability_comparison(
         )
         axis.axhline(0.0, color="#777777", linewidth=0.8, alpha=0.55)
         axis.set_xlabel(FEATURE_ALIASES.get(feature_name, feature_name))
-        axis.set_ylabel("Feature effect / SHAP value")
+        axis.set_ylabel("Feature effect (model-specific output scale)")
         axis.legend()
 
         if target_dir is not None:
@@ -277,10 +335,161 @@ def comparison_summary(comparison: InterpretabilityComparison) -> pd.DataFrame:
                 "explanation": explanation_types[name],
                 "fit_time_s": comparison.fit_times[name],
                 "cache": "hit" if name == "tabpfn-3" and comparison.tabpfn_cache_hit else "computed",
+                "model_seed": comparison.seeds.model,
+                "background_seed": comparison.seeds.background,
+                "explanation_seed": comparison.seeds.explanation,
+                "explainer_seed": comparison.seeds.explainer,
             }
             for name in _MODEL_NAMES
         ]
     )
+
+
+def global_feature_importance(comparisons: Sequence[InterpretabilityComparison]) -> pd.DataFrame:
+    """Return per-run mean absolute feature effects and within-model ranks.
+
+    The absolute magnitudes are only comparable within the same explanation
+    method. Spearman correlations of the resulting ranks are used for comparisons
+    across models and runs because the explanation scales can differ.
+    """
+    if not comparisons:
+        raise ValueError("comparisons must contain at least one run")
+
+    expected_names = comparisons[0].feature_names
+    rows: list[dict[str, Any]] = []
+    for run, comparison in enumerate(comparisons, start=1):
+        if comparison.feature_names != expected_names:
+            raise ValueError("All runs must use the same transformed feature space")
+
+        effects_by_model = {
+            "ebm": comparison.ebm_points.effects,
+            "xgboost": comparison.xgboost.effects,
+            "tabpfn-3": comparison.tabpfn.effects,
+        }
+        for model_name, effects in effects_by_model.items():
+            if effects.ndim != 2 or effects.shape[1] != len(expected_names):
+                raise ValueError(f"Unexpected {model_name} effect shape in run {run}: {effects.shape}")
+            if not np.isfinite(effects).all():
+                invalid_count = int(effects.size - np.isfinite(effects).sum())
+                raise ValueError(f"{model_name} run {run} contains {invalid_count} non-finite feature effects")
+            importance = np.mean(np.abs(effects), axis=0)
+            ranks = pd.Series(importance).rank(method="average", ascending=False).to_numpy()
+            rows.extend(
+                {
+                    "run": run,
+                    "model_seed": comparison.seeds.model,
+                    "background_seed": comparison.seeds.background,
+                    "explanation_seed": comparison.seeds.explanation,
+                    "explainer_seed": comparison.seeds.explainer,
+                    "model": model_name,
+                    "model_label": MODEL_STYLES[model_name].label,
+                    "feature": feature_name,
+                    "feature_label": FEATURE_ALIASES.get(feature_name, feature_name),
+                    "mean_absolute_effect": float(importance[index]),
+                    "rank": float(ranks[index]),
+                }
+                for index, feature_name in enumerate(expected_names)
+            )
+
+    return pd.DataFrame(rows).sort_values(["run", "model", "rank", "feature"], ignore_index=True)
+
+
+def global_ranking_correlation_matrix(
+    comparisons: Sequence[InterpretabilityComparison],
+) -> pd.DataFrame:
+    """Return all model-run Spearman correlations of global feature rankings."""
+    importance = global_feature_importance(comparisons)
+    run_numbers = tuple(range(1, len(comparisons) + 1))
+    column_order = pd.MultiIndex.from_tuples(
+        [(model_name, run) for model_name in _MODEL_NAMES for run in run_numbers],
+        names=["model", "run"],
+    )
+    wide = (
+        importance.set_index(["feature", "model", "run"])["mean_absolute_effect"]
+        .unstack(["model", "run"])
+        .reindex(index=comparisons[0].feature_names, columns=column_order)
+    )
+    correlations = wide.corr(method="spearman")
+    if not np.isfinite(correlations.to_numpy()).all():
+        raise ValueError("A global feature-ranking correlation is undefined; check for constant rankings")
+    labels = [f"{MODEL_STYLES[model_name].label} · run {run}" for model_name, run in correlations.columns]
+    correlations.index = labels
+    correlations.columns = labels
+    return correlations
+
+
+def ranking_correlation_table(comparisons: Sequence[InterpretabilityComparison]) -> pd.DataFrame:
+    """Summarize within-model run stability and within-run model agreement."""
+    importance = global_feature_importance(comparisons)
+    indexed = {
+        (model_name, run): group.set_index("feature")["mean_absolute_effect"]
+        for (model_name, run), group in importance.groupby(["model", "run"], sort=False)
+    }
+    rows: list[dict[str, Any]] = []
+    run_numbers = tuple(range(1, len(comparisons) + 1))
+
+    def _correlation(left_key: tuple[str, int], right_key: tuple[str, int]) -> float:
+        rho = indexed[left_key].corr(indexed[right_key], method="spearman")
+        if not np.isfinite(rho):
+            raise ValueError(f"Feature-ranking correlation is undefined for {left_key} and {right_key}")
+        return float(rho)
+
+    for model_name in _MODEL_NAMES:
+        for run_a, run_b in combinations(run_numbers, 2):
+            rho = _correlation((model_name, run_a), (model_name, run_b))
+            rows.append(
+                {
+                    "scope": "run stability",
+                    "comparison": MODEL_STYLES[model_name].label,
+                    "context": f"run {run_a} vs run {run_b}",
+                    "spearman_rho": float(rho),
+                }
+            )
+
+    for run in run_numbers:
+        for model_a, model_b in combinations(_MODEL_NAMES, 2):
+            rho = _correlation((model_a, run), (model_b, run))
+            rows.append(
+                {
+                    "scope": "model agreement",
+                    "comparison": f"{MODEL_STYLES[model_a].label} vs {MODEL_STYLES[model_b].label}",
+                    "context": f"run {run}",
+                    "spearman_rho": float(rho),
+                }
+            )
+
+    return pd.DataFrame(rows)
+
+
+def plot_global_ranking_correlations(
+    comparisons: Sequence[InterpretabilityComparison],
+    *,
+    output_path: str | Path | None = None,
+) -> tuple[plt.Figure, pd.DataFrame]:
+    """Plot the model-run Spearman correlation matrix for global rankings."""
+    set_plot_style()
+    correlations = global_ranking_correlation_matrix(comparisons)
+    size = max(7.0, 0.8 * len(correlations.columns))
+    figure, axis = plt.subplots(figsize=(size, size), constrained_layout=True)
+    image = axis.imshow(correlations.to_numpy(), cmap="coolwarm", vmin=-1.0, vmax=1.0)
+    tick_positions = np.arange(len(correlations.columns))
+    axis.set_xticks(tick_positions, correlations.columns, rotation=45, ha="right")
+    axis.set_yticks(tick_positions, correlations.index)
+    axis.set_title("Global feature-ranking correlation")
+
+    for row_index, column_index in np.ndindex(correlations.shape):
+        value = correlations.iat[row_index, column_index]
+        label = "NA" if not np.isfinite(value) else f"{value:.2f}"
+        text_color = "white" if np.isfinite(value) and abs(value) >= 0.55 else "black"
+        axis.text(column_index, row_index, label, ha="center", va="center", color=text_color, fontsize=8)
+
+    colorbar = figure.colorbar(image, ax=axis, shrink=0.8)
+    colorbar.set_label("Spearman $\\rho$")
+    if output_path is not None:
+        target = Path(output_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        figure.savefig(target, bbox_inches="tight", pad_inches=0.2)
+    return figure, correlations
 
 
 def _sample_rows(frame, requested_rows: int, random_state: int):
@@ -291,6 +500,7 @@ def _tabpfn_cache_key(
     *,
     X_train,
     y_train,
+    background_raw,
     explain_raw,
     model_params: Mapping[str, Any],
     task_type: str,
@@ -299,10 +509,11 @@ def _tabpfn_cache_key(
     explanation_rows: int,
     class_index: int,
     budget: int,
-    random_state: int,
-    model_preprocessing: ModelPreprocessingConfig | None,
+    seeds: InterpretabilitySeeds,
+    preprocessing_settings: Mapping[str, Any],
 ) -> str:
     settings = {
+        "cache_schema": 2,
         "model_params": model_params,
         "task_type": task_type,
         "test_source": test_source,
@@ -310,11 +521,17 @@ def _tabpfn_cache_key(
         "explanation_rows": explanation_rows,
         "class_index": class_index,
         "budget": budget,
-        "random_state": random_state,
-        "model_preprocessing": (None if model_preprocessing is None else model_preprocessing.model_dump(mode="json")),
+        "seeds": {
+            "model": seeds.model,
+            "background": seeds.background,
+            "explanation": seeds.explanation,
+            "explainer": seeds.explainer,
+        },
+        "preprocessing": preprocessing_settings,
+        "shapiq": {"index": "SV", "max_order": 1, "imputer": "baseline"},
     }
     digest = hashlib.sha256(json.dumps(settings, sort_keys=True, default=repr).encode())
-    for frame in (X_train, y_train, explain_raw):
+    for frame in (X_train, y_train, background_raw, explain_raw):
         row_hashes = pd.util.hash_pandas_object(frame, index=True).to_numpy()
         digest.update(row_hashes.tobytes())
     return digest.hexdigest()
@@ -378,6 +595,14 @@ def _extract_ebm_effects(estimator, feature_names: tuple[str, ...]) -> tuple[EBM
     return tuple(effects)
 
 
+def _ebm_term_contributions(estimator, explained: np.ndarray, class_index: int) -> np.ndarray:
+    expected_terms = tuple((index,) for index in range(explained.shape[1]))
+    if tuple(getattr(estimator, "term_features_", ())) != expected_terms:
+        raise ValueError("EBM must contain exactly one main-effect term per transformed feature")
+    values = np.asarray(estimator.eval_terms(explained))
+    return _select_output(values, explained.shape, class_index, "EBM")
+
+
 def _xgboost_shap_values(estimator, explained: np.ndarray, class_index: int) -> np.ndarray:
     import shap
 
@@ -429,7 +654,12 @@ def _select_output(
     raise ValueError(f"Unexpected {model_name} SHAP shape {values.shape}; expected {expected_shape}")
 
 
-def _plot_ebm_line(axis, effect: EBMTermEffect) -> None:
+def _plot_ebm_line(
+    axis,
+    effect: EBMTermEffect,
+    *,
+    plotted_range: tuple[float, float] | None = None,
+) -> None:
     style = MODEL_STYLES["ebm"]
     x_values = effect.feature_values
     line_options = {
@@ -440,8 +670,12 @@ def _plot_ebm_line(axis, effect: EBMTermEffect) -> None:
         "zorder": 3,
     }
     if np.issubdtype(x_values.dtype, np.number) and len(x_values) == len(effect.effects) + 1:
-        # EBM exposes continuous terms as one score per interval and its edges.
-        # A stair plot preserves that native step function.
-        axis.stairs(effect.effects, x_values.astype(float), **line_options)
+        # EBM assigns out-of-range values to its first or last bin. Extend those
+        # boundary bins across the plotted samples rather than dropping to zero.
+        edges = x_values.astype(float).copy()
+        if plotted_range is not None:
+            edges[0] = min(edges[0], plotted_range[0])
+            edges[-1] = max(edges[-1], plotted_range[1])
+        axis.stairs(effect.effects, edges, baseline=None, **line_options)
     else:
         axis.plot(x_values, effect.effects, **line_options)
