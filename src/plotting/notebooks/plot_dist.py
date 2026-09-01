@@ -75,7 +75,7 @@ def _(config, filtered_data_dir, pd):
     exclude_cols = list(read_tudd_data.columns)
     exclude_cols.remove("hours_to_readmit")
 
-    plots_output_dir_read = config.dir_plots / "feature_distributions" / "mimic"
+    plots_output_dir_read = config.dir_plots / "feature_distributions" / "tudd"
     return exclude_cols, plots_output_dir_read, read_mimic_data, read_tudd_data
 
 

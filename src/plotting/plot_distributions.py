@@ -21,7 +21,7 @@ def plot_feature_distribution(
     datasets = [name for name in ordered_datasets(list(supplied)) if supplied[name] is not None]
 
     set_plot_style()
-    figure, axis = plt.subplots(figsize=(8, 5))
+    figure, axis = plt.subplots(figsize=(8, 6))
     for name in datasets:
         sns.histplot(
             data=supplied[name],

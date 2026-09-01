@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import to_hex
 
+from src.plotting.scientific_figstyle import PALETTE, use_style
+
 # Metric alias
 
 POINT_SCALE_METRICS = frozenset({"roc_auc", "prc_auc", "f1", "accuracy", "precision", "sensitivity"})
@@ -39,11 +41,26 @@ def metric_scale(metric: str) -> int:
     return 100 if metric in POINT_SCALE_METRICS else 1
 
 
-# --- Dataset defaults ------------------------------------------------------
+# --- Dataset and task defaults --------------------------------------------
 
-DATASET_COLORS = {"mimic": "#EB4A25", "tudd": "#3B82F6"}
+# Dataset and task colors are separate semantic namespaces. A plot comparing
+# datasets uses DATASET_COLORS; one comparing tasks uses TASK_COLORS. Neither
+# changes the stable model identity colors below.
+DATASET_COLORS = {"mimic": PALETTE["red"], "tudd": PALETTE["blue"]}
 DATASET_NAMES = {"mimic": "MIMIC-IV", "tudd": "EUH"}
 DATASET_ORDER = ["tudd", "mimic"]
+
+TASK_COLORS = {
+    "mortality": PALETTE["orange"],
+    "LOS7": PALETTE["blue"],
+    "hours_to_readmit_72": PALETTE["green"],
+}
+TASK_NAMES = {
+    "mortality": "Mortality",
+    "LOS7": "LOS > 7 d",
+    "hours_to_readmit_72": "72 h readmission",
+}
+TASK_ORDER = ["mortality", "LOS7", "hours_to_readmit_72"]
 
 
 def dataset_label(dataset: str) -> str:
@@ -59,6 +76,19 @@ def ordered_datasets(dataset_names: Sequence[str]) -> list[str]:
     return known + unknown
 
 
+def task_label(task: str) -> str:
+    """Return the shared display label for a prediction task."""
+    return TASK_NAMES.get(task, task.replace("_", " ").title())
+
+
+def ordered_tasks(task_names: Sequence[str]) -> list[str]:
+    """Order tasks canonically, appending unknown tasks stably."""
+    present = set(task_names)
+    known = [name for name in TASK_ORDER if name in present]
+    unknown = [name for name in dict.fromkeys(task_names) if name not in TASK_ORDER]
+    return known + unknown
+
+
 # --- Model defaults --------------------------------------------------------
 
 
@@ -71,24 +101,28 @@ class ModelStyle(NamedTuple):
     label: str
 
 
+BASELINE_MARKER = "o"
+TFM_MARKER = "^"
+
 MODEL_STYLES: dict[str, ModelStyle] = {
-    # Classical ML baselines: muted gray/neutral colors, circle markers.
-    "logistic-regression": ModelStyle("#757575", "-", "o", "LR"),
-    "ebm": ModelStyle("#B3B3B3", "-", "o", "EBM"),
-    "xgboost": ModelStyle("#222222", "-", "o", "XGBoost"),
-    # Tabular foundation models. Strongest colors go to the key models, in
-    # priority order: TabPFNv3, TabICLv2, TabFM, TabSwift, LimiX16M.
-    "tabpfn-2.5": ModelStyle("#AEC7E8", "-", "^", "TabPFNv2.5"),
-    "tabpfn-2.6": ModelStyle("#56B4E9", "-", "^", "TabPFNv2.6"),
-    "tabpfn-3": ModelStyle("#0072B2", "-", "^", "TabPFNv3"),
-    "tabicl-2": ModelStyle("#E69F00", "-", "^", "TabICLv2"),
-    "limix-2m": ModelStyle("#C5B0D5", "-", "^", "LimiX2M"),
-    "limix-16m": ModelStyle("#CC79A7", "-", "^", "LimiX16M"),
-    "mitra": ModelStyle("#BCBD22", "-", "^", "Mitra"),
-    "orion-msp": ModelStyle("#17BECF", "-", "^", "OrionMSP"),
-    "orion-bix": ModelStyle("#98DF8A", "-", "^", "OrionBIX"),
-    "tabswift": ModelStyle("#D55E00", "-", "^", "TabSwift"),
-    "tabfm": ModelStyle("#009E73", "-", "^", "TabFM"),
+    # Classical ML baselines: neutral colors and circle markers.
+    "logistic-regression": ModelStyle("#757575", "-", BASELINE_MARKER, "LR"),
+    "ebm": ModelStyle("#B3B3B3", "-", BASELINE_MARKER, "EBM"),
+    "xgboost": ModelStyle("#222222", "-", BASELINE_MARKER, "XGBoost"),
+    # Retained foundation models receive the strongest accessible colors.
+    "tabpfn-2.5": ModelStyle("#A6CEE3", "-", TFM_MARKER, "TabPFNv2.5"),
+    "tabpfn-2.6": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv2.6"),
+    "tabpfn-3": ModelStyle(PALETTE["blue"], "-", TFM_MARKER, "TabPFNv3"),
+    "tabicl-2": ModelStyle(PALETTE["orange"], "-", TFM_MARKER, "TabICLv2"),
+    "tabfm": ModelStyle(PALETTE["green"], "-", TFM_MARKER, "TabFM"),
+    "exaone": ModelStyle(PALETTE["purple"], "-", TFM_MARKER, "EXAONE"),
+    # Legacy models keep stable but less prominent secondary colors.
+    "limix-2m": ModelStyle("#D5C4D8", "-", TFM_MARKER, "LimiX2M"),
+    "limix-16m": ModelStyle("#A98BB5", "-", TFM_MARKER, "LimiX16M"),
+    "mitra": ModelStyle("#8A7A00", "-", TFM_MARKER, "Mitra"),
+    "orion-msp": ModelStyle("#17BECF", "-", TFM_MARKER, "OrionMSP"),
+    "orion-bix": ModelStyle("#74A66A", "-", TFM_MARKER, "OrionBIX"),
+    "tabswift": ModelStyle(PALETTE["red"], "-", TFM_MARKER, "TabSwift"),
 }
 
 MODEL_ORDER = list(MODEL_STYLES)
@@ -136,21 +170,8 @@ def model_styles(model_names: Sequence[str]) -> dict[str, ModelStyle]:
 
 
 def set_plot_style() -> None:
-    """Apply consistent matplotlib defaults used across result plots."""
-    plt.rcParams.update(
-        {
-            "figure.dpi": 120,
-            "axes.spines.top": False,
-            "axes.spines.right": False,
-            "axes.grid": True,
-            "grid.alpha": 0.3,
-            "axes.titlesize": 12,
-            "axes.labelsize": 11,
-            "legend.fontsize": 9,
-            "xtick.labelsize": 9,
-            "ytick.labelsize": 9,
-        }
-    )
+    """Apply the vendored publication style used by all result plots."""
+    use_style()
 
 
 # Feature aliases
@@ -169,19 +190,19 @@ FEATURE_ALIASES: dict[str, str] = {
     "Albumin+100%mean": "Albumin",
     "AnionGAP+100%mean": "Anion Gap",
     "Bilirubin+100%mean": "Bilirubin",
-    "FiO2+100%mean": "Fraction of Inspired O2",
-    "GCST+100%mean": "Glascow Coma Scale",
+    "FiO2+100%mean": "Fraction of Inspired Oxygen",
+    "GCST+100%mean": "Glasgow Coma Scale",
     "GLU+100%mean": "Glucose",
     "HCO3+100%mean": "Bicarbonate",
     "HR+100%mean": "Heart Rate",
     "Urea+100%mean": "Urea",
     "Hb+100%mean": "Hemoglobin",
-    "Kalium+100%mean": "Kalium",
-    "Kreatinin+100%mean": "Kreatinin",
+    "Kalium+100%mean": "Potassium",
+    "Kreatinin+100%mean": "Creatinine",
     "Lactate+100%mean": "Lactate",
-    "Leukocyten+100%mean": "Leukocyten",
+    "Leukocyten+100%mean": "Leukocytes",
     "MBP+100%mean": "Mean Blood Pressure",
-    "Natrium+100%mean": "Natrium",
+    "Natrium+100%mean": "Sodium",
     "PaCO2+100%mean": "Partial Pressure of CO2",
     "PaO2+100%mean": "Partial Pressure of O2",
     "Quick+100%mean": "Prothrombin Time",
@@ -189,4 +210,11 @@ FEATURE_ALIASES: dict[str, str] = {
     "Temp+100%mean": "Temperature",
     "Thrombocyten+100%mean": "Thrombocyten",
     "Ph+100%mean": "Potential Hydrogen",
+}
+
+SMALL_FEATURE_NAMES: dict[str, str] = {
+    "Fraction of Inspired Oxygen": "FiO2",
+    "Glasgow Coma Scale": "GCST",
+    "Partial Pressure of CO2": "PaCO2",
+    "Partial Pressure of O2": "PaO2",
 }

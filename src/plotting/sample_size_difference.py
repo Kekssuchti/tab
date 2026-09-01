@@ -10,7 +10,13 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
-from src.plotting.defaults import dataset_label, metric_label, metric_scale, model_label
+from src.plotting.defaults import (
+    dataset_label,
+    metric_label,
+    metric_scale,
+    model_label,
+    set_plot_style,
+)
 from src.plotting.plot_support import instance_plot_styles
 
 
@@ -38,6 +44,7 @@ def plot_difference_training_size(
     baseline_model and compare_models refer to model names, rather than
     model-instance IDs. The baseline must resolve to exactly one model instance.
     """
+    set_plot_style()
     if run_aggregation not in {None, "average"}:
         raise ValueError("run_aggregation must be: average")
 

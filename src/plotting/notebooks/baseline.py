@@ -116,7 +116,6 @@ def _(data_los7, data_mortality, data_readmission):
     for ds, _ in setups.values():
         ds["total_time"] = ds["total_time"] - ds["predict_time_mimic"]
         ds["training_time"] = ds["cv_time"] + ds["fit_time"]
-
     return figure_size, model_setups, plt, save_figs, setups
 
 
@@ -135,7 +134,7 @@ def _(
                 data,
                 include_models=included_models,
                 run_aggregation="average",
-                metric="prc_auc",
+                metric="roc_auc",
                 runtime_metric="training_time",
                 show_ci=False,
                 x_axis_label="Model preparation time (s, log scale)"
@@ -162,7 +161,7 @@ def _(
                 _data,
                 include_models=_included_models,
                 run_aggregation="average",
-                metric="prc_auc",
+                metric="roc_auc",
                 runtime_metric="predict_time_tudd",
                 show_ci=False,
                 x_axis_label="Predict time (s, log scale)"

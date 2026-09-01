@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.23.16"
 app = marimo.App()
 
 
@@ -117,6 +117,7 @@ def _(setting_run_ids):
             "Native": ["tabswift", "orion-msp", "tabfm", "logistic-regression"],
         },
         "dataset": "tudd",
+        "x_axis_label": None
     }
     save_figs = True
     return common_kwargs, model_setups, save_figs
@@ -143,6 +144,7 @@ def _(
         if save_figs:
             fig.savefig(f"plots/preprocessing_comparision/imputer/performance_bar_{model_group}.svg")
         plt.show()
+    return
 
 
 @app.cell
@@ -166,6 +168,7 @@ def _(
         if save_figs:
             fig2.savefig(f"plots/preprocessing_comparision/imputer/time_performance_{model_group2}.svg")
         plt.show()
+    return
 
 
 @app.cell
@@ -202,6 +205,7 @@ def _(load_evaluation_data, runs_scaler, scaler_exp_name):
 @app.cell
 def _(data_scaler):
     data_scaler["pipeline_mlflow_run_id"].unique()
+    return
 
 
 @app.cell
@@ -211,6 +215,7 @@ def _(scaler_setting_run_ids):
         "setting_run_ids": scaler_setting_run_ids,
         "excluded_models_by_setting": None,
         "dataset": "tudd",
+        "x_axis_label": None
     }
     return (common_kwargs_scaler,)
 
@@ -236,6 +241,7 @@ def _(
         if save_figs:
             fig_s.savefig(f"plots/preprocessing_comparision/scaler/performance_bar_{model_group_s}.svg")
         plt.show()
+    return
 
 
 @app.cell
@@ -259,6 +265,7 @@ def _(
         if save_figs:
             fig_s2.savefig(f"plots/preprocessing_comparision/scaler/time_performance_{model_group_s2}.svg")
         plt.show()
+    return
 
 
 if __name__ == "__main__":

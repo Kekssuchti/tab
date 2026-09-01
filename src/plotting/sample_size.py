@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
-from src.plotting.defaults import dataset_label, metric_label, metric_scale
+from src.plotting.defaults import dataset_label, metric_label, metric_scale, set_plot_style
 from src.plotting.plot_support import instance_plot_styles
 
 
@@ -35,6 +35,7 @@ def plot_over_training_size(
     classification scores and confidence bounds are displayed as points on a
     0--100 scale.
     """
+    set_plot_style()
     if run_aggregation not in {None, "average"}:
         raise ValueError("run_aggregation must be: average")
 

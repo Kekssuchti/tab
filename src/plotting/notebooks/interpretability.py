@@ -27,6 +27,7 @@ def _():
         comparison_summary,
         compute_interpretability_comparison,
         global_feature_importance,
+        plot_global_feature_rankings,
         plot_global_ranking_correlations,
         plot_interpretability_comparison,
         ranking_correlation_table,
@@ -47,9 +48,10 @@ def _():
         global_feature_importance,
         mo,
         pd,
+        plot_global_feature_rankings,
         plot_global_ranking_correlations,
-        plt,
         plot_interpretability_comparison,
+        plt,
         project_root,
         ranking_correlation_table,
     )
@@ -245,15 +247,22 @@ def _(
     SAVE_PLOTS,
     comparisons,
     global_feature_importance,
+    plot_global_feature_rankings,
     plot_global_ranking_correlations,
     project_root,
     ranking_correlation_table,
 ):
     ranking_output_dir = project_root / PLOT_OUTPUT_DIR if SAVE_PLOTS else None
+    ranking_output_path = ranking_output_dir / "global_feature_rankings.svg" if ranking_output_dir is not None else None
     correlation_output_path = (
         ranking_output_dir / "global_ranking_correlations.svg" if ranking_output_dir is not None else None
     )
     global_rankings = global_feature_importance(comparisons)
+    ranking_figure, _ = plot_global_feature_rankings(
+        global_rankings,
+        top_n=10,
+        output_path=ranking_output_path,
+    )
     rank_correlations = ranking_correlation_table(comparisons)
     correlation_figure, correlation_matrix = plot_global_ranking_correlations(
         comparisons,
@@ -295,9 +304,7 @@ def _(
     return (
         agreement_summary,
         correlation_figure,
-        correlation_matrix,
-        global_rankings,
-        rank_correlations,
+        ranking_figure,
         stability_summary,
         top_rankings,
     )
@@ -325,7 +332,7 @@ def _(
             _comparison,
             features=FEATURES_TO_PLOT,
             output_dir=_output_dir,
-            figsize=(10, 6),
+            figsize=(6, 6),
         )
         _run_output_dirs.append((_run_number, _output_dir))
         if _run_number == DISPLAY_RUN:
@@ -350,6 +357,7 @@ def _(
     display_feature_figures,
     mo,
     pd,
+    ranking_figure,
     run_output_dirs,
     stability_summary,
     top_rankings,
@@ -380,6 +388,7 @@ def _(
                 "feature contribution. Spearman correlations compare rankings without treating the "
                 "different explanation scales as directly comparable."
             ),
+            ranking_figure,
             top_rankings,
             mo.md("### Within-model global-ranking stability across runs"),
             stability_summary,
@@ -394,6 +403,7 @@ def _(
             ],
         ]
     )
+    return
 
 
 if __name__ == "__main__":

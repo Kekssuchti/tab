@@ -17,7 +17,7 @@ models/
 cache/
 run_results/
 mlflow.db
-mlflow.db-*
+mlflow_backup.db
 mlartifacts/
 mlruns/
 data/raw

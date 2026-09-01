@@ -14,7 +14,14 @@ from matplotlib.colors import to_hex
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
-from src.plotting.defaults import POINT_SCALE_METRICS, metric_label, metric_scale, model_label, ordered_models
+from src.plotting.defaults import (
+    POINT_SCALE_METRICS,
+    metric_label,
+    metric_scale,
+    model_label,
+    ordered_models,
+    set_plot_style,
+)
 from src.plotting.plot_support import draw_confidence_intervals, instance_plot_styles
 from src.plotting.plot_utils import runtime_label
 
@@ -44,6 +51,7 @@ def plot_model_setting_performance(
     title: str | None = None,
     legend_title: str = "Setting",
     y_limits: Literal["auto"] | tuple[float, float] | None = None,
+    x_axis_label: str | None = "Model",
 ) -> Figure:
     """Plot adjacent performance bars for repeated model settings.
 
@@ -55,6 +63,7 @@ def plot_model_setting_performance(
     plots do not aggregate runs. When omitted, the legacy behavior assigns
     ``setting_labels`` by stable occurrence order within each model instance.
     """
+    set_plot_style()
     prepared = prepare_model_setting_plot_data(
         data,
         metric=metric,
@@ -87,7 +96,10 @@ def plot_model_setting_performance(
     styles = instance_plot_styles(frame)
     labels = [styles[instance][1] for instance in prepared.model_instances]
     ax.set_xticks(model_positions, labels)
-    ax.set(xlabel="Model", ylabel=metric_label(metric))
+    if x_axis_label is not None:
+        ax.set(xlabel=x_axis_label, ylabel=metric_label(metric))
+    else:
+        ax.set(ylabel=metric_label(metric))
     resolved_y_limits = calculate_y_limits(
         frame[metric],
         y_limits,
@@ -143,6 +155,7 @@ def plot_model_setting_performance_vs_runtime(
     ``keep_labels_inside`` is true, labels at the visual right edge are placed
     to the left of their points.
     """
+    set_plot_style()
     _validate_run_aggregation_options(
         run_aggregation,
         setting_run_ids=setting_run_ids,

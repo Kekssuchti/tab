@@ -13,9 +13,10 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.ticker import MaxNLocator
 
 from src.classes.trainer import Trainer
-from src.plotting.defaults import FEATURE_ALIASES, MODEL_STYLES, set_plot_style
+from src.plotting.defaults import FEATURE_ALIASES, MODEL_STYLES, SMALL_FEATURE_NAMES, set_plot_style
 from src.schemas.dataset_schemas import DatasetBundle
 from src.schemas.training_schemas import ModelConfig, ModelPreprocessingConfig
 from src.utils.model_lifecycle import release_model
@@ -308,7 +309,7 @@ def plot_interpretability_comparison(
         )
         axis.axhline(0.0, color="#777777", linewidth=0.8, alpha=0.55)
         axis.set_xlabel(FEATURE_ALIASES.get(feature_name, feature_name))
-        axis.set_ylabel("Feature effect (model-specific output scale)")
+        axis.set_ylabel("Feature effect")
         axis.legend()
 
         if target_dir is not None:
@@ -466,6 +467,106 @@ def ranking_correlation_table(comparisons: Sequence[InterpretabilityComparison])
             )
 
     return pd.DataFrame(rows)
+
+
+def plot_global_feature_rankings(
+    rankings: pd.DataFrame,
+    *,
+    top_n: int = 10,
+    output_path: str | Path | None = None,
+) -> tuple[plt.Figure, pd.DataFrame]:
+    """Plot median within-model ranks and their run-to-run ranges.
+
+    Each model is shown in a separate panel because its top features may differ.
+    Features are selected by median rank across runs; horizontal intervals show
+    the minimum and maximum ranks observed across those runs. No absolute effect
+    magnitudes are compared across explanation methods.
+    """
+    required_columns = {"run", "model", "feature", "feature_label", "rank"}
+    missing_columns = required_columns.difference(rankings.columns)
+    if missing_columns:
+        raise ValueError(f"rankings is missing columns: {', '.join(sorted(missing_columns))}")
+    if top_n < 1:
+        raise ValueError("top_n must be positive")
+    if rankings.empty:
+        raise ValueError("rankings must contain at least one row")
+    if rankings.duplicated(["run", "model", "feature"]).any():
+        raise ValueError("rankings must contain one row per run, model, and feature")
+    rank_values = rankings["rank"].to_numpy(dtype=float)
+    if not np.isfinite(rank_values).all() or (rank_values < 1).any():
+        raise ValueError("rankings contains invalid rank values")
+
+    available_models = set(rankings["model"])
+    missing_models = [model_name for model_name in _MODEL_NAMES if model_name not in available_models]
+    if missing_models:
+        raise ValueError(f"rankings is missing models: {', '.join(missing_models)}")
+
+    summaries: list[pd.DataFrame] = []
+    for model_name in _MODEL_NAMES:
+        model_rankings = rankings.loc[rankings["model"] == model_name]
+        label_counts = model_rankings.groupby("feature")["feature_label"].nunique()
+        if (label_counts != 1).any():
+            inconsistent = ", ".join(label_counts[label_counts != 1].index.astype(str))
+            raise ValueError(f"Features have inconsistent labels: {inconsistent}")
+        summary = (
+            model_rankings.groupby(["feature", "feature_label"], as_index=False)
+            .agg(
+                median_rank=("rank", "median"),
+                minimum_rank=("rank", "min"),
+                maximum_rank=("rank", "max"),
+                run_count=("run", "nunique"),
+            )
+            .sort_values(["median_rank", "feature"], kind="stable")
+            .head(top_n)
+            .assign(model=model_name, model_label=MODEL_STYLES[model_name].label)
+        )
+        summaries.append(summary)
+    top_rankings = pd.concat(summaries, ignore_index=True)
+
+    set_plot_style()
+    figure, axes = plt.subplots(
+        1,
+        len(_MODEL_NAMES),
+        figsize=(12.0, 5.2),
+        sharex=True,
+        constrained_layout=True,
+    )
+    maximum_displayed_rank = float(top_rankings["maximum_rank"].max())
+    for axis, model_name in zip(axes, _MODEL_NAMES, strict=True):
+        model_summary = top_rankings.loc[top_rankings["model"] == model_name].reset_index(drop=True)
+        positions = np.arange(len(model_summary))
+        style = MODEL_STYLES[model_name]
+        lower_errors = model_summary["median_rank"] - model_summary["minimum_rank"]
+        upper_errors = model_summary["maximum_rank"] - model_summary["median_rank"]
+        axis.errorbar(
+            model_summary["median_rank"],
+            positions,
+            xerr=np.vstack((lower_errors, upper_errors)),
+            fmt=style.marker,
+            markersize=6.0,
+            color=style.color,
+            markeredgecolor="#222222",
+            markeredgewidth=0.6,
+            elinewidth=1.5,
+            capsize=2.5,
+        )
+        axis.set_yticks(
+            positions,
+            model_summary["feature_label"].map(_small_feature_names),
+        )
+        axis.invert_yaxis()
+        axis.set_title(style.label)
+        axis.set_xlim(0.5, maximum_displayed_rank + 0.5)
+        axis.xaxis.set_major_locator(MaxNLocator(integer=True))
+        axis.grid(axis="y", visible=False)
+        axis.tick_params(axis="y", length=0)
+
+    figure.supxlabel("Within-model feature-importance rank (1 = highest)")
+    if output_path is not None:
+        target = Path(output_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        figure.savefig(target, bbox_inches="tight", pad_inches=0.2)
+    return figure, top_rankings
 
 
 def plot_global_ranking_correlations(
@@ -688,3 +789,7 @@ def _plot_ebm_line(
         axis.stairs(effect.effects, edges, baseline=None, **line_options)
     else:
         axis.plot(x_values, effect.effects, **line_options)
+
+
+def _small_feature_names(feature_name: str) -> str:
+    return SMALL_FEATURE_NAMES.get(feature_name, feature_name)

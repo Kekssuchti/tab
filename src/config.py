@@ -13,7 +13,7 @@ os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
 class Config(BaseSettings):
     """Environment-backed project settings and workspace paths."""
 
-    seed: int = Field(default=1338, alias="SEED")
+    seed: int = Field(default=1337, alias="SEED")
 
     # paths
     dir_root: Path = Path(__file__).parents[1]
