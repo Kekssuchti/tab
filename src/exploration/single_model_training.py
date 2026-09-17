@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.9"
+__generated_with = "0.24.2"
 app = marimo.App()
 
 
@@ -31,18 +31,19 @@ def _():
     from src.utils.evaluation_utils import evaluate_classification_predictions
     from src.utils.model_lifecycle import release_model
     from src.utils.model_registry import get_model_spec
+    from tabpfn.classifier import ModelVersion
 
     return (
         DataSplitConfig,
         Dataset,
         DatasetConfig,
-        dataset_task_for_target,
         ImputerConfig,
         ModelConfig,
         ScalerEncoderConfig,
         Trainer,
         TuningConfig,
         asdict,
+        dataset_task_for_target,
         evaluate_classification_predictions,
         get_model_spec,
         mo,
@@ -72,15 +73,15 @@ def _():
 
     # Dataset-level preprocessing defaults used by Trainer unless overridden below.
     DATASET_IMPUTER = {
-        "imputation_method": "mean",
+        "imputation_method": "none",
         "flag_missing": False,
     }
     DATASET_SCALER = {"type": "none"}
 
-    MODEL_NAME = "tabpfn-2.6"
+    MODEL_NAME = "tabpfn-3.5-fast"
+
     MODEL_PARAMS = {
-        "n_estimators": [2],
-        "fit_mode": "fit_preprocessors",
+        "n_estimators": [2, 4, 8, 16, 32],
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None
@@ -110,7 +111,6 @@ def _(
     DATASET_SCALER,
     DataSplitConfig,
     DatasetConfig,
-    dataset_task_for_target,
     FORCE_REPREPROCESS,
     ImputerConfig,
     MODEL_NAME,
@@ -123,6 +123,7 @@ def _(
     TRAIN_ON,
     TRAIN_SIZE,
     TuningConfig,
+    dataset_task_for_target,
     product,
 ):
     def expand_params(params):
@@ -190,7 +191,7 @@ def _(Dataset, asdict, dataset_params, mo, pd):
 
 
 @app.cell
-def _(Trainer, dataset_params, model_config, task_type):
+def _(Trainer, dataset_params, task_type):
     trainer = Trainer(
         task_type=task_type,
         default_imputer=dataset_params.imputer,
@@ -301,6 +302,7 @@ def _(evaluation_table, mo, speed_table):
             evaluation_table,
         ]
     )
+    return
 
 
 @app.cell
@@ -310,6 +312,7 @@ def _(TEST_SETS, speed_table):
         speeds = " / ".join(f"{round(row[f'rows_per_second_{dataset}']):,}" for dataset in TEST_SETS)
         latex_line = f"{row['model']} & {params_s} & {row['fit_time_s']:.2f} & {speeds} " + r"\\"
         print(latex_line)
+    return
 
 
 if __name__ == "__main__":

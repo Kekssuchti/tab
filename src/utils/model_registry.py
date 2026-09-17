@@ -130,10 +130,11 @@ TABPFN_ADAPTER = "src.adapter.tabpfn_adapter:TabPFNAdapter"
 TABICL_ADAPTER = "src.adapter.tabicl_adapter:TabICLAdapter"
 LIMIX_ADAPTER = "src.adapter.limix_adapter:LimixAdapter"
 MITRA_ADAPTER = "src.adapter.mitra_adapter:MitraAdapter"
-ORION_MSP_ADAPTER = "src.adapter.orion_msp_adapter:OrionMSPAdapter"
-ORION_BIX_ADAPTER = "src.adapter.orion_bix_adapter:OrionBixAdapter"
+# ORION_MSP_ADAPTER = "src.adapter.orion_msp_adapter:OrionMSPAdapter"
+# ORION_BIX_ADAPTER = "src.adapter.orion_bix_adapter:OrionBixAdapter"
 TABFM_ADAPTER = "src.adapter.tabfm_adapter:TabfmAdapter"
 TABSWIFT_ADAPTER = "src.adapter.tabswift_adapter:TabSwiftAdapter"
+EXAONE_ADAPTER = "src.adapter.exaone_adapter:EXAONEAdapter"
 
 
 SEARCH_SPACES = {
@@ -297,6 +298,9 @@ SEARCH_SPACES = {
             "n_estimators": [32],
         },
     },
+    "exaone": {
+        "best": {"ensemble_count": [8]},
+    },
 }
 
 # Note that search spaces with parameters that have only 1 value are still worth it
@@ -329,6 +333,16 @@ _COMMON_REGISTRY = {
         },
         search_spaces=SEARCH_SPACES["tabpfn"],
     ),
+    "tabpfn-3.5-fast": ModelSpec(
+        TABPFN_ADAPTER,
+        default_params={"version": "v3.5-fast"},
+        search_spaces=SEARCH_SPACES["tabpfn"],
+    ),
+    "tabpfn-3.5": ModelSpec(
+        TABPFN_ADAPTER,
+        default_params={"version": "v3.5"},
+        search_spaces=SEARCH_SPACES["tabpfn"],
+    ),
     "tabicl-2": ModelSpec(
         TABICL_ADAPTER,
         search_spaces=SEARCH_SPACES["tabicl"],
@@ -345,6 +359,7 @@ _COMMON_REGISTRY = {
     ),
     "mitra": ModelSpec(MITRA_ADAPTER, search_spaces=SEARCH_SPACES["mitra"]),
     "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=SEARCH_SPACES["tabswift"]),
+    "exaone": ModelSpec(EXAONE_ADAPTER, search_spaces=SEARCH_SPACES["exaone"]),
 }
 
 MODEL_REGISTRY_CLS = {
@@ -353,8 +368,8 @@ MODEL_REGISTRY_CLS = {
         f"{SKLEARN_ADAPTER}:LinearModelAdapter",
         search_spaces=SEARCH_SPACES["logistic-regression"],
     ),
-    "orion-msp": ModelSpec(ORION_MSP_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
-    "orion-bix": ModelSpec(ORION_BIX_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
+    # "orion-msp": ModelSpec(ORION_MSP_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
+    # "orion-bix": ModelSpec(ORION_BIX_ADAPTER, search_spaces=SEARCH_SPACES["orion"]),
     "tabfm": ModelSpec(TABFM_ADAPTER, search_spaces=SEARCH_SPACES["tabfm"]),
 }
 
