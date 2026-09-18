@@ -12,6 +12,12 @@ def _write_base_config(path):
     path.write_text(
         """
 run_id: base-run
+random_states:
+  model_training_seed: 1337
+  cv_split_seed: 1337
+  training_sample_seed: 1337
+  tuning_sampler_seed: 4242
+  evaluation_bootstrap_seed: 5555
 dataset:
   target: mortality
   train_size: 0.8
@@ -72,6 +78,40 @@ def test_experiment_suite_expands_range_and_summarizes_dry_run(tmp_path):
     assert "Changed parameters: dataset.train_on.0.fraction" in summary.format()
 
 
+def test_experiment_suite_merges_dict_overrides_and_names_each_seed_variant(tmp_path):
+    base_path = tmp_path / "base.yaml"
+    suite_path = tmp_path / "suite.yaml"
+    _write_base_config(base_path)
+    suite_path.write_text(
+        """
+name: seed-repeat
+base_config: base.yaml
+matrix:
+  - path: random_states
+    values:
+      - {model_training_seed: 1337, training_sample_seed: 1337, cv_split_seed: 1337}
+      - {model_training_seed: 1338, training_sample_seed: 1338, cv_split_seed: 1338}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    summary = ExperimentSuite(load_experiment_suite_config(suite_path), suite_path).dry_run_summary()
+
+    assert [variant.variant_id for variant in summary.config_variants] == [
+        "random-states-1337-1337-1337",
+        "random-states-1338-1338-1338",
+    ]
+    first_seeds = summary.config_variants[0].pipeline_config.random_states
+    varied_seeds = summary.config_variants[1].pipeline_config.random_states
+    assert varied_seeds.model_training_seed == 1338
+    assert varied_seeds.training_sample_seed == 1338
+    assert varied_seeds.cv_split_seed == 1338
+    # Fields the override does not mention keep the base config value.
+    assert first_seeds.tuning_sampler_seed == 4242
+    assert varied_seeds.tuning_sampler_seed == 4242
+    assert varied_seeds.evaluation_bootstrap_seed == 5555
+
+
 def test_experiment_suite_rejects_invalid_override_path(tmp_path):
     base_path = tmp_path / "base.yaml"
     suite_path = tmp_path / "suite.yaml"
@@ -85,7 +125,7 @@ def test_experiment_suite_rejects_invalid_override_path(tmp_path):
         suite.expand()
 
 
-def test_run_suite_dry_run_and_execution_use_concrete_configs(
+def test_run_suite_dry_run_and_execution_use_expanded_configs(
     tmp_path,
     monkeypatch,
     capsys,
@@ -96,11 +136,11 @@ def test_run_suite_dry_run_and_execution_use_concrete_configs(
     _write_suite_config(suite_path)
     calls = []
 
-    def _fake_run_pipeline_params(params, *, config_path=None):
+    def _fake_run_pipeline_params(params):
         calls.append(
             {
                 "fraction": params.dataset.train_on[0].fraction,
-                "config_text": config_path.read_text(encoding="utf-8"),
+                "run_id": params.run_id,
             }
         )
         return SimpleNamespace(run_id=params.run_id)
@@ -120,8 +160,7 @@ def test_run_suite_dry_run_and_execution_use_concrete_configs(
 
     assert len(result.results) == 3
     assert [call["fraction"] for call in calls] == [500, 1000, 1500]
-    assert "fraction: 500" in calls[0]["config_text"]
-    assert "run_id: base-run_training-size_fraction-500" in calls[0]["config_text"]
+    assert calls[0]["run_id"] == "base-run_training-size_fraction-500"
 
 
 def test_override_range_values_include_stop_on_float_steps():

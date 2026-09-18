@@ -75,10 +75,9 @@ class ExperimentSuite:
 
     @staticmethod
     def _variant_id(index: int, overrides: dict[str, Any]) -> str:
-        if len(overrides) == 1:
-            path, value = next(iter(overrides.items()))
-            return _slug(f"{path.split('.')[-1]}-{value}")
-        return f"v{index:03d}"
+        if not overrides:
+            return f"v{index:03d}"
+        return "_".join(_slug(f"{path.split('.')[-1]}-{_value_slug(value)}") for path, value in overrides.items())
 
 
 def _set_path_value(data: Any, path: str, value: Any) -> None:
@@ -111,6 +110,12 @@ def _set_child(current: Any, part: str, value: Any, path: str) -> None:
     if isinstance(current, dict):
         if part not in current:
             raise ValueError(f"Unknown override path '{path}'")
+        # Dict values merge into the existing mapping, so a suite can override
+        # single keys of a config block (for example the seeds it varies) and
+        # inherit every other key from the base config.
+        if isinstance(current[part], dict) and isinstance(value, dict):
+            current[part].update(value)
+            return
         current[part] = value
         return
     if isinstance(current, list):
@@ -132,3 +137,11 @@ def _list_index(part: str, path: str) -> int:
 
 def _slug(value: str) -> str:
     return "".join(char if char.isalnum() else "-" for char in value).strip("-")
+
+
+def _value_slug(value: Any) -> str:
+    if isinstance(value, dict):
+        return "-".join(_value_slug(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return "-".join(_value_slug(item) for item in value)
+    return str(value)

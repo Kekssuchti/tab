@@ -177,6 +177,7 @@ def compute_interpretability_comparison(
                 effective_model_params[model_name],
                 data.train_data.X,
                 y_train,
+                random_state=model_random_state,
             )
             fit_times[model_name] = fit_time
 

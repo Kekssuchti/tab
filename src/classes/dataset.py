@@ -41,9 +41,22 @@ class Dataset:
     def __init__(
         self,
         dataset_config: DatasetConfig,
+        *,
+        sample_seed: int,
     ) -> None:
+        """
+        Build the dataset for one target.
+
+        Args:
+            dataset_config: Dataset settings, including the fixed split seed.
+
+            sample_seed: Seed for training-side sampling only. Kept separate from
+                the split seed so repetitions can redraw the training subset and
+                row order without moving the held-out test sets.
+        """
         self.config = dataset_config
-        self.seed = self.config.random_state
+        self.split_seed = self.config.random_state
+        self.sample_seed = sample_seed
         self.data_cleaner = DataCleaner(self.config.data_cleaner)
         self._task = dataset_task_for_target(self.config.target)
 
@@ -157,7 +170,7 @@ class Dataset:
                     split["X_train"].index,
                     replace=False,
                     n_samples=n,
-                    random_state=self.seed,
+                    random_state=self.sample_seed,
                     stratify=split["y_train"] if self._task.task_type == "classification" else None,
                 )
 
@@ -170,7 +183,7 @@ class Dataset:
         X_train_combined = pd.concat(X_train_parts, axis=0, ignore_index=True)
         y_train_combined = pd.concat(y_train_parts, axis=0, ignore_index=True)
 
-        shuffled_indices = X_train_combined.sample(frac=1, random_state=self.seed * 2).index
+        shuffled_indices = X_train_combined.sample(frac=1, random_state=self.sample_seed).index
 
         train_data = XYDataset(
             X=X_train_combined.loc[shuffled_indices],
@@ -235,7 +248,7 @@ class Dataset:
             X,
             y,
             test_size=(1 - self.config.train_size),
-            random_state=self.seed,
+            random_state=self.split_seed,
             shuffle=True,
             stratify=stratify,
         )

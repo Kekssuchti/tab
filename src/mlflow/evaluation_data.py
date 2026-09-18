@@ -1,97 +1,54 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import astuple, dataclass, fields
-from typing import Literal
+from pathlib import Path
 
 import pandas as pd
 
 from mlflow import MlflowClient
-from mlflow.entities import Experiment, Run, RunStatus
+from mlflow.entities import Experiment, Run
+from mlflow.exceptions import MlflowException
 from src.mlflow.tracking_contract import (
-    METRIC_CV_TOTAL_TIME,
-    METRIC_TRAIN_FIT_TIME,
-    PARAM_DATASET_TARGET,
-    RUN_TYPE_MODEL,
+    ARTIFACT_CLASSIFICATION_METRICS,
     RUN_TYPE_PIPELINE,
-    STATUS_SUCCESS,
-    TAG_MODEL_INSTANCE,
-    TAG_MODEL_NAME,
+    TAG_MODEL_INSTANCES,
     TAG_PIPELINE_ID,
-    TAG_PIPELINE_MLFLOW_RUN_ID,
     TAG_RUN_TYPE,
-    TAG_STATUS,
     TAG_TARGET,
     TAG_TASK_TYPE,
     TAG_TRACKING_SCHEMA_VERSION,
     TAG_TRAIN_SOURCES,
     TAG_TRAINED_ON,
-    TEST_DATASETS,
-    TEST_DELTA_DATASET,
     TRACKING_SCHEMA_VERSION,
-    dataset_row_count_param,
-    parse_test_delta_metric,
-    parse_test_score_metric,
-    test_n_classes_param,
-    test_predict_time_metric,
-    test_score_ci_metric,
-    test_score_metric,
 )
 from src.schemas.training_schemas import LOWER_IS_BETTER_SCORING
 
 DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
 DEFAULT_EXPERIMENT_NAME = "tab"
 
-
-@dataclass(frozen=True)
-class _PipelineRun:
-    experiment: Experiment
-    run: Run
-
-
-@dataclass(frozen=True)
-class _PipelineRunRow:
-    mlflow_run_id: str
-    pipeline_id: str
-    run_name: str
-    experiment_name: str
-    model_instances: tuple[str, ...]
-    target: str | None
-    task_type: str
-    trained_on: str | None
-    train_sources: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class _ModelContext:
-    pipeline_mlflow_run_id: str
-    pipeline_id: str
-    pipeline_run_name: str
-    experiment_name: str
-    model_mlflow_run_id: str
-    model_name: str
-    model_instance: str
-    target: str | None
-    task_type: str
-    trained_on: str | None
-    train_sources: tuple[str, ...]
-    training_size: int | None
-
-
-@dataclass(frozen=True)
-class _Measurement:
-    context: _ModelContext
-    kind: Literal["score", "time"]
-    scope: Literal["test", "test_delta", "train", "model", "cv"]
-    dataset: str | None
-    metric: str
-    value: float
-    statistic: Literal["point", "mean", "difference"]
-    ci_level: float | None = None
-    ci_lower: float | None = None
-    ci_upper: float | None = None
-    n_classes: int | None = None
-    test_row_count: int | None = None
+_PLOTTING_COLUMNS = {
+    "pipeline_mlflow_run_id",
+    "pipeline_id",
+    "pipeline_run_name",
+    "experiment_name",
+    "model_instance",
+    "model_name",
+    "scope",
+    "statistic",
+    "dataset",
+    "target",
+    "task_type",
+    "trained_on",
+    "train_sources",
+    "training_size",
+    "cv_time",
+    "fit_time",
+    "predict_time_mimic",
+    "predict_time_tudd",
+    "training_time",
+    "total_time",
+}
+_MODEL_SELECTOR_COLUMNS = ("model_mlflow_run_id", "model_instance", "model_name")
 
 
 def list_pipeline_runs(
@@ -99,20 +56,25 @@ def list_pipeline_runs(
     *,
     tracking_uri: str = DEFAULT_TRACKING_URI,
 ) -> pd.DataFrame:
-    """List parent pipeline runs and their successful model instances."""
-
+    """List compact v1 parent runs."""
     client = MlflowClient(tracking_uri=tracking_uri)
-    experiments = _get_experiments(client, experiment_names)
-    pipeline_runs, model_runs = _get_pipeline_and_model_runs(client, experiments)
-    models_by_parent = _group_models_by_parent(_successful_models(model_runs))
-    rows = (
-        _pipeline_run_row(
-            pipeline_run,
-            models_by_parent.get(pipeline_run.run.info.run_id, ()),
-        )
-        for pipeline_run in pipeline_runs
-    )
-    return _frame(rows, _PipelineRunRow)
+    rows = []
+    for experiment in _experiments(client, experiment_names):
+        for run in _runs(client, experiment):
+            rows.append(
+                {
+                    "mlflow_run_id": run.info.run_id,
+                    "pipeline_id": run.data.tags.get(TAG_PIPELINE_ID),
+                    "run_name": run.data.tags.get("mlflow.runName"),
+                    "experiment_name": experiment.name,
+                    "model_instances": tuple(filter(None, run.data.tags.get(TAG_MODEL_INSTANCES, "").split(","))),
+                    "target": run.data.tags.get(TAG_TARGET),
+                    "task_type": run.data.tags.get(TAG_TASK_TYPE),
+                    "trained_on": run.data.tags.get(TAG_TRAINED_ON),
+                    "train_sources": tuple(filter(None, run.data.tags.get(TAG_TRAIN_SOURCES, "").split(","))),
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 def load_evaluation_data(
@@ -122,490 +84,119 @@ def load_evaluation_data(
     models: str | Sequence[str] | None = None,
     tracking_uri: str = DEFAULT_TRACKING_URI,
 ) -> pd.DataFrame:
-    """Load scores, test differences, and timings into one wide DataFrame."""
-
+    """Concatenate self-contained prediction metric CSVs for plotting."""
     client = MlflowClient(tracking_uri=tracking_uri)
-    experiments = _get_experiments(client, experiment_names)
-    all_pipeline_runs, all_model_runs = _get_pipeline_and_model_runs(client, experiments)
-    selected_pipeline_runs = _select_pipeline_runs(all_pipeline_runs, pipeline_runs)
-    selected_parent_ids = {pipeline_run.run.info.run_id for pipeline_run in selected_pipeline_runs}
-    selected_models = _select_models(
-        [
-            model_run
-            for model_run in _successful_models(all_model_runs)
-            if model_run.data.tags.get(TAG_PIPELINE_MLFLOW_RUN_ID) in selected_parent_ids
-        ],
-        models,
-    )
-    models_by_parent = _group_models_by_parent(selected_models)
+    requested_runs = _selectors(pipeline_runs)
+    requested_models = _selectors(models)
+    frames = []
 
-    measurements = []
-    for pipeline_run in selected_pipeline_runs:
-        for model_run in models_by_parent.get(pipeline_run.run.info.run_id, ()):
-            measurements.extend(_model_measurements(pipeline_run, model_run))
-    return _wide_measurement_frame(measurements)
+    for experiment in _experiments(client, experiment_names):
+        for parent in _runs(client, experiment):
+            if requested_runs and not requested_runs.intersection(_run_selectors(parent)):
+                continue
+            try:
+                local_path = client.download_artifacts(parent.info.run_id, ARTIFACT_CLASSIFICATION_METRICS)
+            except MlflowException:
+                continue
 
+            frame = pd.read_csv(Path(local_path))
+            _validate_plotting_frame(frame, parent.info.run_id)
+            if requested_models:
+                selector_columns = [column for column in _MODEL_SELECTOR_COLUMNS if column in frame]
+                selected = frame[selector_columns].astype(str).isin(requested_models).any(axis=1)
+                frame = frame.loc[selected].copy()
+            if not frame.empty:
+                frames.append(frame)
 
-def _get_experiments(
-    client: MlflowClient,
-    experiment_names: str | Sequence[str],
-) -> tuple[Experiment, ...]:
-    names = (experiment_names,) if isinstance(experiment_names, str) else tuple(dict.fromkeys(experiment_names))
-    if not names:
-        raise ValueError("At least one MLflow experiment name is required")
+    if not frames:
+        return pd.DataFrame()
 
-    experiments = []
-    missing = []
-    for name in names:
-        experiment = client.get_experiment_by_name(name)
-        if experiment is None:
-            missing.append(name)
-        else:
-            experiments.append(experiment)
-    if missing:
-        raise ValueError(f"MLflow experiments not found: {', '.join(missing)}")
-    return tuple(experiments)
+    combined = pd.concat(frames, ignore_index=True)
+    combined["train_sources"] = combined["train_sources"].map(_parse_sources)
+    return _add_generalizability_losses(combined)
 
 
-def _get_pipeline_and_model_runs(
-    client: MlflowClient,
-    experiments: tuple[Experiment, ...],
-) -> tuple[list[_PipelineRun], list[Run]]:
-    pipeline_runs = []
-    model_runs = []
-    for experiment in experiments:
-        pipeline_runs.extend(
-            _PipelineRun(experiment, run)
-            for run in _search_runs(
-                client,
-                experiment.experiment_id,
-                (
-                    f"tags.{TAG_RUN_TYPE} = '{RUN_TYPE_PIPELINE}' "
-                    f"and tags.{TAG_TRACKING_SCHEMA_VERSION} = '{TRACKING_SCHEMA_VERSION}'"
-                ),
-            )
-        )
-        model_runs.extend(
-            _search_runs(
-                client,
-                experiment.experiment_id,
-                (
-                    f"tags.{TAG_RUN_TYPE} = '{RUN_TYPE_MODEL}' "
-                    f"and tags.{TAG_TRACKING_SCHEMA_VERSION} = '{TRACKING_SCHEMA_VERSION}'"
-                ),
-            )
-        )
-    pipeline_runs.sort(key=lambda item: item.run.info.start_time or 0)
-    model_runs.sort(key=lambda run: run.info.start_time or 0)
-    return pipeline_runs, model_runs
+def _experiments(client: MlflowClient, names: str | Sequence[str]) -> list[Experiment]:
+    names = [names] if isinstance(names, str) else list(names)
+    return [experiment for name in names if (experiment := client.get_experiment_by_name(name)) is not None]
 
 
-def _search_runs(
-    client: MlflowClient,
-    experiment_id: str,
-    filter_string: str,
-) -> list[Run]:
-    runs = []
-    page_token = None
-    while True:
-        page = client.search_runs(
-            [experiment_id],
-            filter_string=filter_string,
-            max_results=1000,
-            page_token=page_token,
+def _runs(client: MlflowClient, experiment: Experiment) -> list[Run]:
+    return list(
+        client.search_runs(
+            [experiment.experiment_id],
+            filter_string=(
+                f"tags.{TAG_RUN_TYPE} = '{RUN_TYPE_PIPELINE}' "
+                f"and tags.{TAG_TRACKING_SCHEMA_VERSION} = '{TRACKING_SCHEMA_VERSION}'"
+            ),
             order_by=["attributes.start_time ASC"],
         )
-        runs.extend(page)
-        page_token = getattr(page, "token", None)
-        if page_token is None:
-            return runs
-
-
-def _successful_models(model_runs: list[Run]) -> list[Run]:
-    finished = RunStatus.to_string(RunStatus.FINISHED)
-    return [
-        run for run in model_runs if run.data.tags.get(TAG_STATUS) == STATUS_SUCCESS and run.info.status == finished
-    ]
-
-
-def _select_pipeline_runs(
-    pipeline_runs: list[_PipelineRun],
-    selectors: str | Sequence[str] | None,
-) -> list[_PipelineRun]:
-    requested = _selectors(selectors)
-    if requested is None:
-        return pipeline_runs
-    selected = [pipeline_run for pipeline_run in pipeline_runs if requested & _pipeline_selectors(pipeline_run.run)]
-    available = set().union(*(_pipeline_selectors(item.run) for item in selected))
-    _raise_for_unmatched("pipeline runs", requested, available)
-    return selected
-
-
-def _select_models(
-    model_runs: list[Run],
-    selectors: str | Sequence[str] | None,
-) -> list[Run]:
-    requested = _selectors(selectors)
-    if requested is None:
-        return model_runs
-    selected = [run for run in model_runs if requested & _model_selectors(run)]
-    available = set().union(*(_model_selectors(run) for run in selected))
-    _raise_for_unmatched("successful models", requested, available)
-    return selected
-
-
-def _pipeline_selectors(run: Run) -> set[str]:
-    return _present(
-        run.info.run_id,
-        run.data.tags.get(TAG_PIPELINE_ID),
-        run.data.tags.get("mlflow.runName"),
     )
 
 
-def _model_selectors(run: Run) -> set[str]:
-    return _present(
-        run.info.run_id,
-        run.data.tags.get(TAG_MODEL_NAME),
-        run.data.tags.get(TAG_MODEL_INSTANCE),
-    )
-
-
-def _raise_for_unmatched(
-    label: str,
-    requested: set[str],
-    available: set[str],
-) -> None:
-    unmatched = sorted(requested - available)
-    if unmatched:
-        raise ValueError(f"No matching {label} for: {', '.join(unmatched)}")
-
-
-def _pipeline_run_row(
-    pipeline_run: _PipelineRun,
-    model_runs: tuple[Run, ...],
-) -> _PipelineRunRow:
-    run = pipeline_run.run
-    return _PipelineRunRow(
-        mlflow_run_id=run.info.run_id,
-        pipeline_id=_tag(run, TAG_PIPELINE_ID),
-        run_name=_tag(run, "mlflow.runName"),
-        experiment_name=pipeline_run.experiment.name,
-        model_instances=tuple(_tag(model, TAG_MODEL_INSTANCE) for model in model_runs),
-        target=run.data.tags.get(TAG_TARGET) or run.data.params.get(PARAM_DATASET_TARGET),
-        task_type=_tag(run, TAG_TASK_TYPE),
-        trained_on=run.data.tags.get(TAG_TRAINED_ON),
-        train_sources=_csv_tag(run, TAG_TRAIN_SOURCES),
-    )
-
-
-def _model_measurements(
-    pipeline_run: _PipelineRun,
-    model_run: Run,
-) -> list[_Measurement]:
-    parent = pipeline_run.run
-    context = _ModelContext(
-        pipeline_mlflow_run_id=parent.info.run_id,
-        pipeline_id=_tag(parent, TAG_PIPELINE_ID),
-        pipeline_run_name=_tag(parent, "mlflow.runName"),
-        experiment_name=pipeline_run.experiment.name,
-        model_mlflow_run_id=model_run.info.run_id,
-        model_name=_tag(model_run, TAG_MODEL_NAME),
-        model_instance=_tag(model_run, TAG_MODEL_INSTANCE),
-        target=parent.data.tags.get(TAG_TARGET) or parent.data.params.get(PARAM_DATASET_TARGET),
-        task_type=_tag(model_run, TAG_TASK_TYPE),
-        trained_on=model_run.data.tags.get(TAG_TRAINED_ON),
-        train_sources=_csv_tag(model_run, TAG_TRAIN_SOURCES),
-        training_size=_integer_param(parent, dataset_row_count_param("train")),
-    )
-    measurements = []
-    for dataset in TEST_DATASETS:
-        measurements.extend(_test_scores(context, parent, model_run, dataset))
-    measurements.extend(_test_differences(context, model_run))
-    measurements.extend(_times(context, parent, model_run))
-    return measurements
-
-
-def _test_scores(
-    context: _ModelContext,
-    parent: Run,
-    run: Run,
-    dataset: str,
-) -> list[_Measurement]:
-    metric_names = {
-        metric for name in run.data.metrics if (metric := parse_test_score_metric(name, dataset)) is not None
+def _run_selectors(run: Run) -> set[str]:
+    return {
+        value
+        for value in (
+            run.info.run_id,
+            run.data.tags.get(TAG_PIPELINE_ID),
+            run.data.tags.get("mlflow.runName"),
+        )
+        if value
     }
-    measurements = []
-    for metric in sorted(metric_names):
-        value = run.data.metrics.get(test_score_metric(dataset, metric))
-        if value is None:
-            continue
-        lower = run.data.metrics.get(test_score_ci_metric(dataset, metric, "lower"))
-        upper = run.data.metrics.get(test_score_ci_metric(dataset, metric, "upper"))
-        measurements.append(
-            _measurement(
-                context,
-                kind="score",
-                scope="test",
-                dataset=dataset,
-                metric=metric,
-                value=value,
-                statistic="point",
-                ci_level=0.95 if lower is not None and upper is not None else None,
-                ci_lower=lower,
-                ci_upper=upper,
-                n_classes=_integer_param(run, test_n_classes_param(dataset)),
-                test_row_count=_test_row_count(parent, dataset),
-            )
-        )
-    return measurements
 
 
-def _test_differences(
-    context: _ModelContext,
-    run: Run,
-) -> list[_Measurement]:
-    return [
-        _measurement(
-            context,
-            kind="score",
-            scope="test_delta",
-            dataset=TEST_DELTA_DATASET,
-            metric=metric,
-            value=value,
-            statistic="difference",
-        )
-        for name, value in run.data.metrics.items()
-        if (metric := parse_test_delta_metric(name)) is not None
-    ]
-
-
-def _times(
-    context: _ModelContext,
-    parent: Run,
-    run: Run,
-) -> list[_Measurement]:
-    specs = (
-        (METRIC_TRAIN_FIT_TIME, "train", None, "fit_time"),
-        (test_predict_time_metric("mimic"), "test", "mimic", "predict_time"),
-        (test_predict_time_metric("tudd"), "test", "tudd", "predict_time"),
-        (METRIC_CV_TOTAL_TIME, "cv", None, "total_time"),
-    )
-    return [
-        _measurement(
-            context,
-            kind="time",
-            scope=scope,
-            dataset=dataset,
-            metric=metric,
-            value=run.data.metrics[mlflow_name],
-            statistic="point",
-            n_classes=_integer_param(run, test_n_classes_param(dataset)) if dataset is not None else None,
-            test_row_count=_test_row_count(parent, dataset) if dataset is not None else None,
-        )
-        for mlflow_name, scope, dataset, metric in specs
-        if mlflow_name in run.data.metrics
-    ]
-
-
-def _measurement(
-    context: _ModelContext,
-    *,
-    kind: Literal["score", "time"],
-    scope: Literal["test", "test_delta", "train", "model", "cv"],
-    dataset: str | None,
-    metric: str,
-    value: float,
-    statistic: Literal["point", "mean", "difference"],
-    ci_level: float | None = None,
-    ci_lower: float | None = None,
-    ci_upper: float | None = None,
-    n_classes: int | None = None,
-    test_row_count: int | None = None,
-) -> _Measurement:
-    return _Measurement(
-        context=context,
-        kind=kind,
-        scope=scope,
-        dataset=dataset,
-        metric=metric,
-        value=value,
-        statistic=statistic,
-        ci_level=ci_level,
-        ci_lower=ci_lower,
-        ci_upper=ci_upper,
-        n_classes=n_classes,
-        test_row_count=test_row_count,
-    )
-
-
-def _group_models_by_parent(model_runs: list[Run]) -> dict[str, tuple[Run, ...]]:
-    grouped = {}
-    for model_run in model_runs:
-        parent_id = model_run.data.tags.get(TAG_PIPELINE_MLFLOW_RUN_ID)
-        if parent_id is not None:
-            grouped.setdefault(parent_id, []).append(model_run)
-    return {key: tuple(value) for key, value in grouped.items()}
-
-
-def _wide_measurement_frame(measurements: list[_Measurement]) -> pd.DataFrame:
-    context_columns = [field.name for field in fields(_ModelContext)]
-    row_columns = context_columns + ["scope", "dataset"]
-    metadata_columns = [
-        "statistic",
-        "ci_level",
-        "n_classes",
-        "test_row_count",
-    ]
-    score_metrics = sorted({measurement.metric for measurement in measurements if measurement.kind == "score"})
-    timing_columns = [
-        "cv_time",
-        "fit_time",
-        "predict_time_mimic",
-        "predict_time_tudd",
-        "total_time",
-    ]
-    reserved_columns = set(row_columns + metadata_columns)
-    collisions = reserved_columns & set(score_metrics)
-    if collisions:
-        names = ", ".join(sorted(collisions))
-        raise ValueError(f"MLflow metric names conflict with evaluation columns: {names}")
-
-    grouped: dict[tuple[object, ...], dict[str, object]] = {}
-    for measurement in measurements:
-        if measurement.kind != "score":
-            continue
-        context_values = astuple(measurement.context)
-        key = (*context_values, measurement.scope, measurement.dataset)
-        row = grouped.setdefault(
-            key,
-            dict(zip(row_columns, key, strict=True)),
-        )
-        for column in metadata_columns:
-            value = getattr(measurement, column)
-            if value is not None:
-                existing = row.get(column)
-                if existing is not None and existing != value:
-                    raise ValueError(f"Inconsistent {column} values for evaluation row {key!r}")
-                row[column] = value
-        row[measurement.metric] = measurement.value
-        if measurement.scope == "test":
-            row[f"{measurement.metric}_ci_lower"] = measurement.ci_lower
-            row[f"{measurement.metric}_ci_upper"] = measurement.ci_upper
-
-    timings_by_model: dict[tuple[object, ...], dict[str, float]] = {}
-    timing_names = {
-        ("cv", None, "total_time"): "cv_time",
-        ("train", None, "fit_time"): "fit_time",
-        ("test", "mimic", "predict_time"): "predict_time_mimic",
-        ("test", "tudd", "predict_time"): "predict_time_tudd",
-    }
-    for measurement in measurements:
-        if measurement.kind != "time":
-            continue
-        column = timing_names.get((measurement.scope, measurement.dataset, measurement.metric))
-        if column is not None:
-            model_key = astuple(measurement.context)
-            timings_by_model.setdefault(model_key, {})[column] = measurement.value
-
-    component_columns = timing_columns[:-1]
-    for key, row in grouped.items():
-        timing_values = timings_by_model.get(key[: len(context_columns)], {})
-        row.update(timing_values)
-        present_values = [timing_values[column] for column in component_columns if column in timing_values]
-        row["total_time"] = sum(present_values) if present_values else None
-
-    metric_columns = [
-        column for metric in score_metrics for column in (metric, f"{metric}_ci_lower", f"{metric}_ci_upper")
-    ]
-    columns = row_columns + metadata_columns + metric_columns + timing_columns
-    frame = pd.DataFrame.from_records(list(grouped.values()), columns=columns)
-    return _add_generalizability_losses(frame, score_metrics)
-
-
-def _add_generalizability_losses(
-    frame: pd.DataFrame,
-    score_metrics: list[str],
-) -> pd.DataFrame:
-    loss_columns = [
-        column
-        for metric in score_metrics
-        for column in (
-            f"generalizability_loss_{metric}",
-            f"comparative_generalizability_loss_{metric}",
-        )
-    ]
-    if frame.empty:
-        return frame.reindex(columns=[*frame.columns, *loss_columns])
-
-    test_rows = frame["scope"].eq("test")
-    external_rows = test_rows & frame["dataset"].ne(frame["trained_on"])
-    training_rows = test_rows & frame["dataset"].eq(frame["trained_on"])
-    for metric in score_metrics:
-        generalizability = f"generalizability_loss_{metric}"
-        comparative = f"comparative_generalizability_loss_{metric}"
-        frame[generalizability] = float("nan")
-        frame[comparative] = float("nan")
-
-        training_scores = (
-            frame.loc[training_rows, ["model_mlflow_run_id", metric]]
-            .dropna(subset=[metric])
-            .set_index("model_mlflow_run_id")[metric]
-        )
-        external_scores = frame.loc[external_rows, metric]
-        training_for_external = frame.loc[external_rows, "model_mlflow_run_id"].map(training_scores)
-        lower_is_better = metric in LOWER_IS_BETTER_SCORING
-        if lower_is_better:
-            frame.loc[external_rows, generalizability] = training_for_external - external_scores
-            best_external = (
-                frame.loc[external_rows]
-                .groupby(["target", "task_type", "dataset"], dropna=False)[metric]
-                .transform("min")
-            )
-            frame.loc[external_rows, comparative] = best_external - external_scores
-        else:
-            frame.loc[external_rows, generalizability] = external_scores - training_for_external
-            best_external = (
-                frame.loc[external_rows]
-                .groupby(["target", "task_type", "dataset"], dropna=False)[metric]
-                .transform("max")
-            )
-            frame.loc[external_rows, comparative] = external_scores - best_external
-    return frame
-
-
-def _frame(records, record_type: type) -> pd.DataFrame:
-    return pd.DataFrame.from_records(
-        (astuple(record) for record in records),
-        columns=[field.name for field in fields(record_type)],
-    )
-
-
-def _selectors(values: str | Sequence[str] | None) -> set[str] | None:
+def _selectors(values: str | Sequence[str] | None) -> set[str]:
     if values is None:
-        return None
+        return set()
     return {values} if isinstance(values, str) else set(values)
 
 
-def _present(*values: str | None) -> set[str]:
-    return {value for value in values if value is not None}
+def _validate_plotting_frame(frame: pd.DataFrame, run_id: str) -> None:
+    missing = sorted(_PLOTTING_COLUMNS - set(frame.columns))
+    if missing:
+        raise ValueError(
+            f"Run {run_id} has an outdated {ARTIFACT_CLASSIFICATION_METRICS} artifact; "
+            f"missing plotting columns: {', '.join(missing)}"
+        )
+    recorded_ids = frame["pipeline_mlflow_run_id"].dropna().astype(str).unique().tolist()
+    if recorded_ids != [run_id]:
+        raise ValueError(
+            f"Run {run_id} has mismatched pipeline_mlflow_run_id values in "
+            f"{ARTIFACT_CLASSIFICATION_METRICS}: {recorded_ids}"
+        )
 
 
-def _tag(run: Run, name: str) -> str:
-    value = run.data.tags.get(name)
-    if value is None:
-        raise ValueError(f"MLflow run {run.info.run_id} is missing required tag {name!r}")
-    return value
+def _parse_sources(value: object) -> tuple[str, ...]:
+    if pd.isna(value):
+        return ()
+    return tuple(filter(None, str(value).split(",")))
 
 
-def _csv_tag(run: Run, name: str) -> tuple[str, ...]:
-    value = run.data.tags.get(name)
-    return tuple(value.split(",")) if value else ()
+def _add_generalizability_losses(frame: pd.DataFrame) -> pd.DataFrame:
+    metric_columns = [
+        column for column in ("roc_auc", "prc_auc", "f1", "accuracy", "sensitivity", "precision") if column in frame
+    ]
+    test_rows = frame["scope"].eq("test")
+    external = test_rows & frame["dataset"].ne(frame["trained_on"])
+    training = test_rows & frame["dataset"].eq(frame["trained_on"])
+    identity_columns = ["pipeline_mlflow_run_id", "model_instance"]
 
+    for metric in metric_columns:
+        loss = f"generalizability_loss_{metric}"
+        comparative = f"comparative_generalizability_loss_{metric}"
+        frame[loss] = float("nan")
+        frame[comparative] = float("nan")
 
-def _test_row_count(run: Run, dataset: str) -> int | None:
-    return _integer_param(run, dataset_row_count_param(f"test.{dataset}"))
-
-
-def _integer_param(run: Run, name: str) -> int | None:
-    value = run.data.params.get(name)
-    return int(value) if value is not None else None
+        training_scores = frame.loc[training].set_index(identity_columns)[metric]
+        external_index = pd.MultiIndex.from_frame(frame.loc[external, identity_columns])
+        reference = training_scores.reindex(external_index).to_numpy()
+        if metric in LOWER_IS_BETTER_SCORING:
+            frame.loc[external, loss] = reference - frame.loc[external, metric].to_numpy()
+            best = frame.loc[external].groupby(["target", "dataset"])[metric].transform("min")
+            frame.loc[external, comparative] = best - frame.loc[external, metric]
+        else:
+            frame.loc[external, loss] = frame.loc[external, metric].to_numpy() - reference
+            best = frame.loc[external].groupby(["target", "dataset"])[metric].transform("max")
+            frame.loc[external, comparative] = frame.loc[external, metric] - best
+    return frame

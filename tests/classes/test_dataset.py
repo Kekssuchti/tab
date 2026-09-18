@@ -53,10 +53,15 @@ def _dataset_params(
 ) -> DatasetConfig:
     return DatasetConfig(
         target=target,
+        random_state=random_state,
         train_on=train_on,
         train_size=train_size,
-        random_state=random_state,
     )
+
+
+def _dataset(config: DatasetConfig, *, sample_seed: int = 7) -> Dataset:
+    """Build a Dataset with an explicit training-sampling seed."""
+    return Dataset(config, sample_seed=sample_seed)
 
 
 def _labels_by_record_id(df: pd.DataFrame, target: str) -> dict[int, int | float]:
@@ -142,6 +147,7 @@ def test_dataset_config_rejects_independent_classification_flag():
     with pytest.raises(ValidationError, match="classification"):
         DatasetConfig(
             target="mortality",
+            random_state=1337,
             train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
             classification=True,
         )
@@ -150,6 +156,7 @@ def test_dataset_config_rejects_independent_classification_flag():
 def test_dataset_config_only_allows_log_transform_for_los():
     los_config = DatasetConfig(
         target="LOS",
+        random_state=1337,
         train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
         log_transform_target=True,
     )
@@ -159,6 +166,7 @@ def test_dataset_config_only_allows_log_transform_for_los():
     with pytest.raises(ValidationError, match="only supported for the LOS target"):
         DatasetConfig(
             target="mortality",
+            random_state=1337,
             log_transform_target=True,
             train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
         )
@@ -166,7 +174,7 @@ def test_dataset_config_only_allows_log_transform_for_los():
 
 def test_los_regression_split_does_not_stratify_continuous_labels():
     df = _make_rows("mimic", 1, 10)
-    dataset = Dataset(
+    dataset = _dataset(
         _dataset_params(
             target="LOS",
             train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
@@ -189,7 +197,7 @@ def test_existing_target_filtered_files_do_not_invoke_cleaner(tmp_path, monkeypa
         },
     )
     monkeypatch.setattr(dataset_module, "config", SimpleNamespace(dir_data=tmp_path))
-    dataset = Dataset(
+    dataset = _dataset(
         _dataset_params(
             target="mortality",
             train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
@@ -209,7 +217,7 @@ def test_existing_target_filtered_files_do_not_invoke_cleaner(tmp_path, monkeypa
 def test_missing_filtered_file_preprocesses_only_target_kind(tmp_path, monkeypatch):
     (tmp_path / "filtered").mkdir()
     monkeypatch.setattr(dataset_module, "config", SimpleNamespace(dir_data=tmp_path))
-    dataset = Dataset(
+    dataset = _dataset(
         _dataset_params(
             target="hours_to_readmit",
             train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
@@ -245,7 +253,7 @@ def test_force_repreprocesses_only_target_kind(tmp_path, monkeypatch):
         target="mortality",
         train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
     ).model_copy(update={"force_repreprocess": True})
-    dataset = Dataset(params)
+    dataset = _dataset(params)
     calls = []
     monkeypatch.setattr(dataset.data_cleaner, "preprocess_extracted_to_filtered", calls.append)
 
@@ -284,7 +292,7 @@ def test_regression_target_summary_is_finite_and_bounded():
 
 
 def test_dataset_summarize_uses_target_task_type(monkeypatch):
-    dataset = Dataset(
+    dataset = _dataset(
         _dataset_params(
             target="LOS",
             train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
@@ -313,7 +321,7 @@ def test_mortality_dataset_uses_only_normal_task_files_and_assembles_splits(tmp_
     )
     monkeypatch.setattr(dataset_module, "config", SimpleNamespace(dir_data=tmp_path))
 
-    dataset = Dataset(
+    dataset = _dataset(
         _dataset_params(
             target="mortality",
             train_on=(
@@ -364,7 +372,7 @@ def test_combined_classification_training_subsamples_are_stratified():
     mortality = [0] * 16 + [1] * 4
     mimic = _make_rows("mimic", 100, 20).assign(mortality=mortality)
     tudd = _make_rows("tudd", 200, 20).assign(mortality=mortality)
-    dataset = Dataset(
+    dataset = _dataset(
         _dataset_params(
             target="mortality",
             train_on=(
@@ -380,6 +388,25 @@ def test_combined_classification_training_subsamples_are_stratified():
     assert bundle.train_data.y.value_counts().to_dict() == {0: 8, 1: 2}
 
 
+def test_training_sampling_seed_keeps_the_test_split_fixed():
+    mimic = _make_rows("mimic", 1, 40)
+    tudd = _make_rows("tudd", 100, 40)
+    params = _dataset_params(
+        target="mortality",
+        train_on=(
+            DataSplitConfig(dataset="mimic", fraction=0.5),
+            DataSplitConfig(dataset="tudd", fraction=0.5),
+        ),
+    )
+
+    first_bundle = _dataset(params, sample_seed=7)._split_data({"mimic": mimic, "tudd": tudd})
+    second_bundle = _dataset(params, sample_seed=8)._split_data({"mimic": mimic, "tudd": tudd})
+
+    assert list(first_bundle.test_mimic.X["record_id"]) == list(second_bundle.test_mimic.X["record_id"])
+    assert list(first_bundle.test_tudd.X["record_id"]) == list(second_bundle.test_tudd.X["record_id"])
+    assert list(first_bundle.train_data.X["record_id"]) != list(second_bundle.train_data.X["record_id"])
+
+
 def test_readmission_dataset_uses_readmission_task_policy_without_normal_files(tmp_path, monkeypatch):
     mimic_readmission = _make_rows("mimic", 300, 10).assign(mimic_only_feature=1.0)
     tudd_readmission = _make_rows("tudd", 400, 10).assign(tudd_only_feature=2.0)
@@ -392,7 +419,7 @@ def test_readmission_dataset_uses_readmission_task_policy_without_normal_files(t
     )
     monkeypatch.setattr(dataset_module, "config", SimpleNamespace(dir_data=tmp_path))
 
-    dataset = Dataset(
+    dataset = _dataset(
         _dataset_params(
             target="hours_to_readmit",
             train_on=(

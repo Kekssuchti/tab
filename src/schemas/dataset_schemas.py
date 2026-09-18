@@ -157,8 +157,11 @@ class DatasetConfig(StrictConfig):
         target: {"mortality", "LOS7", "hours_to_readmit", "hours_to_readmit_72", "LOS"}
             Prediction target.
 
-        random_state: int, default=config.seed
-            Seed used for train-test splitting and sampling.
+        random_state: int, default=1337
+            Seed used for the per-source train/test split. This seed defines the
+            held-out test sets, so it must stay identical across repetitions of
+            an experiment. Training-side randomness (subset draw, row order) is
+            controlled by RandomStates.training_sample_seed instead.
 
         train_size: float, default=0.8
             Fraction reserved for each source's train split.
@@ -183,7 +186,7 @@ class DatasetConfig(StrictConfig):
     """
 
     target: Target
-    random_state: int = Field(default=config.seed)
+    random_state: int = 1337
     train_size: float = Field(default=0.8, gt=0, lt=1)
     train_on: tuple[DataSplitConfig, ...]
     data_cleaner: DataCleanerConfig = Field(default_factory=DataCleanerConfig)

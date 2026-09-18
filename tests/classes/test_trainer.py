@@ -8,12 +8,14 @@ from src.classes import trainer as trainer_module
 from src.classes.trainer import Trainer
 from src.interfaces.model_interface import TimedPrediction
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
-from src.schemas.metrics import BootstrapClassificationMetrics, BootstrapFinalTestMetrics
+from src.schemas.metrics import FinalTestMetrics
+from src.schemas.pipeline_schemas import RandomStates
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.training_schemas import CrossValidationConfig, ModelConfig, OptunaConfig, TuningConfig
 from src.utils import model_registry
+from src.utils.evaluation import TrainedModelEvaluation
 from src.utils.tuning_distributions import LogUniform
-from tests.factories import bootstrap_classification_metrics
+from tests.factories import classification_metrics
 from tests.toy_data import load_toy_classification_data
 
 
@@ -26,6 +28,7 @@ def _preprocess_pipeline():
     return {
         "default_imputer": ImputerConfig(imputation_method="none"),
         "default_scaler": ScalerEncoderConfig(type="none"),
+        "random_states": RandomStates.from_seed(1),
     }
 
 
@@ -49,7 +52,7 @@ def _model_config(
         "method": method,
         "grid": grid,
         "scoring": scoring,
-        "cv": CrossValidationConfig(n_splits=n_splits, random_state=1),
+        "cv": CrossValidationConfig(n_splits=n_splits),
     }
     if search_space is not None:
         tuning_kwargs["search_space"] = search_space
@@ -98,12 +101,12 @@ class _FitFailureAdapter:
         type(self).releases += 1
 
 
-def _bootstrap_final_metrics() -> BootstrapFinalTestMetrics:
-    bootstrap_metrics = bootstrap_classification_metrics(0.5, lower=0.4, upper=0.6)
-    return BootstrapFinalTestMetrics(
-        mimic_test=bootstrap_metrics,
+def _final_metrics() -> FinalTestMetrics:
+    metrics = classification_metrics(0.5)
+    return FinalTestMetrics(
+        mimic_test=metrics,
         mimic_prediction_time=0.1,
-        tudd_test=bootstrap_metrics,
+        tudd_test=metrics,
         tudd_prediction_time=0.2,
     )
 
@@ -111,8 +114,11 @@ def _bootstrap_final_metrics() -> BootstrapFinalTestMetrics:
 def test_trainer_records_final_metrics_after_training():
     X, y = _classification_data()
     trainer = Trainer(task_type="classification", **_preprocess_pipeline())
-
-    result = trainer.train_evaluate_model(_model_config(grid={"C": [1.0]}), _bundle(X, y))
+    outcome = trainer.train_evaluate_model(
+        _model_config(grid={"C": [1.0]}),
+        _bundle(X, y),
+    )
+    result = outcome.result
 
     assert result.model_name == "logistic-regression"
     assert result.task_type == "classification"
@@ -122,6 +128,9 @@ def test_trainer_records_final_metrics_after_training():
     assert result.tuning_result is not None
     assert result.tuning_result.final_test_metrics.mimic_test.accuracy >= 0.0
     assert result.tuning_result.final_test_metrics.tudd_test.accuracy >= 0.0
+    assert outcome.test_predictions is not None
+    assert outcome.test_predictions.mimic.test_set_id.tolist() == list(range(len(X)))
+    assert len(outcome.test_predictions.mimic.positive_class_probability) == len(X)
 
 
 def test_trainer_uses_one_full_training_fit_for_bootstrap_evaluation(monkeypatch):
@@ -142,17 +151,20 @@ def test_trainer_uses_one_full_training_fit_for_bootstrap_evaluation(monkeypatch
     monkeypatch.setattr(trainer, "_fit_model", _fit_model)
     monkeypatch.setattr(
         trainer_module,
-        "evaluate_trained_model_bootstrap",
-        lambda trained_model, task_type, data: _bootstrap_final_metrics(),
+        "evaluate_trained_model",
+        lambda trained_model, task_type, data: TrainedModelEvaluation(
+            metrics=_final_metrics(),
+            test_predictions=None,
+        ),
     )
 
-    result = trainer._tune_model(model_config, model_spec, _bundle(X, y))
+    outcome = trainer._tune_model(model_config, model_spec, _bundle(X, y))
+    result = outcome.result
 
     assert fit_calls == 1
     assert result.fit_time == pytest.approx(0.25)
     assert result.tuning_result is not None
-    assert isinstance(result.tuning_result.final_test_metrics.mimic_test, BootstrapClassificationMetrics)
-    assert result.tuning_result.final_test_metrics.mimic_test.metrics.accuracy == pytest.approx(0.5)
+    assert result.tuning_result.final_test_metrics.mimic_test.accuracy == pytest.approx(0.5)
     assert _ReleasableFoldModel.releases == 1
     assert _ReleasableFoldModel.active == 0
 
@@ -171,7 +183,7 @@ def test_single_candidate_grid_does_not_construct_cv(monkeypatch):
         model_config,
         model_registry.get_model_spec(model_config, "classification"),
         _bundle(X, y),
-    )
+    ).result
 
     assert result.tuning_result is not None
     assert result.tuning_result.fold_results == []
@@ -217,7 +229,7 @@ def test_trainer_uses_tuning_grid_and_returns_best_params():
     X, y = _classification_data()
     trainer = Trainer(task_type="classification", **_preprocess_pipeline())
 
-    result = trainer.train_evaluate_model(_model_config(grid={"C": [0.1, 1.0]}), _bundle(X, y))
+    result = trainer.train_evaluate_model(_model_config(grid={"C": [0.1, 1.0]}), _bundle(X, y)).result
 
     assert result.tuned
     assert result.tuning_result is not None
@@ -245,7 +257,7 @@ def test_trainer_can_tune_with_optuna_categorical_grid():
             optuna=OptunaConfig(n_trials=2, sampler="random"),
         ),
         _bundle(X, y),
-    )
+    ).result
 
     assert result.tuned
     assert result.tuning_result is not None
@@ -279,7 +291,7 @@ def test_trainer_can_tune_with_mixed_optuna_search_space():
     )
     trainer = Trainer(task_type="classification", **_preprocess_pipeline())
 
-    result = trainer._tune_model(model_params, mixed_spec, _bundle(X, y))
+    result = trainer._tune_model(model_params, mixed_spec, _bundle(X, y)).result
 
     assert result.tuning_result is not None
     assert result.tuning_result.method == "optuna"
@@ -302,7 +314,7 @@ def test_trainer_releases_models_between_tuning_folds(monkeypatch):
 
     monkeypatch.setattr(trainer, "_fit_model", _fit_model)
 
-    result = trainer._tune_model(model_params, model_spec, _bundle(X, y))
+    result = trainer._tune_model(model_params, model_spec, _bundle(X, y)).result
 
     assert result.tuned
     assert _ReleasableFoldModel.peak == 1
@@ -317,6 +329,7 @@ def test_trainer_uses_model_specific_preprocessing_override():
         task_type="classification",
         default_imputer=ImputerConfig(imputation_method="none"),
         default_scaler=ScalerEncoderConfig(type="none"),
+        random_states=RandomStates.from_seed(1),
     )
 
     result = trainer.train_evaluate_model(
@@ -325,7 +338,7 @@ def test_trainer_uses_model_specific_preprocessing_override():
             preprocessing={"imputer": {"imputation_method": "mean"}, "scaler_encoder": {"type": "none"}},
         ),
         _bundle(X, y),
-    )
+    ).result
 
     assert result.model_name == "logistic-regression"
     assert result.tuning_result is not None
@@ -340,12 +353,13 @@ def test_trainer_encodes_categorical_columns_before_xgboost():
         task_type="classification",
         default_imputer=ImputerConfig(imputation_method="none"),
         default_scaler=ScalerEncoderConfig(type="none"),
+        random_states=RandomStates.from_seed(1),
     )
 
     result = trainer.train_evaluate_model(
         _model_config(name="xgboost", grid={"n_estimators": [2], "max_depth": [1], "n_jobs": [1]}),
         _bundle(X, y),
-    )
+    ).result
 
     assert result.model_name == "xgboost"
     assert result.tuning_result is not None
@@ -393,7 +407,7 @@ def test_trainer_releases_adapter_when_fit_fails():
     model_config = ModelConfig(name="failing")
 
     class _Spec:
-        def create(self, task_type, params):
+        def create(self, task_type, params, *, random_state=None, inference_state=None):
             return _FitFailureAdapter()
 
     _FitFailureAdapter.releases = 0

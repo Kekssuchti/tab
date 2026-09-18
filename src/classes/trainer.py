@@ -11,6 +11,7 @@ from src.classes.preprocessor import Preprocessor
 from src.interfaces.model_interface import LogTargetModelAdapter, ModelAdapter, PreprocessedModelAdapter
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle
+from src.schemas.pipeline_schemas import RandomStates
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 from src.schemas.training_schemas import (
@@ -21,7 +22,7 @@ from src.schemas.training_schemas import (
     RegressionScoring,
     TuningMethod,
 )
-from src.utils.evaluation import evaluate_trained_model_bootstrap
+from src.utils.evaluation import evaluate_trained_model
 from src.utils.evaluation_utils import (
     classification_score,
     evaluate_classification_predictions,
@@ -34,6 +35,15 @@ from src.utils.model_registry import ModelSpec, get_model_spec
 from src.utils.optuna_callbacks import (
     stop_stale_study,
 )
+from src.utils.prediction_tables import FinalTestPredictions
+
+
+@dataclass(frozen=True)
+class TrainingOutcome:
+    """Model-free training result and optional held-out probabilities."""
+
+    result: ModelTrainingResult
+    test_predictions: FinalTestPredictions
 
 
 @dataclass
@@ -53,14 +63,20 @@ class Trainer:
         task_type: TaskType,
         default_imputer: ImputerConfig,
         default_scaler: ScalerEncoderConfig,
+        random_states: RandomStates,
         log_transform_target: bool = False,
     ) -> None:
         self.task_type = task_type
         self.default_imputer = default_imputer
         self.default_scaler = default_scaler
+        self.random_states = random_states
         self.log_transform_target = log_transform_target
 
-    def train_evaluate_model(self, model_config: ModelConfig, data: DatasetBundle) -> ModelTrainingResult:
+    def train_evaluate_model(
+        self,
+        model_config: ModelConfig,
+        data: DatasetBundle,
+    ) -> TrainingOutcome:
         logger.info(f"Training model: {model_config.name}")
 
         imputer, scaler = self._resolved_preprocessing(model_config)
@@ -77,8 +93,20 @@ class Trainer:
         model_params: dict[str, Any],
         X_train,
         y_train,
+        *,
+        random_state: int | None = None,
     ) -> tuple[ModelAdapter, float]:
-        adapter = model_spec.create(self.task_type, model_params)
+        """Fit one adapter with the configured model seeds.
+
+        `random_state` overrides the configured model training seed for callers
+        that steer every model individually, such as the interpretability runs.
+        """
+        adapter = model_spec.create(
+            self.task_type,
+            model_params,
+            random_state=self.random_states.model_training_seed if random_state is None else random_state,
+            inference_state=self.random_states.model_inference_seed,
+        )
         model = PreprocessedModelAdapter(
             adapter,
             self._build_preprocess_pipeline(model_config),
@@ -113,7 +141,12 @@ class Trainer:
         )
         return imputer, scaler
 
-    def _tune_model(self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle) -> ModelTrainingResult:
+    def _tune_model(
+        self,
+        model_config: ModelConfig,
+        model_spec: ModelSpec,
+        data: DatasetBundle,
+    ) -> TrainingOutcome:
         tuning = model_config.tuning
 
         if tuning.method == "grid":
@@ -124,8 +157,11 @@ class Trainer:
         raise ValueError(f"Unknown tuning method: {tuning.method}")
 
     def _tune_model_grid(
-        self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
-    ) -> ModelTrainingResult:
+        self,
+        model_config: ModelConfig,
+        model_spec: ModelSpec,
+        data: DatasetBundle,
+    ) -> TrainingOutcome:
         tuning = model_config.tuning
         X_train, y_train = _training_data(data)
 
@@ -176,8 +212,11 @@ class Trainer:
         )
 
     def _tune_model_optuna(
-        self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
-    ) -> ModelTrainingResult:
+        self,
+        model_config: ModelConfig,
+        model_spec: ModelSpec,
+        data: DatasetBundle,
+    ) -> TrainingOutcome:
 
         self._configure_optuna_logging(optuna)
 
@@ -324,21 +363,8 @@ class Trainer:
         evaluations: list[_CandidateEvaluation],
         *,
         method: TuningMethod,
-    ) -> ModelTrainingResult:
-        """
-        Fits the best parameters on all training data and bootstraps the held-out test predictions.
-
-        Args:
-            model_config: The model configuration to fit.
-            model_spec: The model spec to use for fitting.
-            data: The dataset bundle to use for training and evaluation.
-            evaluations: The candidate evaluations to consolidate.
-            method: The tuning method to use.
-
-        Returns:
-            A `ModelTrainingResult` with the consolidated results.
-
-        """
+    ) -> TrainingOutcome:
+        """Fit the selected candidate once and evaluate both test sets once."""
 
         tuning_config = model_config.tuning
 
@@ -367,7 +393,7 @@ class Trainer:
                 base_X_train,
                 base_y_train,
             )
-            test_metrics = evaluate_trained_model_bootstrap(
+            final_evaluation = evaluate_trained_model(
                 trained_model=trained_model,
                 data=data,
                 task_type=self.task_type,
@@ -378,36 +404,39 @@ class Trainer:
         tuning_result = TuningRecord(
             best_params=best_params,
             scoring=tuning_config.scoring,
-            final_test_metrics=test_metrics,
+            final_test_metrics=final_evaluation.metrics,
             fold_results=fold_results,
             method=method,
         )
 
-        mimic_metrics = tuning_result.final_test_metrics.mimic_test.metrics
-        tudd_metrics = tuning_result.final_test_metrics.tudd_test.metrics
+        mimic_metrics = tuning_result.final_test_metrics.mimic_test
+        tudd_metrics = tuning_result.final_test_metrics.tudd_test
         if self.task_type == "classification":
             logger.info(
                 f"Model tuning complete in {tuning_result.total_time:.3f}s. "
-                f"Best AUROC MIMIC: {mimic_metrics.roc_auc:.4f}, "
-                f"Best AUROC TUDD: {tudd_metrics.roc_auc:.4f}"
+                f"AUROC MIMIC: {mimic_metrics.roc_auc:.4f}, "
+                f"AUROC TUDD: {tudd_metrics.roc_auc:.4f}"
             )
         else:
             logger.info(
                 f"Model tuning complete in {tuning_result.total_time:.3f}s. "
-                f"Best RMSE MIMIC: {mimic_metrics.rmse:.4f}, Best RMSE TUDD: {tudd_metrics.rmse:.4f}"
+                f"RMSE MIMIC: {mimic_metrics.rmse:.4f}, RMSE TUDD: {tudd_metrics.rmse:.4f}"
             )
 
-        return ModelTrainingResult(
+        training_result = ModelTrainingResult(
             model_name=model_config.name,
             task_type=self.task_type,
             tuned=True,
             fit_time=final_fit_time,
             tuning_result=tuning_result,
         )
+        return TrainingOutcome(
+            result=training_result,
+            test_predictions=final_evaluation.test_predictions,
+        )
 
-    @staticmethod
-    def _build_optuna_sampler(tuning):
-        seed = tuning.cv.random_state
+    def _build_optuna_sampler(self, tuning):
+        seed = self.random_states.tuning_sampler_seed
         if tuning.optuna.sampler == "tpe":
             return optuna.samplers.TPESampler(
                 seed=seed,
@@ -435,7 +464,7 @@ class Trainer:
         return cv_cls(
             n_splits=tuning.cv.n_splits,
             shuffle=tuning.cv.shuffle,
-            random_state=tuning.cv.random_state,
+            random_state=self.random_states.cv_split_seed,
         )
 
     def _build_cv_folds(self, tuning, X_train, y_train) -> list[tuple[np.ndarray, np.ndarray]]:

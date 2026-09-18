@@ -32,6 +32,7 @@ def _():
     from src.classes.dataset import Dataset
     from src.classes.trainer import Trainer
     from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig
+    from src.schemas.pipeline_schemas import RandomStates
     from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
     from src.schemas.training_schemas import ModelConfig
     from src.utils.model_lifecycle import release_model
@@ -44,6 +45,7 @@ def _():
         ImputerConfig,
         ModelConfig,
         Path,
+        RandomStates,
         ScalerEncoderConfig,
         Trainer,
         dataset_task_for_target,
@@ -123,6 +125,7 @@ def _(
     ModelConfig,
     RANDOM_STATE,
     RUN_INTERPRETABILITY,
+    RandomStates,
     ScalerEncoderConfig,
     TARGET,
     TRAIN_ON,
@@ -150,22 +153,24 @@ def _(
         name=MODEL_NAME,
         preprocessing=MODEL_PREPROCESSING,
     )
-    return dataset_params, model_config, task_type
+    random_states = RandomStates.from_seed(RANDOM_STATE)
+    return dataset_params, model_config, random_states, task_type
 
 
 @app.cell
-def _(Dataset, dataset_params):
-    dataset = Dataset(dataset_params)
+def _(Dataset, dataset_params, random_states):
+    dataset = Dataset(dataset_params, sample_seed=random_states.training_sample_seed)
     data = dataset.get_dataset()
     return (data,)
 
 
 @app.cell
-def _(Trainer, dataset_params, task_type):
+def _(Trainer, dataset_params, random_states, task_type):
     trainer = Trainer(
         task_type=task_type,
         default_imputer=dataset_params.imputer,
         default_scaler=dataset_params.scaler_encoder,
+        random_states=random_states,
         log_transform_target=dataset_params.log_transform_target,
     )
     return (trainer,)
@@ -368,7 +373,6 @@ def _(importance_table, mo, plot_figures, run_summary, scatter_figures):
             ],
         ]
     )
-    return
 
 
 if __name__ == "__main__":

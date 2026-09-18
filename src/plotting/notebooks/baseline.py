@@ -52,22 +52,10 @@ def _(
     los7_exp_name,
     mortality_exp_name,
     readmission_exp_name,
-    runs_los7,
-    runs_moratlity,
-    runs_readmission,
 ):
-    data_mortality = load_evaluation_data(
-        experiment_names=mortality_exp_name,
-        pipeline_runs=runs_moratlity["mlflow_run_id"],
-    )
-    data_readmission = load_evaluation_data(
-        experiment_names=readmission_exp_name,
-        pipeline_runs=runs_readmission["mlflow_run_id"],
-    )
-    data_los7 = load_evaluation_data(
-        experiment_names=los7_exp_name,
-        pipeline_runs=runs_los7["mlflow_run_id"],
-    )
+    data_mortality = load_evaluation_data(mortality_exp_name)
+    data_readmission = load_evaluation_data(readmission_exp_name)
+    data_los7 = load_evaluation_data(los7_exp_name)
     data_mortality
     return data_los7, data_mortality, data_readmission
 
@@ -75,7 +63,6 @@ def _(
 @app.cell
 def _(data_readmission):
     data_readmission
-    return
 
 
 @app.cell
@@ -83,7 +70,6 @@ def _(data_los7, data_mortality, data_readmission):
     for daa in [data_mortality, data_los7, data_readmission]:
         print(daa["experiment_name"][0])
         print(len(daa["pipeline_id"].unique()))
-    return
 
 
 @app.cell
@@ -115,7 +101,6 @@ def _(data_los7, data_mortality, data_readmission):
     # Adjust total time since MIMIC prediction is not relevant right now.
     for ds, _ in setups.values():
         ds["total_time"] = ds["total_time"] - ds["predict_time_mimic"]
-        ds["training_time"] = ds["cv_time"] + ds["fit_time"]
     return figure_size, model_setups, plt, save_figs, setups
 
 
@@ -143,7 +128,6 @@ def _(
             if save_figs:
                 fig.savefig(f"{save_path}{setting}_performance_training_time.svg")
             plt.show()
-    return
 
 
 @app.cell
@@ -170,7 +154,6 @@ def _(
             if save_figs:
                 _fig.savefig(f"{_save_path}{_setting}_performance_test_time.svg")
             plt.show()
-    return
 
 
 @app.cell
@@ -331,7 +314,6 @@ def _(data_los7, data_mortality, data_readmission, performance_table_to_latex):
         metrics=["prc_auc"],
     )
     print(table)
-    return
 
 
 if __name__ == "__main__":

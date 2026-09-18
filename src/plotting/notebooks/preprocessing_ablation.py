@@ -14,7 +14,6 @@ def _():
         sys.path.insert(0, str(project_root))
 
     import matplotlib.pyplot as plt
-    import pandas as pd
 
     from src.mlflow.evaluation_data import (
         list_pipeline_runs,
@@ -25,7 +24,6 @@ def _():
     return (
         list_pipeline_runs,
         load_evaluation_data,
-        pd,
         plot_model_setting_performance,
         plot_model_setting_performance_vs_runtime,
         plt,
@@ -76,21 +74,16 @@ def _(
     exploration_exp_name,
     exploration_exp_name_knn,
     load_evaluation_data,
-    pd,
     runs_exploration,
     runs_exploration_knn,
 ):
-    data_imputation = load_evaluation_data(
-        experiment_names=exploration_exp_name,
-        pipeline_runs=runs_exploration["mlflow_run_id"],
+    data_imputation_all = load_evaluation_data(
+        experiment_names=(exploration_exp_name, exploration_exp_name_knn),
+        pipeline_runs=(
+            *runs_exploration["mlflow_run_id"],
+            *runs_exploration_knn["mlflow_run_id"],
+        ),
     )
-
-    data_imputation_knn = load_evaluation_data(
-        experiment_names=exploration_exp_name_knn,
-        pipeline_runs=runs_exploration_knn["mlflow_run_id"],
-    )
-
-    data_imputation_all = pd.concat([data_imputation, data_imputation_knn])
     return (data_imputation_all,)
 
 
@@ -144,7 +137,6 @@ def _(
         if save_figs:
             fig.savefig(f"plots/preprocessing_comparision/imputer/performance_bar_{model_group}.svg")
         plt.show()
-    return
 
 
 @app.cell
@@ -168,7 +160,6 @@ def _(
         if save_figs:
             fig2.savefig(f"plots/preprocessing_comparision/imputer/time_performance_{model_group2}.svg")
         plt.show()
-    return
 
 
 @app.cell
@@ -205,7 +196,6 @@ def _(load_evaluation_data, runs_scaler, scaler_exp_name):
 @app.cell
 def _(data_scaler):
     data_scaler["pipeline_mlflow_run_id"].unique()
-    return
 
 
 @app.cell
@@ -241,7 +231,6 @@ def _(
         if save_figs:
             fig_s.savefig(f"plots/preprocessing_comparision/scaler/performance_bar_{model_group_s}.svg")
         plt.show()
-    return
 
 
 @app.cell
@@ -265,7 +254,6 @@ def _(
         if save_figs:
             fig_s2.savefig(f"plots/preprocessing_comparision/scaler/time_performance_{model_group_s2}.svg")
         plt.show()
-    return
 
 
 if __name__ == "__main__":

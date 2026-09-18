@@ -5,12 +5,12 @@ from src.schemas.metrics import (
     RegressionMetrics,
 )
 from src.schemas.training_schemas import ClassificationScoring, RegressionScoring
-from src.utils.bootstrap_utils_cls import (
-    _ClassificationPredictionBatch,
+from src.utils.classification_metrics import (
+    ClassificationPredictionBatch,
     bootstrap_scores_classification,
     classification_metrics,
 )
-from src.utils.bootstrap_utils_reg import bootstrap_scores_regression, regression_metrics
+from src.utils.regression_metrics import regression_metrics
 
 
 def evaluate_classification_predictions(
@@ -25,8 +25,8 @@ def evaluate_classification_predictions(
 def classification_prediction_batch(
     predictions: np.ndarray,
     y_true,
-) -> _ClassificationPredictionBatch:
-    probabilities = np.asarray(predictions)
+) -> ClassificationPredictionBatch:
+    probabilities = np.asarray(predictions, dtype=float)
     labels = np.asarray(y_true).ravel()
 
     if probabilities.ndim != 2:
@@ -45,13 +45,17 @@ def classification_prediction_batch(
 
     if not np.isfinite(probabilities).all():
         raise ValueError("Classification probabilities must be finite")
+    if ((probabilities < 0.0) | (probabilities > 1.0)).any():
+        raise ValueError("Classification probabilities must lie between 0 and 1")
+    if not np.allclose(probabilities.sum(axis=1), 1.0, rtol=1e-6, atol=1e-8):
+        raise ValueError("Classification probability rows must sum to 1")
 
     _, encoded_labels = np.unique(labels, return_inverse=True)
 
-    return _ClassificationPredictionBatch(
+    return ClassificationPredictionBatch(
         probabilities=probabilities,
         y_true=encoded_labels,
-        y_pred=probabilities.argmax(axis=1),
+        y_pred=(probabilities[:, 1] > 0.5).astype(np.int8),
         n_classes=probabilities.shape[1],  # 2
     )
 
@@ -103,7 +107,7 @@ def evaluate_bootstrap_classification(
     y_true: np.ndarray,
     n_bootstrap: int,
     rng: np.random.Generator,
-) -> tuple[ClassificationMetrics, np.ndarray, np.ndarray]:
+) -> tuple[ClassificationMetrics, np.ndarray, np.ndarray, np.ndarray]:
     if n_bootstrap < 1:
         raise ValueError("n_bootstrap must be at least 1")
 
@@ -115,7 +119,7 @@ def evaluate_bootstrap_classification(
         rng,
     )
     lower, upper = np.percentile(scores, [2.5, 97.5], axis=1)
-    return metrics, lower, upper
+    return metrics, lower, upper, scores
 
 
 def evaluate_regression_predictions(
@@ -123,24 +127,3 @@ def evaluate_regression_predictions(
     true_values: np.ndarray,
 ) -> RegressionMetrics:
     return regression_metrics(predictions, true_values)
-
-
-def evaluate_bootstrap_regression(
-    predictions: np.ndarray,
-    y_true: np.ndarray,
-    n_bootstrap: int,
-    rng: np.random.Generator,
-) -> tuple[RegressionMetrics, np.ndarray, np.ndarray]:
-    if n_bootstrap < 1:
-        raise ValueError("n_bootstrap must be at least 1")
-
-    metrics = regression_metrics(predictions, y_true)
-
-    scores = bootstrap_scores_regression(
-        predictions,
-        y_true,
-        n_bootstrap,
-        rng,
-    )
-    lower, upper = np.percentile(scores, [2.5, 97.5], axis=1)
-    return metrics, lower, upper

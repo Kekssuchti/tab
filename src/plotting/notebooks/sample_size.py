@@ -86,7 +86,6 @@ def _(
 @app.cell
 def _(data_readmission):
     data_readmission
-    return
 
 
 @app.cell
@@ -94,7 +93,6 @@ def _(data_los7, data_mortality, data_readmission_72):
     for data in [data_mortality, data_los7, data_readmission_72]:
         print(data["experiment_name"][0])
         print(len(data["pipeline_id"].unique()) / 9)
-    return
 
 
 @app.cell
@@ -130,8 +128,6 @@ def _(data_los7, data_mortality, data_readmission_72):
 
     datasets_to_plot = ("tudd",)
 
-    for ds, _ in setups.values():
-        ds["training_time"] = ds["cv_time"] + ds["fit_time"]
     return (
         datasets_to_plot,
         model_setups,
@@ -181,7 +177,6 @@ def _(
                     fig.tight_layout()
                     fig.savefig(f"{base_save_path}{setting}_{use_metric}.svg")
                 plt.show()
-    return
 
 
 @app.cell
@@ -211,7 +206,6 @@ def _(
                     _difference_fig.tight_layout()
                     _difference_fig.savefig(f"{_base_save_path}{_setting}_difference_xgboost_{metr}.svg")
                 plt.show()
-    return
 
 
 if __name__ == "__main__":

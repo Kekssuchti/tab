@@ -2,7 +2,6 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from src.config import config
 from src.schemas.base_schemas import StrictConfig
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 
@@ -27,14 +26,10 @@ class CrossValidationConfig(StrictConfig):
 
         shuffle: bool, default=True
             Whether to shuffle the data before splitting.
-
-        random_state: int, default=config.seed
-            Seed used for reproducible shuffling.
     """
 
     n_splits: int = Field(default=5, ge=2)
     shuffle: bool = True
-    random_state: int = Field(default_factory=lambda: config.seed)
 
 
 class OptunaConfig(StrictConfig):

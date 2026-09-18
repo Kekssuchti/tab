@@ -13,7 +13,7 @@ import torch
 from huggingface_hub import hf_hub_download
 
 from external.limix.inference.predictor import LimiXPredictor
-from src.interfaces.model_interface import ModelAdapter, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
 from src.schemas.base_schemas import TaskType
 
 
@@ -22,6 +22,8 @@ class LimixAdapter(ModelAdapter):
         self,
         task_type: TaskType = "classification",
         size: Literal["2M", "16M"] = "2M",
+        random_state: int | None = None,
+        inference_state: int | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -31,13 +33,14 @@ class LimixAdapter(ModelAdapter):
         self.size = size  # only "2M" and "16M" are valid
         self.model_path = str(config.dir_cache / f"LimiX-{self.size}.ckpt")
 
-        seed = kwargs.pop("random_state", config.seed)
+        self.random_state = random_state
+        self.inference_state = inference_state
         self.inference_config = kwargs.pop("inference_config", None)
         self.n_estimators = kwargs.pop("n_estimators", None)
         self.retrieval_config_overrides = kwargs.pop("retrieval_config_overrides", None)
         default_params = {
-            "seed": seed,
             "mask_prediction": False,
+            **seed_kwargs("seed", random_state),
         }
         self.predict_batch_size = kwargs.pop("predict_batch_size", 99999999)
         if self.predict_batch_size is not None and self.predict_batch_size < 1:
@@ -75,7 +78,7 @@ class LimixAdapter(ModelAdapter):
         return model
 
     def _configure_inference(self):
-        if self.n_estimators is None and self.retrieval_config_overrides is None:
+        if self.n_estimators is None and self.retrieval_config_overrides is None and self.inference_state is None:
             return
 
         inference_config = deepcopy(self.model.inference_config)
@@ -93,7 +96,9 @@ class LimixAdapter(ModelAdapter):
             for config_item in inference_config:
                 config_item["retrieval_config"].update(self.retrieval_config_overrides)
 
-        self.model.set_inference_config(inference_config)
+        # LimiX derives the per-pipeline predict-time seeds from this value, so
+        # the inference state is the seed for randomness drawn while predicting.
+        self.model.set_inference_config(inference_config, seed=self.inference_state)
 
     def fit(self, X_train, y_train):
         # this model does not have a fit() function

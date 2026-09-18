@@ -25,6 +25,10 @@ from src.utils.tuning_distributions import (
 if TYPE_CHECKING:
     from src.interfaces.model_interface import ModelAdapter
 
+# Adapter-level seed keywords. They never travel as tuning parameters, because
+# the pipeline seeds them through RandomStates.
+_SEED_KEYS = frozenset({"random_state", "inference_state", "seed"})
+
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -47,9 +51,29 @@ class ModelSpec:
     default_params: dict[str, Any] = field(default_factory=dict)
     search_spaces: Mapping[str, Mapping[str, SearchDomain]] = field(default_factory=dict)
 
-    def create(self, task_type: TaskType, params: dict[str, Any]) -> "ModelAdapter":
+    def create(
+        self,
+        task_type: TaskType,
+        params: dict[str, Any],
+        *,
+        random_state: int | None = None,
+        inference_state: int | None = None,
+    ) -> "ModelAdapter":
+        """Instantiate the adapter with the pipeline seeds.
+
+        The seeds reach the adapter under their canonical names and each adapter
+        maps them onto the keyword its estimator expects. Anything the caller
+        passes under those names inside `params` is dropped, so the configured
+        pipeline seed always wins over a seed that leaked into a tuning grid.
+        """
         adapter_cls = _load_adapter_cls(self.adapter_path)
-        return adapter_cls(task_type=task_type, **{**self.default_params, **params})
+        tuned_params = {key: value for key, value in {**self.default_params, **params}.items() if key not in _SEED_KEYS}
+        return adapter_cls(
+            task_type=task_type,
+            random_state=random_state,
+            inference_state=inference_state,
+            **tuned_params,
+        )
 
     def tuning_grid(self, search_space: str | None, overrides: dict[str, list[Any]] | None) -> dict[str, list[Any]]:
         space = self.tuning_search_space(search_space, overrides)
@@ -204,6 +228,9 @@ SEARCH_SPACES = {
     },
     "tabpfn": {
         "default": {
+            "n_estimators": [8],
+        },
+        "default_tune": {
             "n_estimators": [4, 8, 16],
             "softmax_temperature": [0.75, 0.8, 0.9, 0.95, 1],
             "inference_config.POLYNOMIAL_FEATURES": ["no", 5, 10, 15],

@@ -1,3 +1,11 @@
+random_states:
+  model_training_seed: 1337
+  model_inference_seed: 1337
+  cv_split_seed: 1337
+  tuning_sampler_seed: 1337
+  training_sample_seed: 1337
+  evaluation_bootstrap_seed: 1337
+
 dataset:
   target: LOS
   log_transform_target: true
@@ -30,7 +38,6 @@ training:
       cv:
         n_splits: 5
         shuffle: true
-        random_state: 1337
 
   - name: xgboost
     tuning:
@@ -45,7 +52,6 @@ training:
       cv:
         n_splits: 5
         shuffle: true
-        random_state: 1337
 
   - name: tabpfn-3
     tuning:
@@ -55,7 +61,6 @@ training:
       cv:
         n_splits: 5
         shuffle: true
-        random_state: 1337
 
   - name: tabicl-2
     tuning:
@@ -65,7 +70,6 @@ training:
       cv:
         n_splits: 5
         shuffle: true
-        random_state: 1337
 
   - name: limix-16m
     tuning:
@@ -75,7 +79,6 @@ training:
       cv:
         n_splits: 5
         shuffle: true
-        random_state: 1337
 
   - name: tabfm
     preprocessing:
@@ -88,7 +91,6 @@ training:
       cv:
         n_splits: 5
         shuffle: true
-        random_state: 1337
 
   - name: tabswift
     preprocessing:
@@ -101,7 +103,6 @@ training:
       cv:
         n_splits: 5
         shuffle: true
-        random_state: 1337
 
 mlflow:
   enabled: true
