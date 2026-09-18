@@ -54,7 +54,9 @@ class ModelAdapter(ABC):
         Predict for a fitted model.
 
         Classification adapters must return class probabilities with shape
-        (n_samples, n_classes). Regression adapters return predictions.
+        (n_samples, n_classes), ordered by encoded class label. For binary
+        classification, column 1 is therefore the probability of class 1.
+        Regression adapters return predictions.
 
         Returns:
             Prediction values and prediction time in seconds.

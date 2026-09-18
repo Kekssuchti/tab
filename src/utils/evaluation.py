@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 
 from src.config import config
@@ -9,9 +11,19 @@ from src.schemas.metrics import (
     BootstrapRegressionMetrics,
 )
 from src.utils.evaluation_utils import (
+    classification_prediction_batch,
     evaluate_bootstrap_classification,
     evaluate_bootstrap_regression,
 )
+from src.utils.prediction_tables import BinaryTestPredictions, FinalTestPredictions
+
+
+@dataclass(frozen=True)
+class TrainedModelBootstrapEvaluation:
+    """Final metrics plus classification probabilities for artifact logging."""
+
+    metrics: BootstrapFinalTestMetrics
+    test_predictions: FinalTestPredictions | None
 
 
 def _evaluate_bootstrap_classification(
@@ -85,6 +97,24 @@ def evaluate_trained_model_bootstrap(
     n_bootstrap: int = 10000,
     random_state: int | None = config.seed,
 ) -> BootstrapFinalTestMetrics:
+    """Evaluate a trained model while preserving the metrics-only public API."""
+
+    return evaluate_trained_model_bootstrap_with_predictions(
+        trained_model=trained_model,
+        task_type=task_type,
+        data=data,
+        n_bootstrap=n_bootstrap,
+        random_state=random_state,
+    ).metrics
+
+
+def evaluate_trained_model_bootstrap_with_predictions(
+    trained_model,
+    task_type: TaskType,
+    data: DatasetBundle,
+    n_bootstrap: int = 10000,
+    random_state: int | None = config.seed,
+) -> TrainedModelBootstrapEvaluation:
     mimic_prediction = trained_model.predict(data.test_mimic.X)
     tudd_prediction = trained_model.predict(data.test_tudd.X)
     rng = np.random.default_rng(random_state)
@@ -102,6 +132,10 @@ def evaluate_trained_model_bootstrap(
             n_bootstrap=n_bootstrap,
             rng=rng,
         )
+        test_predictions = FinalTestPredictions(
+            mimic=_binary_test_predictions(mimic_prediction.values, data.test_mimic.y),
+            tudd=_binary_test_predictions(tudd_prediction.values, data.test_tudd.y),
+        )
     else:
         mimic_bootstrap_metrics = _evaluate_bootstrap_regression(
             predictions=mimic_prediction.values,
@@ -115,10 +149,23 @@ def evaluate_trained_model_bootstrap(
             n_bootstrap=n_bootstrap,
             rng=rng,
         )
+        test_predictions = None
 
-    return BootstrapFinalTestMetrics(
-        mimic_test=mimic_bootstrap_metrics,
-        mimic_prediction_time=mimic_prediction.seconds,
-        tudd_test=tudd_bootstrap_metrics,
-        tudd_prediction_time=tudd_prediction.seconds,
+    return TrainedModelBootstrapEvaluation(
+        metrics=BootstrapFinalTestMetrics(
+            mimic_test=mimic_bootstrap_metrics,
+            mimic_prediction_time=mimic_prediction.seconds,
+            tudd_test=tudd_bootstrap_metrics,
+            tudd_prediction_time=tudd_prediction.seconds,
+        ),
+        test_predictions=test_predictions,
+    )
+
+
+def _binary_test_predictions(predictions: np.ndarray, y_true) -> BinaryTestPredictions:
+    batch = classification_prediction_batch(predictions, y_true)
+    return BinaryTestPredictions(
+        test_set_id=y_true.index.to_numpy(copy=True),
+        y_true=np.asarray(y_true).ravel(),
+        positive_class_probability=batch.probabilities[:, 1],
     )

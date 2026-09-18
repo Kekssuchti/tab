@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from src.mlflow.serialization import (
+    artifact_manifest_from_dict,
     canonical_json,
     cv_result_from_dict,
     cv_result_from_json,
@@ -30,6 +31,20 @@ from src.schemas.run_records import (
 )
 from src.schemas.run_records import TestSetEvaluationRecord as EvaluationRecord
 from tests.factories import bootstrap_result, pipeline_result, regression_result, tuning_result
+
+
+def test_artifact_manifest_accepts_runs_without_prediction_tables():
+    manifest = artifact_manifest_from_dict(
+        {
+            "tracking_schema_version": TRACKING_SCHEMA_VERSION,
+            "config": "config.json",
+            "pipeline_result": "pipeline_result.json",
+            "environment": "environment.json",
+            "cv_results": [],
+        }
+    )
+
+    assert manifest.test_predictions == ()
 
 
 def test_pipeline_result_serialization_omits_trained_model():

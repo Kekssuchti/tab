@@ -19,6 +19,7 @@ from src.schemas.run_records import (
 from src.schemas.training_schemas import ModelConfig
 from src.utils.logger import logger
 from src.utils.model_identity import model_instance_ids
+from src.utils.prediction_tables import PredictionTableAccumulator, cohort_fingerprints_from_summary
 
 
 class Pipeline:
@@ -28,12 +29,14 @@ class Pipeline:
         self.pipeline_config = pipeline_config
 
         self.dataset = Dataset(pipeline_config.dataset)
+        self.prediction_tables = PredictionTableAccumulator()
 
     def run(
         self,
         on_model_complete: Callable[[PipelineRunRecord, ModelRunRecord], None] | None = None,
     ) -> PipelineRunRecord:
         start_time = perf_counter()
+        self.prediction_tables = PredictionTableAccumulator()
         target = self.pipeline_config.dataset.target
         task_type = dataset_task_for_target(target).task_type
         logger.info(
@@ -49,6 +52,8 @@ class Pipeline:
 
         data = self.dataset.get_dataset()
         dataset_summary = self.dataset.summarize(data)
+        if task_type == "classification":
+            self.prediction_tables = PredictionTableAccumulator(cohort_fingerprints_from_summary(dataset_summary))
 
         model_runs = []
         for model_instance_id, model_config in zip(
@@ -59,10 +64,20 @@ class Pipeline:
             model_start_time = perf_counter()
             tr = None
             mr = None
+            captured_predictions = []
             failure_stage = "training_evaluation"
             try:
-                tr = trainer.train_evaluate_model(model_config, data)
+                tr = trainer.train_evaluate_model(
+                    model_config,
+                    data,
+                    on_test_predictions=captured_predictions.append,
+                )
                 mr = self._model_result_from_training_result(tr)
+                if captured_predictions:
+                    try:
+                        self.prediction_tables.add(model_instance_id, captured_predictions[0])
+                    except Exception:  # noqa: BLE001 - persistence must not invalidate model evaluation
+                        logger.exception(f"Could not accumulate test predictions for {model_instance_id}; continuing")
                 logger.info(f"Model {model_instance_id} trained and evaluated successfully")
             except Exception as exc:  # noqa: BLE001 - one model's failure must not abort the run
                 logger.exception(f"Model {model_config.name} failed during {failure_stage}; continuing")
@@ -86,15 +101,18 @@ class Pipeline:
                     )
                     model_runs.append(model_run)
                     if on_model_complete is not None:
-                        on_model_complete(
-                            PipelineRunRecord(
-                                run_id=self.pipeline_config.run_id,
-                                dataset_summary=dataset_summary,
-                                model_runs=tuple(model_runs),
-                                total_time=perf_counter() - start_time,
-                            ),
-                            model_run,
-                        )
+                        try:
+                            on_model_complete(
+                                PipelineRunRecord(
+                                    run_id=self.pipeline_config.run_id,
+                                    dataset_summary=dataset_summary,
+                                    model_runs=tuple(model_runs),
+                                    total_time=perf_counter() - start_time,
+                                ),
+                                model_run,
+                            )
+                        except Exception:  # noqa: BLE001 - tracking must not abort later models
+                            logger.exception(f"Completion callback failed for {model_instance_id}; continuing")
 
         total_time = perf_counter() - start_time
         logger.info(

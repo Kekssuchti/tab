@@ -33,6 +33,7 @@ from src.mlflow.tracking_contract import (
     ARTIFACT_EVALUATION_TABLE,
     ARTIFACT_MANIFEST,
     ARTIFACT_PIPELINE_RESULT,
+    ARTIFACT_TEST_PREDICTIONS,
     RUN_TYPE_PIPELINE,
     TAG_MODEL_MLFLOW_RUN_ID,
     TAG_PIPELINE_ID,
@@ -43,6 +44,7 @@ from src.mlflow.tracking_contract import (
 )
 from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.run_records import ModelRunRecord, PipelineRunRecord
+from src.utils.prediction_tables import PREDICTION_MANIFEST_FILENAME, PredictionTableAccumulator
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,7 @@ class _ArtifactPaths:
     environment: Path
     manifest: Path
     cv_dir: Path
+    prediction_dir: Path
 
 
 class MLflowPipelineLogger:
@@ -62,6 +65,7 @@ class MLflowPipelineLogger:
         model_run: ModelRunRecord,
         *,
         config_path: Path | None = None,
+        prediction_tables: PredictionTableAccumulator | None = None,
     ) -> None:
         mlflow.set_tracking_uri(params.mlflow.tracking_uri)
         _set_experiment(params)
@@ -79,6 +83,7 @@ class MLflowPipelineLogger:
                 result,
                 temp_dir,
                 include_evaluation_table=False,
+                prediction_tables=prediction_tables,
             )
 
             with self._start_or_resume_pipeline_run(
@@ -98,6 +103,7 @@ class MLflowPipelineLogger:
         result: PipelineRunRecord,
         *,
         config_path: Path | None = None,
+        prediction_tables: PredictionTableAccumulator | None = None,
     ) -> None:
         mlflow.set_tracking_uri(params.mlflow.tracking_uri)
         _set_experiment(params)
@@ -110,6 +116,7 @@ class MLflowPipelineLogger:
                 result,
                 temp_dir,
                 include_evaluation_table=bool(observation.evaluations),
+                prediction_tables=prediction_tables,
             )
             with self._start_or_resume_pipeline_run(
                 params,
@@ -222,6 +229,7 @@ class MLflowPipelineLogger:
         temp_dir: Path,
         *,
         include_evaluation_table: bool,
+        prediction_tables: PredictionTableAccumulator | None,
     ) -> _ArtifactPaths:
         config_path = temp_dir / ARTIFACT_CONFIG
         result_path = temp_dir / ARTIFACT_PIPELINE_RESULT
@@ -229,6 +237,8 @@ class MLflowPipelineLogger:
         manifest_path = temp_dir / ARTIFACT_MANIFEST
         cv_dir = temp_dir / ARTIFACT_CV_RESULTS
         cv_dir.mkdir()
+        prediction_dir = temp_dir / ARTIFACT_TEST_PREDICTIONS
+        prediction_dir.mkdir()
 
         config_path.write_text(canonical_json(pipeline_config_to_dict(params)), encoding="utf-8")
         result_path.write_text(canonical_json(pipeline_result_to_dict(result)), encoding="utf-8")
@@ -251,16 +261,27 @@ class MLflowPipelineLogger:
             )
 
         cv_result_names = tuple(sorted(path.name for path in cv_dir.iterdir()))
+        if prediction_tables is not None:
+            prediction_tables.write_csvs(prediction_dir)
+        prediction_names = tuple(sorted(path.name for path in prediction_dir.glob("*.csv")))
         manifest_path.write_text(
             canonical_json(
                 artifact_manifest(
                     cv_result_names,
                     include_evaluation_table=include_evaluation_table,
+                    test_prediction_names=prediction_names,
                 ).to_dict()
             ),
             encoding="utf-8",
         )
-        return _ArtifactPaths(config_path, result_path, environment_path, manifest_path, cv_dir)
+        return _ArtifactPaths(
+            config_path,
+            result_path,
+            environment_path,
+            manifest_path,
+            cv_dir,
+            prediction_dir,
+        )
 
     def _log_artifacts(
         self,
@@ -270,10 +291,25 @@ class MLflowPipelineLogger:
         mlflow.log_artifact(str(artifact_paths.config))
         mlflow.log_artifact(str(artifact_paths.pipeline_result))
         mlflow.log_artifact(str(artifact_paths.environment))
-        mlflow.log_artifact(str(artifact_paths.manifest))
 
         if any(artifact_paths.cv_dir.iterdir()):
             mlflow.log_artifacts(str(artifact_paths.cv_dir), artifact_path=ARTIFACT_CV_RESULTS)
+        prediction_csvs = sorted(artifact_paths.prediction_dir.glob("*.csv"))
+        for prediction_csv in prediction_csvs:
+            mlflow.log_artifact(
+                str(prediction_csv),
+                artifact_path=ARTIFACT_TEST_PREDICTIONS,
+            )
+        prediction_manifest = artifact_paths.prediction_dir / PREDICTION_MANIFEST_FILENAME
+        if prediction_manifest.exists():
+            # Upload after both CSVs so hashes identify a complete generation.
+            mlflow.log_artifact(
+                str(prediction_manifest),
+                artifact_path=ARTIFACT_TEST_PREDICTIONS,
+            )
+
+        # Write the tracking manifest last so it marks a complete cumulative snapshot.
+        mlflow.log_artifact(str(artifact_paths.manifest))
 
         if config_path is not None and config_path.exists():
             mlflow.log_artifact(str(config_path), artifact_path="config_source")

@@ -13,7 +13,31 @@ from src.mlflow.serialization import (
 )
 from src.mlflow.tracking_contract import TRACKING_SCHEMA_VERSION
 from src.schemas.metrics import ClassificationMetrics
+from src.utils.prediction_tables import (
+    BinaryTestPredictions,
+    FinalTestPredictions,
+    PredictionTableAccumulator,
+    load_prediction_snapshot,
+)
 from tests.factories import failed_result, pipeline_config, pipeline_result
+
+
+def _prediction_tables() -> PredictionTableAccumulator:
+    tables = PredictionTableAccumulator({"mimic": "sha256:" + "a" * 64, "tudd": "sha256:" + "b" * 64})
+    predictions = FinalTestPredictions(
+        mimic=BinaryTestPredictions(
+            test_set_id=np.array([10, 11, 12, 13]),
+            y_true=np.array([0, 0, 1, 1]),
+            positive_class_probability=np.array([0.1, 0.2, 0.8, 0.9]),
+        ),
+        tudd=BinaryTestPredictions(
+            test_set_id=np.array([20, 21, 22, 23]),
+            y_true=np.array([0, 0, 1, 1]),
+            positive_class_probability=np.array([0.2, 0.4, 0.6, 0.8]),
+        ),
+    )
+    tables.add("logistic-regression", predictions)
+    return tables
 
 
 def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
@@ -24,9 +48,21 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
     config_path.write_text("run_number: 7\n", encoding="utf-8")
 
     result = pipeline_result(tuned=True)
+    prediction_tables = _prediction_tables()
     logger = MLflowPipelineLogger()
-    logger.log_model_run(params, result, result.model_runs[0], config_path=config_path)
-    logger.log_pipeline_summary(params, result, config_path=config_path)
+    logger.log_model_run(
+        params,
+        result,
+        result.model_runs[0],
+        config_path=config_path,
+        prediction_tables=prediction_tables,
+    )
+    logger.log_pipeline_summary(
+        params,
+        result,
+        config_path=config_path,
+        prediction_tables=prediction_tables,
+    )
 
     mlflow.set_tracking_uri(tracking_uri)
     runs = mlflow.search_runs(
@@ -74,6 +110,7 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
         "_metrics.json",
         "evaluation_metrics.json",
         "cv_results",
+        "test_predictions",
     } <= artifact_names
     result_artifact = Path(client.download_artifacts(parent.info.run_id, "pipeline_result.json"))
     loaded_result = pipeline_result_from_json(result_artifact.read_text(encoding="utf-8"))
@@ -83,6 +120,20 @@ def test_mlflow_logger_writes_nested_runs_and_artifacts(tmp_path):
     assert manifest.pipeline_result == "pipeline_result.json"
     assert manifest.evaluation_table == "evaluation_metrics.json"
     assert manifest.cv_results == ("cv_results/logistic-regression.json",)
+    assert manifest.test_predictions == (
+        "test_predictions/mimic.csv",
+        "test_predictions/tudd.csv",
+    )
+    prediction_directory = Path(client.download_artifacts(parent.info.run_id, "test_predictions"))
+    prediction_snapshot = load_prediction_snapshot(prediction_directory)
+    prediction_frame = prediction_snapshot.tables["mimic"]
+    assert list(prediction_frame.columns) == [
+        "test_set_id",
+        "y_true",
+        "y_pred_logistic-regression",
+    ]
+    assert prediction_frame["test_set_id"].str.fullmatch(r"ts_[0-9a-f]{64}").all()
+    assert prediction_snapshot.model_instance_ids == ("logistic-regression",)
     cv_artifact = Path(client.download_artifacts(parent.info.run_id, "cv_results/logistic-regression.json"))
     cv_result = cv_result_from_json(cv_artifact.read_text(encoding="utf-8"))
     assert cv_result.model_instance_id == "logistic-regression"

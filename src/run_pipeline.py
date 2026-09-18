@@ -32,6 +32,7 @@ def run_pipeline_params(
 ):
     resolved_config_path = Path(config_path) if config_path is not None else None
     mlflow_logger = MLflowPipelineLogger() if pipeline_config.mlflow.enabled else None
+    pipeline = Pipeline(pipeline_config)
 
     def log_completed_model(partial_result, model_run):
         if mlflow_logger is None:
@@ -41,16 +42,21 @@ def run_pipeline_params(
             partial_result,
             model_run,
             config_path=resolved_config_path,
+            prediction_tables=pipeline.prediction_tables,
         )
 
-    result = Pipeline(pipeline_config).run(on_model_complete=log_completed_model)
+    result = pipeline.run(on_model_complete=log_completed_model)
 
     if mlflow_logger is not None:
-        mlflow_logger.log_pipeline_summary(
-            pipeline_config,
-            result,
-            config_path=resolved_config_path,
-        )
+        try:
+            mlflow_logger.log_pipeline_summary(
+                pipeline_config,
+                result,
+                config_path=resolved_config_path,
+                prediction_tables=pipeline.prediction_tables,
+            )
+        except Exception:  # noqa: BLE001 - tracking must not invalidate completed model work
+            logger.exception("Final MLflow summary logging failed; returning completed pipeline result")
 
     return result
 

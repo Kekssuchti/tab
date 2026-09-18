@@ -12,6 +12,7 @@ from src.schemas.metrics import BootstrapClassificationMetrics, BootstrapFinalTe
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.training_schemas import CrossValidationConfig, ModelConfig, OptunaConfig, TuningConfig
 from src.utils import model_registry
+from src.utils.evaluation import TrainedModelBootstrapEvaluation
 from src.utils.tuning_distributions import LogUniform
 from tests.factories import bootstrap_classification_metrics
 from tests.toy_data import load_toy_classification_data
@@ -111,8 +112,13 @@ def _bootstrap_final_metrics() -> BootstrapFinalTestMetrics:
 def test_trainer_records_final_metrics_after_training():
     X, y = _classification_data()
     trainer = Trainer(task_type="classification", **_preprocess_pipeline())
+    captured_predictions = []
 
-    result = trainer.train_evaluate_model(_model_config(grid={"C": [1.0]}), _bundle(X, y))
+    result = trainer.train_evaluate_model(
+        _model_config(grid={"C": [1.0]}),
+        _bundle(X, y),
+        on_test_predictions=captured_predictions.append,
+    )
 
     assert result.model_name == "logistic-regression"
     assert result.task_type == "classification"
@@ -122,6 +128,26 @@ def test_trainer_records_final_metrics_after_training():
     assert result.tuning_result is not None
     assert result.tuning_result.final_test_metrics.mimic_test.accuracy >= 0.0
     assert result.tuning_result.final_test_metrics.tudd_test.accuracy >= 0.0
+    assert len(captured_predictions) == 1
+    assert captured_predictions[0].mimic.test_set_id.tolist() == list(range(len(X)))
+    assert len(captured_predictions[0].mimic.positive_class_probability) == len(X)
+
+
+def test_trainer_preserves_success_when_prediction_handoff_fails():
+    X, y = _classification_data()
+    trainer = Trainer(task_type="classification", **_preprocess_pipeline())
+
+    def fail_handoff(predictions):
+        raise OSError("artifact handoff unavailable")
+
+    result = trainer.train_evaluate_model(
+        _model_config(grid={"C": [1.0]}),
+        _bundle(X, y),
+        on_test_predictions=fail_handoff,
+    )
+
+    assert result.succeeded
+    assert result.tuning_result is not None
 
 
 def test_trainer_uses_one_full_training_fit_for_bootstrap_evaluation(monkeypatch):
@@ -142,8 +168,11 @@ def test_trainer_uses_one_full_training_fit_for_bootstrap_evaluation(monkeypatch
     monkeypatch.setattr(trainer, "_fit_model", _fit_model)
     monkeypatch.setattr(
         trainer_module,
-        "evaluate_trained_model_bootstrap",
-        lambda trained_model, task_type, data: _bootstrap_final_metrics(),
+        "evaluate_trained_model_bootstrap_with_predictions",
+        lambda trained_model, task_type, data: TrainedModelBootstrapEvaluation(
+            metrics=_bootstrap_final_metrics(),
+            test_predictions=None,
+        ),
     )
 
     result = trainer._tune_model(model_config, model_spec, _bundle(X, y))

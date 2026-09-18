@@ -15,6 +15,7 @@ from src.mlflow.tracking_contract import (
     ARTIFACT_ENVIRONMENT,
     ARTIFACT_EVALUATION_TABLE,
     ARTIFACT_PIPELINE_RESULT,
+    ARTIFACT_TEST_PREDICTIONS,
     TRACKING_SCHEMA_VERSION,
 )
 from src.mlflow.validation import validate_pipeline_result, validate_tuning_record, validate_tuning_settings
@@ -95,6 +96,7 @@ class ArtifactManifest:
     environment: str
     evaluation_table: str | None
     cv_results: tuple[str, ...]
+    test_predictions: tuple[str, ...]
 
     def to_dict(self) -> JsonObject:
         payload: JsonObject = {
@@ -106,6 +108,8 @@ class ArtifactManifest:
         }
         if self.evaluation_table is not None:
             payload["evaluation_table"] = self.evaluation_table
+        if self.test_predictions:
+            payload["test_predictions"] = list(self.test_predictions)
         return payload
 
 
@@ -113,6 +117,7 @@ def artifact_manifest(
     cv_result_names: tuple[str, ...],
     *,
     include_evaluation_table: bool,
+    test_prediction_names: tuple[str, ...] = (),
 ) -> ArtifactManifest:
     return ArtifactManifest(
         tracking_schema_version=TRACKING_SCHEMA_VERSION,
@@ -121,6 +126,7 @@ def artifact_manifest(
         environment=ARTIFACT_ENVIRONMENT,
         evaluation_table=ARTIFACT_EVALUATION_TABLE if include_evaluation_table else None,
         cv_results=tuple(f"{ARTIFACT_CV_RESULTS}/{name}" for name in cv_result_names),
+        test_predictions=tuple(f"{ARTIFACT_TEST_PREDICTIONS}/{name}" for name in test_prediction_names),
     )
 
 
@@ -187,12 +193,17 @@ def artifact_manifest_from_dict(value: object) -> ArtifactManifest:
     _required_keys(
         payload,
         {"tracking_schema_version", "config", "pipeline_result", "environment", "cv_results"},
-        {"evaluation_table"},
+        {"evaluation_table", "test_predictions"},
         path="artifact_manifest",
     )
     version = _string(payload["tracking_schema_version"], path="artifact_manifest.tracking_schema_version")
     _require_schema_version(version)
     cv_results = _list(payload["cv_results"], path="artifact_manifest.cv_results")
+    test_predictions = (
+        _list(payload["test_predictions"], path="artifact_manifest.test_predictions")
+        if "test_predictions" in payload
+        else []
+    )
     return ArtifactManifest(
         tracking_schema_version=version,
         config=_string(payload["config"], path="artifact_manifest.config"),
@@ -205,6 +216,10 @@ def artifact_manifest_from_dict(value: object) -> ArtifactManifest:
         ),
         cv_results=tuple(
             _string(item, path=f"artifact_manifest.cv_results[{index}]") for index, item in enumerate(cv_results)
+        ),
+        test_predictions=tuple(
+            _string(item, path=f"artifact_manifest.test_predictions[{index}]")
+            for index, item in enumerate(test_predictions)
         ),
     )
 

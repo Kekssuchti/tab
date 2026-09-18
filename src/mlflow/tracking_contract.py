@@ -30,6 +30,8 @@ ARTIFACT_ENVIRONMENT = "environment.json"
 ARTIFACT_MANIFEST = "tracking_manifest.json"
 ARTIFACT_EVALUATION_TABLE = "evaluation_metrics.json"
 ARTIFACT_CV_RESULTS = "cv_results"
+ARTIFACT_TEST_PREDICTIONS = "test_predictions"
+ARTIFACT_RECOMPUTED_METRICS = "prediction_metrics/classification_metrics.csv"
 
 TEST_DATASETS = ("mimic", "tudd")
 TEST_DELTA_DATASET = "mimic_minus_tudd"
@@ -45,6 +47,12 @@ METRIC_CV_TOTAL_TIME = "cv.total_time"
 
 _TEST_SCORE_CI_PATTERN = re.compile(r"^ci_95_(?P<metric>.+)_(?:lower|upper)$")
 _TEST_DELTA_PREFIX = f"test.{TEST_DELTA_DATASET}."
+
+
+def test_predictions_artifact(dataset: str) -> str:
+    if dataset not in TEST_DATASETS:
+        raise ValueError(f"Unknown test dataset {dataset!r}")
+    return f"{ARTIFACT_TEST_PREDICTIONS}/{dataset}.csv"
 
 
 def dataset_row_count_param(dataset_part: str) -> str:

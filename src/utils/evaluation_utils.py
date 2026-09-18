@@ -26,7 +26,7 @@ def classification_prediction_batch(
     predictions: np.ndarray,
     y_true,
 ) -> _ClassificationPredictionBatch:
-    probabilities = np.asarray(predictions)
+    probabilities = np.asarray(predictions, dtype=float)
     labels = np.asarray(y_true).ravel()
 
     if probabilities.ndim != 2:
@@ -45,13 +45,17 @@ def classification_prediction_batch(
 
     if not np.isfinite(probabilities).all():
         raise ValueError("Classification probabilities must be finite")
+    if ((probabilities < 0.0) | (probabilities > 1.0)).any():
+        raise ValueError("Classification probabilities must lie between 0 and 1")
+    if not np.allclose(probabilities.sum(axis=1), 1.0, rtol=1e-6, atol=1e-8):
+        raise ValueError("Classification probability rows must sum to 1")
 
     _, encoded_labels = np.unique(labels, return_inverse=True)
 
     return _ClassificationPredictionBatch(
         probabilities=probabilities,
         y_true=encoded_labels,
-        y_pred=probabilities.argmax(axis=1),
+        y_pred=(probabilities[:, 1] > 0.5).astype(np.int8),
         n_classes=probabilities.shape[1],  # 2
     )
 

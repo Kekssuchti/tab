@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 from timeit import default_timer as timer
@@ -21,7 +22,7 @@ from src.schemas.training_schemas import (
     RegressionScoring,
     TuningMethod,
 )
-from src.utils.evaluation import evaluate_trained_model_bootstrap
+from src.utils.evaluation import evaluate_trained_model_bootstrap_with_predictions
 from src.utils.evaluation_utils import (
     classification_score,
     evaluate_classification_predictions,
@@ -34,6 +35,9 @@ from src.utils.model_registry import ModelSpec, get_model_spec
 from src.utils.optuna_callbacks import (
     stop_stale_study,
 )
+from src.utils.prediction_tables import FinalTestPredictions
+
+PredictionCallback = Callable[[FinalTestPredictions], None]
 
 
 @dataclass
@@ -60,7 +64,13 @@ class Trainer:
         self.default_scaler = default_scaler
         self.log_transform_target = log_transform_target
 
-    def train_evaluate_model(self, model_config: ModelConfig, data: DatasetBundle) -> ModelTrainingResult:
+    def train_evaluate_model(
+        self,
+        model_config: ModelConfig,
+        data: DatasetBundle,
+        *,
+        on_test_predictions: PredictionCallback | None = None,
+    ) -> ModelTrainingResult:
         logger.info(f"Training model: {model_config.name}")
 
         imputer, scaler = self._resolved_preprocessing(model_config)
@@ -68,7 +78,12 @@ class Trainer:
         logger.info(f"scaling data using: {scaler.type}")
 
         spec = get_model_spec(model_config, self.task_type)
-        return self._tune_model(model_config, spec, data)
+        return self._tune_model(
+            model_config,
+            spec,
+            data,
+            on_test_predictions=on_test_predictions,
+        )
 
     def _fit_model(
         self,
@@ -113,18 +128,40 @@ class Trainer:
         )
         return imputer, scaler
 
-    def _tune_model(self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle) -> ModelTrainingResult:
+    def _tune_model(
+        self,
+        model_config: ModelConfig,
+        model_spec: ModelSpec,
+        data: DatasetBundle,
+        *,
+        on_test_predictions: PredictionCallback | None = None,
+    ) -> ModelTrainingResult:
         tuning = model_config.tuning
 
         if tuning.method == "grid":
-            return self._tune_model_grid(model_config, model_spec, data)
+            return self._tune_model_grid(
+                model_config,
+                model_spec,
+                data,
+                on_test_predictions=on_test_predictions,
+            )
         if tuning.method == "optuna":
-            return self._tune_model_optuna(model_config, model_spec, data)
+            return self._tune_model_optuna(
+                model_config,
+                model_spec,
+                data,
+                on_test_predictions=on_test_predictions,
+            )
 
         raise ValueError(f"Unknown tuning method: {tuning.method}")
 
     def _tune_model_grid(
-        self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
+        self,
+        model_config: ModelConfig,
+        model_spec: ModelSpec,
+        data: DatasetBundle,
+        *,
+        on_test_predictions: PredictionCallback | None = None,
     ) -> ModelTrainingResult:
         tuning = model_config.tuning
         X_train, y_train = _training_data(data)
@@ -173,10 +210,16 @@ class Trainer:
             data,
             evaluations,
             method="grid",
+            on_test_predictions=on_test_predictions,
         )
 
     def _tune_model_optuna(
-        self, model_config: ModelConfig, model_spec: ModelSpec, data: DatasetBundle
+        self,
+        model_config: ModelConfig,
+        model_spec: ModelSpec,
+        data: DatasetBundle,
+        *,
+        on_test_predictions: PredictionCallback | None = None,
     ) -> ModelTrainingResult:
 
         self._configure_optuna_logging(optuna)
@@ -253,6 +296,7 @@ class Trainer:
             data,
             evaluations,
             method="optuna",
+            on_test_predictions=on_test_predictions,
         )
 
     def _evaluate_cv_candidate(
@@ -324,6 +368,7 @@ class Trainer:
         evaluations: list[_CandidateEvaluation],
         *,
         method: TuningMethod,
+        on_test_predictions: PredictionCallback | None = None,
     ) -> ModelTrainingResult:
         """
         Fits the best parameters on all training data and bootstraps the held-out test predictions.
@@ -367,7 +412,7 @@ class Trainer:
                 base_X_train,
                 base_y_train,
             )
-            test_metrics = evaluate_trained_model_bootstrap(
+            final_evaluation = evaluate_trained_model_bootstrap_with_predictions(
                 trained_model=trained_model,
                 data=data,
                 task_type=self.task_type,
@@ -378,7 +423,7 @@ class Trainer:
         tuning_result = TuningRecord(
             best_params=best_params,
             scoring=tuning_config.scoring,
-            final_test_metrics=test_metrics,
+            final_test_metrics=final_evaluation.metrics,
             fold_results=fold_results,
             method=method,
         )
@@ -397,13 +442,21 @@ class Trainer:
                 f"Best RMSE MIMIC: {mimic_metrics.rmse:.4f}, Best RMSE TUDD: {tudd_metrics.rmse:.4f}"
             )
 
-        return ModelTrainingResult(
+        training_result = ModelTrainingResult(
             model_name=model_config.name,
             task_type=self.task_type,
             tuned=True,
             fit_time=final_fit_time,
             tuning_result=tuning_result,
         )
+        if final_evaluation.test_predictions is not None and on_test_predictions is not None:
+            try:
+                on_test_predictions(final_evaluation.test_predictions)
+            except Exception:  # noqa: BLE001 - prediction persistence must not invalidate the trained model
+                logger.exception(
+                    f"Prediction handoff failed for {model_config.name}; preserving successful training result"
+                )
+        return training_result
 
     @staticmethod
     def _build_optuna_sampler(tuning):
