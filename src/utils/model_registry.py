@@ -159,6 +159,8 @@ MITRA_ADAPTER = "src.adapter.mitra_adapter:MitraAdapter"
 TABFM_ADAPTER = "src.adapter.tabfm_adapter:TabfmAdapter"
 TABSWIFT_ADAPTER = "src.adapter.tabswift_adapter:TabSwiftAdapter"
 EXAONE_ADAPTER = "src.adapter.exaone_adapter:EXAONEAdapter"
+CAUSILO_ADAPTER = "src.adapter.causilo_adapter:CausiloAdapter"
+LIMIX_V2_ADAPTER = "src.adapter.limix_2_adapter:LimixV2Adapter"
 
 
 SEARCH_SPACES = {
@@ -230,7 +232,16 @@ SEARCH_SPACES = {
         "default": {
             "n_estimators": [8],
         },
-        "default_tune": {
+        "best": {
+            "n_estimators": [32],
+        },
+        "default_2_6": {
+            "n_estimators": [4],
+        },
+        "default_2_5": {
+            "n_estimators": [2],
+        },
+        "tune_default": {
             "n_estimators": [4, 8, 16],
             "softmax_temperature": [0.75, 0.8, 0.9, 0.95, 1],
             "inference_config.POLYNOMIAL_FEATURES": ["no", 5, 10, 15],
@@ -246,87 +257,59 @@ SEARCH_SPACES = {
             "inference_config.POLYNOMIAL_FEATURES": UniformChoice("no", DiscreteUniform(1, 20, 1)),
             "inference_config.ENABLE_GPU_PREPROCESSING": [True],
         },
-        "best": {
-            "n_estimators": [32],
-        },
-        "best_2_6": {
-            "n_estimators": [4],
-        },
-        "best_2_5": {
-            "n_estimators": [2],
-        },
     },
     "tabicl": {
         "default": {
+            "n_estimators": [8],
+        },
+        "best": {
+            "n_estimators": [8],
+        },
+        "tune_default": {
             "n_estimators": [4, 8, 16],
             "softmax_temperature": [0.75, 0.8, 0.9, 0.95, 1],
             "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
             "average_logits": [True, False],
         },
-        "good": {
+        "tune_good": {
             "n_estimators": [1, 4, 8, 16, 32],
             "softmax_temperature": Uniform(0.7, 1.1),
             "average_logits": [True, False],
             "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
         },
-        "best": {
-            "n_estimators": [32],
-        },
     },
     "limix": {
         "default": {
-            "softmax_temperature": Uniform(0.7, 1.1),
-        },
-        "best": {
             "softmax_temperature": [0.9],
         },
     },
     "orion": {
         "default": {
-            "n_estimators": [1, 2, 4, 8, 16, 32],
-            "softmax_temperature": Uniform(0.7, 1.1),
-            "norm_methods": ["power", "quantile", "quantile_rtdl", "robust"],
-            "average_logits": [True, False],
-        },
-        "bix": {
-            "n_estimators": [1, 2],
-            "softmax_temperature": Uniform(0.7, 1.1),
-        },
-        "best": {
             "n_estimators": [32],
         },
     },
-    "mitra": {
-        "default": {
-            "n_estimators": [1, 2, 4],
-            "shuffle_classes": [True, False],
-            "shuffle_features": [True, False],
-            "use_random_transforms": [True, False],
-        },
-        "best": {
-            "n_estimators": [8],
-        },
-    },
     "tabfm": {
-        "default": {
+        "tune_default": {
             "n_estimators": [1, 2],
             "softmax_temperature": Uniform(0.7, 1.1),
         },
-        "best": {
+        "default": {
             "n_estimators": [4],
         },
     },
     "tabswift": {
         "default": {
-            # could be extended!
-            "n_estimators": [4, 8, 16, 32],
-        },
-        "best": {
             "n_estimators": [32],
+        },
+        "tune_default": {
+            "n_estimators": [4, 8, 16, 32],
         },
     },
     "exaone": {
-        "best": {"ensemble_count": [8]},
+        "default": {"ensemble_count": [8]},
+    },
+    "causilo": {
+        "default": {"n_estimators": [8]},
     },
 }
 
@@ -384,9 +367,13 @@ _COMMON_REGISTRY = {
         default_params={"size": "16M"},
         search_spaces=SEARCH_SPACES["limix"],
     ),
-    "mitra": ModelSpec(MITRA_ADAPTER, search_spaces=SEARCH_SPACES["mitra"]),
+    "limix-2": ModelSpec(
+        LIMIX_V2_ADAPTER,
+        search_spaces=SEARCH_SPACES["limix"],
+    ),
     "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=SEARCH_SPACES["tabswift"]),
     "exaone": ModelSpec(EXAONE_ADAPTER, search_spaces=SEARCH_SPACES["exaone"]),
+    "causilo": ModelSpec(CAUSILO_ADAPTER, search_spaces=SEARCH_SPACES["causilo"]),
 }
 
 MODEL_REGISTRY_CLS = {

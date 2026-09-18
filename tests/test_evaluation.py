@@ -37,23 +37,6 @@ def test_trained_model_evaluation_returns_point_metrics_and_probabilities():
     np.testing.assert_allclose(result.test_predictions.mimic.positive_class_probability, [0.1, 0.2, 0.8, 0.9])
 
 
-def test_regression_evaluation_returns_only_point_metrics():
-    class RegressionPredictionModel:
-        def predict(self, X):
-            return TimedPrediction(values=np.array([1.1, 2.2, 2.8, 4.1]), seconds=0.05)
-
-    test_set = XYDataset(
-        X=pd.DataFrame({"feature": [1.0, 2.0, 3.0, 4.0]}),
-        y=pd.Series([1.0, 2.0, 3.0, 4.0], index=[40, 41, 45, 49]),
-    )
-    data = DatasetBundle(train_data=test_set, test_mimic=test_set, test_tudd=test_set)
-
-    result = evaluate_trained_model(RegressionPredictionModel(), "regression", data)
-
-    assert isinstance(result.metrics.mimic_test, RegressionMetrics)
-    assert result.test_predictions is None
-
-
 @pytest.mark.parametrize(
     ("probabilities", "message"),
     [

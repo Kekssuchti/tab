@@ -28,6 +28,8 @@ training:
     preprocessing:
       imputer:
         imputation_method: mean
+      scaler_encoder:
+        type: standardization
     tuning:
       method: optuna
       search_space: good

@@ -31,7 +31,7 @@ ADAPTER_MODULES = {
 CLASSIFICATION_MODELS = [name for name in model_registry.MODEL_REGISTRY_CLS]
 LIGHTWEIGHT_REGRESSION_MODELS = ["xgboost", "tabswift"]
 # Models whose adapters hard-require a CUDA/HIP device and cannot run on CPU.
-GPU_ONLY_MODELS = {"limix-2m", "limix-16m", "mitra", "tabfm"}
+GPU_ONLY_MODELS = {"limix-2m", "limix-16m", "tabfm"}
 
 
 @pytest.mark.parametrize("removed_field", ["task_type", "params"])

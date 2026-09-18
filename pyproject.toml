@@ -1,15 +1,14 @@
 [project]
 name = "tab"
-version = "0.1.0"
+version = "1.1.0"
 description = "Add your description here"
 requires-python = "== 3.12.13"
 dependencies = [
     "numpy>2.2,<2.4",
     "pandas>=2.2",
-    "torch==2.9.1; sys_platform == 'linux'",
-    "torchvision>=0.20.1; sys_platform == 'linux'",
-    "pytorch-triton-rocm>=3.1.0; sys_platform == 'linux'",
-    "triton-rocm>=3.6.0; sys_platform == 'linux'",
+    # ROCm 10.0.0 user space comes from AMD's own index; only use gfx1100
+    "torch[device-gfx1100]==2.13.0+rocm10.0.0; sys_platform == 'linux'",
+    "torchvision[device-gfx1100]==0.28.0+rocm10.0.0; sys_platform == 'linux'",
     "marimo>=0.23.9",
     "tabpfn>=8.1.0",
     "tabpfn-extensions[interpretability]==0.5.0",
@@ -18,7 +17,6 @@ dependencies = [
     "pydantic>=2.13.4",
     "python-json-logger>=4.1.0",
     "tabicl>=2.1.1",
-    "autogluon-tabular[mitra]==1.5.0",
     "scipy",
     "scikit-learn",
     "xgboost",
@@ -38,28 +36,33 @@ dependencies = [
     "ruff>=0.15.22",
     "dtale>=3.22.0",
     "exaonetabular",
+    "causilo>=1.0.2",
+    "nvtx>=0.2.16", # for limix
 ]
 
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-rocm" },
+    { index = "amd-rocm" },
 ]
 torchvision = [
-    { index = "pytorch-rocm" },
-]
-pytorch-triton-rocm = [
-    { index = "pytorch-rocm" },
-]
-triton-rocm = [
-    { index = "pytorch-rocm", marker = "sys_platform == 'linux'" },
+    { index = "amd-rocm" },
 ]
 tabfm = { path = "external/tabfm", editable = true }
 exaonetabular = { git = "https://github.com/LGAI-Research/EXAONE-Tabular.git" }
 
+# Without `unsafe-first-match` the AMD mirror
+# would win for shared packages such as numpy (we dont want that, only for rocm)
+[tool.uv]
+index-strategy = "unsafe-first-match"
+
 [[tool.uv.index]]
-name = "pytorch-rocm"
-url = "https://download.pytorch.org/whl/rocm6.4"
-explicit = true
+name = "pypi"
+url = "https://pypi.org/simple"
+
+[[tool.uv.index]]
+name = "amd-rocm"
+url = "https://stable.repo.amd.com/rocm/whl-next/"
+default = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -18,6 +18,7 @@ cache/
 run_results/
 mlflow**.db
 mlartifacts/
+mlartifacts_fs/
 mlruns/
 data/raw
 data/filtered

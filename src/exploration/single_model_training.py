@@ -64,8 +64,7 @@ def _():
     # Training sources are always origins; the target selects normal/readmission files.
     TARGET = "mortality"
     TRAIN_ON = (
-        ("mimic", 1.0),
-        ("tudd", 2500),
+        ("tudd", 1.0),
     )
 
     TEST_SETS = ("mimic", "tudd")
@@ -80,10 +79,10 @@ def _():
     }
     DATASET_SCALER = {"type": "none"}
 
-    MODEL_NAME = "tabpfn-3.5-fast"
+    MODEL_NAME = "limix-2"
 
     MODEL_PARAMS = {
-        "n_estimators": [2, 4, 8, 16, 32],
+        "softmax_temperature": [0.9],
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None
@@ -152,7 +151,13 @@ def _(
     )
     task_type = dataset_task_for_target(TARGET).task_type
     random_states = RandomStates.from_seed(RANDOM_STATE)
-    return dataset_params, model_config, model_param_sets, random_states, task_type
+    return (
+        dataset_params,
+        model_config,
+        model_param_sets,
+        random_states,
+        task_type,
+    )
 
 
 @app.cell
@@ -307,6 +312,7 @@ def _(evaluation_table, mo, speed_table):
             evaluation_table,
         ]
     )
+    return
 
 
 @app.cell
@@ -316,6 +322,7 @@ def _(TEST_SETS, speed_table):
         speeds = " / ".join(f"{round(row[f'rows_per_second_{dataset}']):,}" for dataset in TEST_SETS)
         latex_line = f"{row['model']} & {params_s} & {row['fit_time_s']:.2f} & {speeds} " + r"\\"
         print(latex_line)
+    return
 
 
 if __name__ == "__main__":
