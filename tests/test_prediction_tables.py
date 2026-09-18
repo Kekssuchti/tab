@@ -42,7 +42,7 @@ def _predictions(
 def test_prediction_snapshot_accumulates_wider_generations_and_validates_hashes(tmp_path):
     accumulator = _accumulator()
     accumulator.add("model", _predictions())
-    accumulator.write_csvs(tmp_path)
+    accumulator.write(tmp_path)
     first = load_prediction_snapshot(tmp_path)
 
     accumulator.add(
@@ -52,11 +52,10 @@ def test_prediction_snapshot_accumulates_wider_generations_and_validates_hashes(
             tudd_probability=(0.2, 0.5, 0.5, 0.8),
         ),
     )
-    paths = accumulator.write_csvs(tmp_path)
+    accumulator.write(tmp_path)
     second = load_prediction_snapshot(tmp_path)
 
     assert accumulator.model_instance_ids == ("model", "model__1")
-    assert {path.name for path in paths} == {"mimic.csv", "tudd.csv"}
     assert (tmp_path / PREDICTION_MANIFEST_FILENAME).exists()
     assert first.generation_id != second.generation_id
     assert second.model_instance_ids == ("model", "model__1")
@@ -89,7 +88,7 @@ def test_prediction_tables_reject_nonpositional_source_ids():
         positive_class_probability=predictions.mimic.positive_class_probability,
     )
 
-    with pytest.raises(TypeError, match="integer row positions"):
+    with pytest.raises(TypeError, match="integer source-row positions"):
         _accumulator().add(
             "model",
             FinalTestPredictions(mimic=patient_like_ids, tudd=predictions.tudd),
@@ -99,7 +98,7 @@ def test_prediction_tables_reject_nonpositional_source_ids():
 def test_prediction_snapshot_rejects_torn_csv_generation(tmp_path):
     accumulator = _accumulator()
     accumulator.add("model", _predictions())
-    accumulator.write_csvs(tmp_path)
+    accumulator.write(tmp_path)
     mimic_path = tmp_path / "mimic.csv"
     mimic_path.write_text(mimic_path.read_text(encoding="utf-8") + chr(10), encoding="utf-8")
 
@@ -117,7 +116,7 @@ def test_prediction_table_add_is_atomic_when_test_identity_changes():
         positive_class_probability=mismatched.tudd.positive_class_probability,
     )
 
-    with pytest.raises(ValueError, match="IDs or labels changed"):
+    with pytest.raises(ValueError, match="test set changed"):
         accumulator.add(
             "other",
             FinalTestPredictions(mimic=mismatched.mimic, tudd=mismatched_tudd),

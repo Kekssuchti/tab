@@ -1,11 +1,7 @@
 import pytest
 
-from src.schemas.metrics import ClassificationMetrics, RegressionMetrics, calculate_metric_diff
-from tests.factories import (
-    bootstrap_classification_metrics,
-    bootstrap_regression_metrics,
-    classification_metrics,
-)
+from src.schemas.metrics import RegressionMetrics, calculate_metric_diff
+from tests.factories import classification_metrics
 
 
 def _regression(*, r2: float = 0.9, mae: float = 0.1, mse: float = 0.2, rmse: float = 0.3) -> RegressionMetrics:
@@ -37,32 +33,9 @@ def test_calculate_metric_diff_subtracts_regression_metrics():
     assert result.rmse == pytest.approx(0.15)
 
 
-def test_calculate_metric_diff_unwraps_bootstrap_classification():
-    result = calculate_metric_diff(
-        bootstrap_classification_metrics(0.8),
-        bootstrap_classification_metrics(0.2),
-    )
-
-    assert isinstance(result, ClassificationMetrics)
-    assert result.accuracy == pytest.approx(0.6)
-
-
-def test_calculate_metric_diff_unwraps_bootstrap_regression():
-    result = calculate_metric_diff(
-        bootstrap_regression_metrics(_regression(r2=0.9)),
-        bootstrap_regression_metrics(_regression(r2=0.3)),
-    )
-
-    assert isinstance(result, RegressionMetrics)
-    assert result.r2 == pytest.approx(0.6)
-
-
 def test_calculate_metric_diff_rejects_mismatched_metric_types():
-    with pytest.raises(ValueError, match="same type"):
+    with pytest.raises(TypeError, match="same metric type"):
         calculate_metric_diff(classification_metrics(), _regression())
-
-    with pytest.raises(ValueError, match="same type"):
-        calculate_metric_diff(bootstrap_classification_metrics(0.8), classification_metrics(0.2))
 
 
 def test_calculate_metric_diff_reports_none_when_auc_is_unavailable():

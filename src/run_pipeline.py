@@ -1,6 +1,5 @@
 import argparse
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from src.classes.experiment_suite import ExperimentSuite
 from src.classes.pipeline import Pipeline
@@ -9,11 +8,11 @@ from src.mlflow.mlflow_logger import MLflowPipelineLogger
 from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.suite_schemas import SuiteRunResult
 from src.utils.config_io import (
-    dump_pipeline_config,
     load_experiment_suite_config,
     load_pipeline_config,
 )
 from src.utils.logger import logger
+from src.utils.prediction_metrics import evaluate_classification_models
 
 
 def run_pipeline(config_path: str | Path):
@@ -28,10 +27,10 @@ def run_pipeline(config_path: str | Path):
 
 def run_pipeline_params(
     pipeline_config: PipelineConfig,
+    *,
     config_path: str | Path | None = None,
 ):
-    resolved_config_path = Path(config_path) if config_path is not None else None
-    mlflow_logger = MLflowPipelineLogger() if pipeline_config.mlflow.enabled else None
+    mlflow_logger = MLflowPipelineLogger(config_path) if pipeline_config.mlflow.enabled else None
     pipeline = Pipeline(pipeline_config)
 
     def log_completed_model(partial_result, model_run):
@@ -41,22 +40,27 @@ def run_pipeline_params(
             pipeline_config,
             partial_result,
             model_run,
-            config_path=resolved_config_path,
-            prediction_tables=pipeline.prediction_tables,
+            pipeline.prediction_tables,
         )
 
     result = pipeline.run(on_model_complete=log_completed_model)
 
     if mlflow_logger is not None:
+        classification_evaluation = None
+        if pipeline.prediction_tables:
+            try:
+                classification_evaluation = evaluate_classification_models(pipeline.prediction_tables.frames())
+            except Exception:  # noqa: BLE001 - the notebook can recover from the saved predictions
+                logger.exception("Post-pipeline metric calculation failed; prediction CSVs remain available")
         try:
             mlflow_logger.log_pipeline_summary(
                 pipeline_config,
                 result,
-                config_path=resolved_config_path,
-                prediction_tables=pipeline.prediction_tables,
+                pipeline.prediction_tables,
+                classification_evaluation,
             )
         except Exception:  # noqa: BLE001 - tracking must not invalidate completed model work
-            logger.exception("Final MLflow summary logging failed; returning completed pipeline result")
+            logger.exception("Final MLflow logging failed; returning completed pipeline result")
 
     return result
 
@@ -75,18 +79,9 @@ def run_suite(config_path: str | Path, *, dry_run: bool = False):
         logger.info(summary)
 
     results = []
-    with TemporaryDirectory() as temp_dir_name:
-        temp_dir = Path(temp_dir_name)
-        for variant in summary.config_variants:
-            logger.info(f"Running variant {variant.variant_id}")
-            concrete_config_path = temp_dir / f"{variant.variant_id}.yaml"
-            dump_pipeline_config(variant.pipeline_config, concrete_config_path)
-            results.append(
-                run_pipeline_params(
-                    variant.pipeline_config,
-                    config_path=concrete_config_path,
-                )
-            )
+    for variant in summary.config_variants:
+        logger.info(f"Running variant {variant.variant_id}")
+        results.append(run_pipeline_params(variant.pipeline_config))
 
     suite_result = SuiteRunResult(
         suite_name=suite_params.name,

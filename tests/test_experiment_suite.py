@@ -85,7 +85,7 @@ def test_experiment_suite_rejects_invalid_override_path(tmp_path):
         suite.expand()
 
 
-def test_run_suite_dry_run_and_execution_use_concrete_configs(
+def test_run_suite_dry_run_and_execution_use_expanded_configs(
     tmp_path,
     monkeypatch,
     capsys,
@@ -96,11 +96,11 @@ def test_run_suite_dry_run_and_execution_use_concrete_configs(
     _write_suite_config(suite_path)
     calls = []
 
-    def _fake_run_pipeline_params(params, *, config_path=None):
+    def _fake_run_pipeline_params(params):
         calls.append(
             {
                 "fraction": params.dataset.train_on[0].fraction,
-                "config_text": config_path.read_text(encoding="utf-8"),
+                "run_id": params.run_id,
             }
         )
         return SimpleNamespace(run_id=params.run_id)
@@ -120,8 +120,7 @@ def test_run_suite_dry_run_and_execution_use_concrete_configs(
 
     assert len(result.results) == 3
     assert [call["fraction"] for call in calls] == [500, 1000, 1500]
-    assert "fraction: 500" in calls[0]["config_text"]
-    assert "run_id: base-run_training-size_fraction-500" in calls[0]["config_text"]
+    assert calls[0]["run_id"] == "base-run_training-size_fraction-500"
 
 
 def test_override_range_values_include_stop_on_float_steps():

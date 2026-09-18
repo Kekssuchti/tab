@@ -5,9 +5,6 @@ from src.classes.data_registry import dataset_task_for_target
 from src.classes.dataset import Dataset
 from src.classes.trainer import Trainer
 from src.schemas.base_schemas import TaskType
-from src.schemas.metrics import (
-    FinalTestMetrics,
-)
 from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.run_records import (
     ModelEvaluationRecord,
@@ -64,20 +61,13 @@ class Pipeline:
             model_start_time = perf_counter()
             tr = None
             mr = None
-            captured_predictions = []
             failure_stage = "training_evaluation"
             try:
-                tr = trainer.train_evaluate_model(
-                    model_config,
-                    data,
-                    on_test_predictions=captured_predictions.append,
-                )
+                outcome = trainer.train_evaluate_model(model_config, data)
+                tr = outcome.result
                 mr = self._model_result_from_training_result(tr)
-                if captured_predictions:
-                    try:
-                        self.prediction_tables.add(model_instance_id, captured_predictions[0])
-                    except Exception:  # noqa: BLE001 - persistence must not invalidate model evaluation
-                        logger.exception(f"Could not accumulate test predictions for {model_instance_id}; continuing")
+                self.prediction_tables.add(model_instance_id, outcome.test_predictions)
+
                 logger.info(f"Model {model_instance_id} trained and evaluated successfully")
             except Exception as exc:  # noqa: BLE001 - one model's failure must not abort the run
                 logger.exception(f"Model {model_config.name} failed during {failure_stage}; continuing")
@@ -153,8 +143,8 @@ class Pipeline:
             return None
 
         test_metrics = tuning_result.final_test_metrics
-        mimic_metrics = test_metrics.mimic_test.metrics
-        tudd_metrics = test_metrics.tudd_test.metrics
+        mimic_metrics = test_metrics.mimic_test
+        tudd_metrics = test_metrics.tudd_test
         test_results = (
             TestSetEvaluationRecord(
                 "mimic",
@@ -170,12 +160,7 @@ class Pipeline:
         return ModelEvaluationRecord(
             model_name=training_result.model_name,
             test_results=test_results,
-            final_test_metrics=FinalTestMetrics(
-                mimic_test=mimic_metrics,
-                mimic_prediction_time=test_metrics.mimic_prediction_time,
-                tudd_test=tudd_metrics,
-                tudd_prediction_time=test_metrics.tudd_prediction_time,
-            ),
+            final_test_metrics=test_metrics,
             fit_time=training_result.fit_time,
         )
 

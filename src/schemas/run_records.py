@@ -1,48 +1,15 @@
 from dataclasses import dataclass, field
-from typing import Any, Generic, TypeAlias, TypeVar
+from typing import Any
 
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetSummary
-from src.schemas.metrics import (
-    BootstrapClassificationMetrics,
-    BootstrapFinalTestMetrics,
-    BootstrapRegressionMetrics,
-    ClassificationMetrics,
-    FinalTestMetrics,
-    RegressionMetrics,
-)
+from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics, RegressionMetrics
 from src.schemas.training_schemas import ScoringMethod, TuningMethod
-
-MetricT = TypeVar("MetricT", ClassificationMetrics, RegressionMetrics)
-ConfidenceMetricT = TypeVar(
-    "ConfidenceMetricT",
-    BootstrapClassificationMetrics,
-    BootstrapRegressionMetrics,
-)
 
 
 @dataclass
-class FoldRecord(Generic[MetricT]):
-    """
-    Validation metrics for one candidate on one CV fold.
-
-    ---
-    Attributes:
-        candidate_index: int
-            Index of the tuned candidate.
-
-        fold_index: int
-            Cross-validation fold index.
-
-        metrics: ClassificationMetrics or RegressionMetrics
-            Metrics measured on the validation fold.
-
-        time: float
-            Fit and validation time for the fold, in seconds.
-
-        model_params: dict
-            Model parameters used by the candidate.
-    """
+class FoldRecord[MetricT: (ClassificationMetrics, RegressionMetrics)]:
+    """Validation metrics for one candidate on one CV fold."""
 
     candidate_index: int
     fold_index: int
@@ -52,31 +19,12 @@ class FoldRecord(Generic[MetricT]):
 
 
 @dataclass
-class TuningRecord(Generic[MetricT, ConfidenceMetricT]):
-    """
-    Result of tuning one model.
-
-    ---
-    Attributes:
-        best_params: dict
-            Parameters selected by tuning.
-
-        scoring: str
-            Metric used to rank candidates.
-
-        final_test_metrics: BootstrapFinalTestMetrics
-            Bootstrapped final-test metrics from the fully trained model.
-
-        fold_results: list of FoldRecord, default=[]
-            Per-fold validation records.
-
-        method: {"grid", "optuna"}, default="optuna"
-            Tuning method used.
-    """
+class TuningRecord[MetricT: (ClassificationMetrics, RegressionMetrics)]:
+    """Candidate selection plus the final model's held-out point metrics."""
 
     best_params: dict[str, Any]
     scoring: ScoringMethod
-    final_test_metrics: BootstrapFinalTestMetrics[ConfidenceMetricT]
+    final_test_metrics: FinalTestMetrics[MetricT]
     fold_results: list[FoldRecord[MetricT]] = field(default_factory=list)
     method: TuningMethod = "optuna"
 
@@ -86,39 +34,14 @@ class TuningRecord(Generic[MetricT, ConfidenceMetricT]):
 
 
 @dataclass
-class ModelTrainingResult(Generic[MetricT, ConfidenceMetricT]):
-    """
-    Result of fitting a single model, optionally after tuning.
-
-    ---
-    Attributes:
-        model_name: str
-            Registered model name.
-
-        task_type: {"classification", "regression"}
-            Prediction task type.
-
-        tuned: bool
-            Whether hyperparameter tuning was run.
-
-        fit_time: float
-            Final fit time in seconds.
-
-        tuning_result: TuningRecord or None, default=None
-            Tuning result when tuning was run.
-
-        error: str or None, default=None
-            Error message when training failed.
-
-        failure_stage: str or None, default=None
-            Pipeline stage where failure occurred.
-    """
+class ModelTrainingResult[MetricT: (ClassificationMetrics, RegressionMetrics)]:
+    """Result of fitting and evaluating one model."""
 
     model_name: str
     task_type: TaskType
     tuned: bool
     fit_time: float
-    tuning_result: TuningRecord[MetricT, ConfidenceMetricT] | None = None
+    tuning_result: TuningRecord[MetricT] | None = None
     error: str | None = None
     failure_stage: str | None = None
 
@@ -127,28 +50,13 @@ class ModelTrainingResult(Generic[MetricT, ConfidenceMetricT]):
         return self.error is None
 
 
-ClassificationModelTrainingResult: TypeAlias = ModelTrainingResult[
-    ClassificationMetrics, BootstrapClassificationMetrics
-]
-RegressionModelTrainingResult: TypeAlias = ModelTrainingResult[RegressionMetrics, BootstrapRegressionMetrics]
+type ClassificationModelTrainingResult = ModelTrainingResult[ClassificationMetrics]
+type RegressionModelTrainingResult = ModelTrainingResult[RegressionMetrics]
 
 
 @dataclass(frozen=True)
-class TestSetEvaluationRecord(Generic[MetricT]):
-    """
-    Evaluation result for one held-out test set.
-
-    ---
-    Attributes:
-        dataset_name: str
-            Name of the evaluated test dataset.
-
-        metrics: ClassificationMetrics
-            Classification metrics for the test set.
-
-        predict_time: float
-            Prediction time in seconds.
-    """
+class TestSetEvaluationRecord[MetricT: (ClassificationMetrics, RegressionMetrics)]:
+    """Point metrics and prediction time for one held-out dataset."""
 
     dataset_name: str
     metrics: MetricT
@@ -156,24 +64,8 @@ class TestSetEvaluationRecord(Generic[MetricT]):
 
 
 @dataclass(frozen=True)
-class ModelEvaluationRecord(Generic[MetricT]):
-    """
-    Evaluation result for one trained model.
-
-    ---
-    Attributes:
-        model_name: str
-            Registered model name.
-
-        test_results: tuple of TestSetEvaluationRecord
-            Per-test-set evaluation records.
-
-        final_test_metrics: FinalTestMetrics
-            Combined MIMIC and TUDD final-test metrics.
-
-        fit_time: float
-            Final model fit time in seconds.
-    """
+class ModelEvaluationRecord[MetricT: (ClassificationMetrics, RegressionMetrics)]:
+    """Point evaluation for one fully trained model."""
 
     model_name: str
     test_results: tuple[TestSetEvaluationRecord[MetricT], ...]
@@ -189,29 +81,16 @@ class ModelEvaluationRecord(Generic[MetricT]):
         return {result.dataset_name: result.metrics for result in self.test_results}
 
 
-ClassificationModelEvaluationRecord: TypeAlias = ModelEvaluationRecord[ClassificationMetrics]
-RegressionModelEvaluationRecord: TypeAlias = ModelEvaluationRecord[RegressionMetrics]
+type ClassificationModelEvaluationRecord = ModelEvaluationRecord[ClassificationMetrics]
+type RegressionModelEvaluationRecord = ModelEvaluationRecord[RegressionMetrics]
 
 
 @dataclass(frozen=True)
-class ModelRunRecord(Generic[MetricT, ConfidenceMetricT]):
-    """
-    Training and evaluation record for one model instance.
-
-    ---
-    Attributes:
-        model_instance_id: str
-            Unique identifier for this model within the run.
-
-        training_result: ModelTrainingResult
-            Training result for the model.
-
-        evaluation: ModelEvaluationRecord or None
-            Evaluation result, or None when training failed.
-    """
+class ModelRunRecord[MetricT: (ClassificationMetrics, RegressionMetrics)]:
+    """Training and point-evaluation record for one model instance."""
 
     model_instance_id: str
-    training_result: ModelTrainingResult[MetricT, ConfidenceMetricT]
+    training_result: ModelTrainingResult[MetricT]
     evaluation: ModelEvaluationRecord[MetricT] | None
 
     @property
@@ -223,30 +102,14 @@ class ModelRunRecord(Generic[MetricT, ConfidenceMetricT]):
         return self.training_result.succeeded
 
 
-ClassificationModelRunRecord: TypeAlias = ModelRunRecord[ClassificationMetrics, BootstrapClassificationMetrics]
-RegressionModelRunRecord: TypeAlias = ModelRunRecord[RegressionMetrics, BootstrapRegressionMetrics]
-ModelRunFamily: TypeAlias = ClassificationModelRunRecord | RegressionModelRunRecord
+type ClassificationModelRunRecord = ModelRunRecord[ClassificationMetrics]
+type RegressionModelRunRecord = ModelRunRecord[RegressionMetrics]
+type ModelRunFamily = ClassificationModelRunRecord | RegressionModelRunRecord
 
 
 @dataclass(frozen=True)
 class PipelineRunRecord:
-    """
-    Complete result record for one pipeline run.
-
-    ---
-    Attributes:
-        run_id: str
-            Pipeline run identifier.
-
-        dataset_summary: DatasetSummary
-            Summary of datasets used by the run.
-
-        model_runs: tuple of ModelRunRecord
-            Training and evaluation records for all model instances.
-
-        total_time: float
-            Total pipeline runtime in seconds.
-    """
+    """Complete in-memory record for one pipeline run."""
 
     run_id: str
     dataset_summary: DatasetSummary

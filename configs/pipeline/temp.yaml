@@ -17,6 +17,9 @@ dataset:
 
 training:
   - name: logistic-regression
+    preprocessing:
+      imputer:
+        imputation_method: mean
     tuning:
       method: optuna
       search_space: good

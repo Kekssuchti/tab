@@ -5,11 +5,12 @@ import pandas as pd
 
 from src.classes import pipeline as pipeline_module
 from src.classes.pipeline import Pipeline
+from src.classes.trainer import TrainingOutcome
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
-from src.schemas.metrics import BootstrapFinalTestMetrics
+from src.schemas.metrics import FinalTestMetrics
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 from src.utils.prediction_tables import BinaryTestPredictions, FinalTestPredictions
-from tests.factories import bootstrap_classification_metrics, classification_metrics
+from tests.factories import classification_metrics
 
 
 def _test_set(labels, signal=None):
@@ -50,10 +51,10 @@ def _tuned_training_result(model_name: str) -> ModelTrainingResult:
         tuning_result=TuningRecord(
             best_params={},
             scoring="accuracy",
-            final_test_metrics=BootstrapFinalTestMetrics(
-                mimic_test=bootstrap_classification_metrics(1.0),
+            final_test_metrics=FinalTestMetrics(
+                mimic_test=classification_metrics(1.0),
                 mimic_prediction_time=0.1,
-                tudd_test=bootstrap_classification_metrics(0.0),
+                tudd_test=classification_metrics(0.0),
                 tudd_prediction_time=0.2,
             ),
             fold_results=[FoldRecord(0, 0, classification_metrics(1.0), 0.0, {})],
@@ -88,11 +89,12 @@ def _build_pipeline(monkeypatch, train_fn):
         def validate_training_data(self, X_train, y_train):
             pass
 
-        def train_evaluate_model(self, model_params, data, *, on_test_predictions=None):
+        def train_evaluate_model(self, model_params, data):
             result = train_fn(model_params)
-            if result.tuning_result is not None and on_test_predictions is not None:
-                on_test_predictions(_final_test_predictions())
-            return result
+            return TrainingOutcome(
+                result=result,
+                test_predictions=_final_test_predictions() if result.tuning_result is not None else None,
+            )
 
     monkeypatch.setattr(pipeline_module, "Trainer", FakeTrainer)
 

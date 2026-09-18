@@ -4,11 +4,8 @@ Centralizes the metric and pipeline-result builders that were previously
 copy-pasted across the observability, trainer, and pipeline tests.
 """
 
-from dataclasses import replace
-
 import numpy as np
 
-from src.mlflow.observation import MetricLog
 from src.schemas.dataset_schemas import (
     ClassificationTargetSummary,
     DatasetFileSummary,
@@ -18,14 +15,7 @@ from src.schemas.dataset_schemas import (
     RegressionTargetSummary,
     Target,
 )
-from src.schemas.metrics import (
-    BootstrapClassificationMetrics,
-    BootstrapFinalTestMetrics,
-    BootstrapRegressionMetrics,
-    ClassificationMetrics,
-    FinalTestMetrics,
-    RegressionMetrics,
-)
+from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics, RegressionMetrics
 from src.schemas.pipeline_schemas import MLflowConfig, PipelineConfig
 from src.schemas.run_records import (
     FoldRecord,
@@ -52,55 +42,14 @@ def classification_metrics(value: float = 1.0) -> ClassificationMetrics:
     )
 
 
-def bootstrap_classification_metrics(
-    value: float,
-    *,
-    lower: float | None = None,
-    upper: float | None = None,
-) -> BootstrapClassificationMetrics:
-    lower = value if lower is None else lower
-    upper = value if upper is None else upper
-    return BootstrapClassificationMetrics(
-        metrics=classification_metrics(value),
-        ci_95_roc_auc_lower=lower,
-        ci_95_roc_auc_upper=upper,
-        ci_95_prc_auc_lower=lower,
-        ci_95_prc_auc_upper=upper,
-        ci_95_f1_lower=lower,
-        ci_95_f1_upper=upper,
-        ci_95_accuracy_lower=lower,
-        ci_95_accuracy_upper=upper,
-        ci_95_sensitivity_lower=lower,
-        ci_95_sensitivity_upper=upper,
-        ci_95_precision_lower=lower,
-        ci_95_precision_upper=upper,
-        n_bootstrap=5000,
-    )
-
-
-def bootstrap_regression_metrics(metrics: RegressionMetrics) -> BootstrapRegressionMetrics:
-    return BootstrapRegressionMetrics(
-        metrics=metrics,
-        ci_95_r2_lower=metrics.r2 - 0.1,
-        ci_95_r2_upper=metrics.r2 + 0.1,
-        ci_95_mae_lower=metrics.mae - 0.1,
-        ci_95_mae_upper=metrics.mae + 0.1,
-        ci_95_mse_lower=metrics.mse - 0.1,
-        ci_95_mse_upper=metrics.mse + 0.1,
-        ci_95_rmse_lower=metrics.rmse - 0.1,
-        ci_95_rmse_upper=metrics.rmse + 0.1,
-        n_bootstrap=5000,
-    )
-
-
 def tuning_result() -> TuningRecord:
     return TuningRecord(
         best_params={"C": 1.0},
         scoring="accuracy",
-        final_test_metrics=BootstrapFinalTestMetrics(
-            mimic_test=bootstrap_classification_metrics(0.95, lower=0.9, upper=1.0),
+        final_test_metrics=FinalTestMetrics(
+            mimic_test=classification_metrics(0.95),
             mimic_prediction_time=0.03,
-            tudd_test=bootstrap_classification_metrics(0.95, lower=0.9, upper=1.0),
+            tudd_test=classification_metrics(0.95),
             tudd_prediction_time=0.04,
         ),
         fold_results=[
@@ -247,40 +196,18 @@ def failed_result() -> PipelineRunRecord:
     )
 
 
-def bootstrap_result() -> PipelineRunRecord:
-    result = pipeline_result(tuned=True)
-    bootstrap_metrics = bootstrap_classification_metrics(0.85, lower=0.75, upper=0.95)
-    training_result = result.model_runs[0].training_result
-    tuning = replace(
-        training_result.tuning_result,
-        final_test_metrics=BootstrapFinalTestMetrics(
-            mimic_test=bootstrap_metrics,
-            mimic_prediction_time=0.03,
-            tudd_test=bootstrap_metrics,
-            tudd_prediction_time=0.04,
-        ),
-    )
-    model_run = replace(
-        result.model_runs[0],
-        training_result=replace(training_result, tuning_result=tuning),
-    )
-    return replace(result, model_runs=(model_run,))
-
-
 def regression_result(*, tuned: bool = True) -> PipelineRunRecord:
     mimic_metrics = RegressionMetrics(r2=0.8, mae=0.2, mse=0.1, rmse=0.3)
     tudd_metrics = RegressionMetrics(r2=0.6, mae=0.4, mse=0.3, rmse=0.5)
     tuning = None
     if tuned:
-        mimic_bootstrap = RegressionMetrics(r2=0.75, mae=0.25, mse=0.15, rmse=0.35)
-        tudd_bootstrap = RegressionMetrics(r2=0.55, mae=0.45, mse=0.35, rmse=0.55)
         tuning = TuningRecord(
             best_params={"alpha": 0.5},
             scoring="rmse",
-            final_test_metrics=BootstrapFinalTestMetrics(
-                mimic_test=bootstrap_regression_metrics(mimic_bootstrap),
+            final_test_metrics=FinalTestMetrics(
+                mimic_test=mimic_metrics,
                 mimic_prediction_time=0.03,
-                tudd_test=bootstrap_regression_metrics(tudd_bootstrap),
+                tudd_test=tudd_metrics,
                 tudd_prediction_time=0.04,
             ),
             fold_results=[FoldRecord(0, 0, mimic_metrics, 0.01, {"alpha": 0.5})],
@@ -313,7 +240,3 @@ def regression_result(*, tuned: bool = True) -> PipelineRunRecord:
         model_runs=(ModelRunRecord("linear-regression", training_result, evaluation),),
         total_time=0.5,
     )
-
-
-def metric_value(metrics: tuple[MetricLog, ...], name: str) -> float:
-    return next(metric.value for metric in metrics if metric.name == name)

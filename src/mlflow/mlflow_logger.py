@@ -1,346 +1,273 @@
 from __future__ import annotations
 
+import json
+import logging
+import platform
 import sys
-import warnings
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import asdict
+from functools import cache
 from importlib import metadata
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import yaml
+
 import mlflow
 from mlflow.entities import Run
-from mlflow.evaluation import Evaluation, log_evaluations
+from src.classes.data_registry import dataset_task_for_target
 from src.config import config
-from src.mlflow.observation import (
-    EvaluationLog,
-    RunObservation,
-    assemble_pipeline_observation,
-    table_rows_to_columns,
-)
-from src.mlflow.serialization import (
-    JsonObject,
-    artifact_manifest,
-    canonical_json,
-    cv_result_to_dict,
-    pipeline_config_to_dict,
-    pipeline_result_to_dict,
-)
 from src.mlflow.tracking_contract import (
+    ARTIFACT_ACTIVE_LOG,
+    ARTIFACT_BOOTSTRAP_METRICS,
+    ARTIFACT_CLASSIFICATION_METRICS,
     ARTIFACT_CONFIG,
+    ARTIFACT_CONFIG_YAML,
     ARTIFACT_CV_RESULTS,
+    ARTIFACT_DATASET_SUMMARY,
     ARTIFACT_ENVIRONMENT,
-    ARTIFACT_EVALUATION_TABLE,
-    ARTIFACT_MANIFEST,
-    ARTIFACT_PIPELINE_RESULT,
+    ARTIFACT_PAIRWISE_WINS,
     ARTIFACT_TEST_PREDICTIONS,
+    METRIC_TRAIN_FIT_TIME,
+    RUN_TYPE_MODEL,
     RUN_TYPE_PIPELINE,
-    TAG_MODEL_MLFLOW_RUN_ID,
+    STATUS_SUCCESS,
+    TAG_MODEL_INSTANCE,
+    TAG_MODEL_INSTANCES,
+    TAG_MODEL_NAME,
     TAG_PIPELINE_ID,
     TAG_PIPELINE_MLFLOW_RUN_ID,
     TAG_RUN_TYPE,
+    TAG_STATUS,
+    TAG_TARGET,
+    TAG_TASK_TYPE,
     TAG_TRACKING_SCHEMA_VERSION,
+    TAG_TRAIN_SOURCES,
+    TAG_TRAINED_ON,
+    TAG_TRAINING_SIZE,
     TRACKING_SCHEMA_VERSION,
+    test_predict_time_metric,
+    test_score_metric,
 )
 from src.schemas.pipeline_schemas import PipelineConfig
 from src.schemas.run_records import ModelRunRecord, PipelineRunRecord
+from src.utils.prediction_metrics import ClassificationModelEvaluation
 from src.utils.prediction_tables import PREDICTION_MANIFEST_FILENAME, PredictionTableAccumulator
 
 
-@dataclass(frozen=True)
-class _ArtifactPaths:
-    config: Path
-    pipeline_result: Path
-    environment: Path
-    manifest: Path
-    cv_dir: Path
-    prediction_dir: Path
-
-
 class MLflowPipelineLogger:
+    """Log compact metrics, predictions, and reconstruction metadata."""
+
+    def __init__(self, source_config_path: str | Path | None = None) -> None:
+        self.source_config_path = Path(source_config_path) if source_config_path is not None else None
+
     def log_model_run(
         self,
         params: PipelineConfig,
         result: PipelineRunRecord,
         model_run: ModelRunRecord,
-        *,
-        config_path: Path | None = None,
-        prediction_tables: PredictionTableAccumulator | None = None,
+        prediction_tables: PredictionTableAccumulator,
     ) -> None:
-        mlflow.set_tracking_uri(params.mlflow.tracking_uri)
-        _set_experiment(params)
+        self._configure(params)
+        with self._parent_run(params) as parent:
+            self._log_parent_metadata(params, result)
+            self._log_prediction_tables(prediction_tables)
+            if model_run.evaluation is None:
+                return
 
-        observation = assemble_pipeline_observation(params, result)
-        model_observation = _find_child_observation(
-            observation,
-            model_run.model_instance_id,
-        )
-
-        with TemporaryDirectory() as temp_dir_name:
-            temp_dir = Path(temp_dir_name)
-            artifact_paths = self._write_artifacts(
-                params,
-                result,
-                temp_dir,
-                include_evaluation_table=False,
-                prediction_tables=prediction_tables,
-            )
-
-            with self._start_or_resume_pipeline_run(
-                params,
-                observation,
-                artifact_paths,
-                config_path,
-            ) as pipeline_run:
-                self._log_model_runs(
-                    (model_observation,),
-                    pipeline_mlflow_run_id=pipeline_run.info.run_id,
+            with mlflow.start_run(run_name=model_run.model_instance_id, nested=True):
+                mlflow.set_tags(
+                    {
+                        TAG_RUN_TYPE: RUN_TYPE_MODEL,
+                        TAG_TRACKING_SCHEMA_VERSION: TRACKING_SCHEMA_VERSION,
+                        TAG_PIPELINE_MLFLOW_RUN_ID: parent.info.run_id,
+                        TAG_MODEL_NAME: model_run.model_name,
+                        TAG_MODEL_INSTANCE: model_run.model_instance_id,
+                        TAG_TARGET: params.dataset.target,
+                        TAG_TASK_TYPE: model_run.training_result.task_type,
+                        TAG_STATUS: STATUS_SUCCESS,
+                        **_training_tags(params),
+                    }
                 )
+                metrics = {METRIC_TRAIN_FIT_TIME: model_run.evaluation.fit_time}
+                for test_result in model_run.evaluation.test_results:
+                    metrics[test_predict_time_metric(test_result.dataset_name)] = test_result.predict_time
+                    metrics.update(
+                        {
+                            test_score_metric(test_result.dataset_name, metric): value
+                            for metric, value in test_result.metrics.scores.items()
+                        }
+                    )
+                mlflow.log_metrics(metrics)
 
     def log_pipeline_summary(
         self,
         params: PipelineConfig,
         result: PipelineRunRecord,
-        *,
-        config_path: Path | None = None,
-        prediction_tables: PredictionTableAccumulator | None = None,
+        prediction_tables: PredictionTableAccumulator,
+        classification_evaluation: ClassificationModelEvaluation | None,
     ) -> None:
-        mlflow.set_tracking_uri(params.mlflow.tracking_uri)
-        _set_experiment(params)
+        self._configure(params)
+        with self._parent_run(params):
+            self._log_parent_metadata(params, result)
+            self._log_prediction_tables(prediction_tables)
+            if classification_evaluation is not None:
+                self._log_classification_evaluation(classification_evaluation)
 
-        observation = assemble_pipeline_observation(params, result)
-        with TemporaryDirectory() as temp_dir_name:
-            temp_dir = Path(temp_dir_name)
-            artifact_paths = self._write_artifacts(
-                params,
-                result,
-                temp_dir,
-                include_evaluation_table=bool(observation.evaluations),
-                prediction_tables=prediction_tables,
+    def _configure(self, params: PipelineConfig) -> None:
+        mlflow.set_tracking_uri(params.mlflow.tracking_uri)
+        experiment = mlflow.MlflowClient().get_experiment_by_name(params.mlflow.experiment_name)
+        if experiment is None:
+            experiment_id = mlflow.create_experiment(
+                params.mlflow.experiment_name,
+                artifact_location=params.mlflow.artifact_location,
             )
-            with self._start_or_resume_pipeline_run(
-                params,
-                observation,
-                artifact_paths,
-                config_path,
-                include_evaluations=True,
-            ):
-                pass
+            mlflow.set_experiment(experiment_id=experiment_id)
+        else:
+            mlflow.set_experiment(experiment_name=params.mlflow.experiment_name)
 
     @contextmanager
-    def _start_or_resume_pipeline_run(
-        self,
-        params: PipelineConfig,
-        observation: RunObservation,
-        artifact_paths: _ArtifactPaths,
-        config_path: Path | None,
-        *,
-        include_evaluations: bool = False,
-    ):
-        existing_run = _find_pipeline_run(params)
-        if existing_run is None:
-            run_context = mlflow.start_run(run_name=observation.run_name)
-        else:
-            run_context = mlflow.start_run(run_id=existing_run.info.run_id)
+    def _parent_run(self, params: PipelineConfig):
+        existing = _find_pipeline_run(params)
+        context = (
+            mlflow.start_run(run_name=params.mlflow.run_name or params.run_id)
+            if existing is None
+            else mlflow.start_run(run_id=existing.info.run_id)
+        )
+        with context as run:
+            yield run
 
-        with run_context as pipeline_run:
-            parent_observation = replace(
-                observation,
-                evaluations=observation.evaluations if include_evaluations else (),
-            )
-            self._log_observation(parent_observation)
-            self._log_artifacts(artifact_paths, config_path)
-            yield pipeline_run
+    def _log_parent_metadata(self, params: PipelineConfig, result: PipelineRunRecord) -> None:
+        successful_models = [run.model_instance_id for run in result.model_runs if run.succeeded]
+        mlflow.set_tags(
+            {
+                TAG_RUN_TYPE: RUN_TYPE_PIPELINE,
+                TAG_TRACKING_SCHEMA_VERSION: TRACKING_SCHEMA_VERSION,
+                TAG_PIPELINE_ID: params.run_id,
+                TAG_TARGET: params.dataset.target,
+                TAG_TASK_TYPE: dataset_task_for_target(params.dataset.target).task_type,
+                TAG_MODEL_INSTANCES: ",".join(successful_models),
+                TAG_TRAINING_SIZE: str(result.dataset_summary.train.row_count),
+                **_training_tags(params),
+            }
+        )
+        mlflow.log_params(
+            {
+                "dataset.train.row_count": result.dataset_summary.train.row_count,
+                "dataset.test.mimic.row_count": result.dataset_summary.test_mimic.row_count,
+                "dataset.test.tudd.row_count": result.dataset_summary.test_tudd.row_count,
+            }
+        )
+        self._log_reconstruction_artifacts(params, result)
 
-    def _log_model_runs(
-        self,
-        model_runs: tuple[RunObservation, ...],
-        *,
-        pipeline_mlflow_run_id: str,
-    ) -> None:
-        for model_run in model_runs:
-            with mlflow.start_run(
-                run_name=model_run.run_name,
-                nested=True,
-            ) as active_run:
-                model_mlflow_run_id = active_run.info.run_id
-                self._log_observation(
-                    model_run,
-                    extra_tags={
-                        TAG_PIPELINE_MLFLOW_RUN_ID: pipeline_mlflow_run_id,
-                        TAG_MODEL_MLFLOW_RUN_ID: model_mlflow_run_id,
-                    },
+    def _log_reconstruction_artifacts(self, params: PipelineConfig, result: PipelineRunRecord) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config_path = root / ARTIFACT_CONFIG
+            config_yaml_path = root / ARTIFACT_CONFIG_YAML
+            dataset_summary_path = root / ARTIFACT_DATASET_SUMMARY
+            environment_path = root / ARTIFACT_ENVIRONMENT
+            config_path.write_text(json.dumps(params.model_dump(mode="json"), indent=2), encoding="utf-8")
+            if self.source_config_path is None:
+                config_yaml_path.write_text(
+                    yaml.safe_dump(params.model_dump(mode="json"), sort_keys=False),
+                    encoding="utf-8",
                 )
-                self._log_cv_candidate_runs(
-                    model_run.children,
-                    pipeline_mlflow_run_id=pipeline_mlflow_run_id,
-                    model_mlflow_run_id=model_mlflow_run_id,
+            else:
+                config_yaml_path.write_bytes(self.source_config_path.read_bytes())
+            dataset_summary_path.write_text(json.dumps(asdict(result.dataset_summary), indent=2), encoding="utf-8")
+            environment_path.write_text(json.dumps(_environment(), indent=2), encoding="utf-8")
+            mlflow.log_artifact(str(config_path))
+            mlflow.log_artifact(str(config_yaml_path))
+            mlflow.log_artifact(str(dataset_summary_path))
+            mlflow.log_artifact(str(environment_path))
+
+            cv_dir = root / ARTIFACT_CV_RESULTS
+            for model_run in result.model_runs:
+                tuning = model_run.training_result.tuning_result
+                if tuning is None:
+                    continue
+                cv_dir.mkdir(exist_ok=True)
+                payload = {
+                    "model_instance": model_run.model_instance_id,
+                    "model_name": model_run.model_name,
+                    "method": tuning.method,
+                    "scoring": tuning.scoring,
+                    "best_params": tuning.best_params,
+                    "folds": [
+                        {
+                            "candidate_index": fold.candidate_index,
+                            "fold_index": fold.fold_index,
+                            "model_params": fold.model_params,
+                            "metrics": fold.metrics.scores,
+                            "time": fold.time,
+                        }
+                        for fold in tuning.fold_results
+                    ],
+                }
+                (cv_dir / f"{model_run.model_instance_id}.json").write_text(
+                    json.dumps(payload, indent=2),
+                    encoding="utf-8",
                 )
+            if cv_dir.exists():
+                mlflow.log_artifacts(str(cv_dir), artifact_path=ARTIFACT_CV_RESULTS)
 
-    def _log_cv_candidate_runs(
-        self,
-        cv_runs: tuple[RunObservation, ...],
-        *,
-        pipeline_mlflow_run_id: str,
-        model_mlflow_run_id: str,
-    ) -> None:
-        for cv_run in cv_runs:
-            with mlflow.start_run(run_name=cv_run.run_name, nested=True):
-                self._log_observation(
-                    cv_run,
-                    extra_tags={
-                        TAG_PIPELINE_MLFLOW_RUN_ID: pipeline_mlflow_run_id,
-                        TAG_MODEL_MLFLOW_RUN_ID: model_mlflow_run_id,
-                    },
-                )
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+        active_log = config.dir_log / ARTIFACT_ACTIVE_LOG
+        if active_log.exists():
+            mlflow.log_artifact(str(active_log))
 
-    def _log_observation(
-        self,
-        observation: RunObservation,
-        *,
-        extra_tags: dict[str, str] | None = None,
-    ) -> None:
-        tags = observation.tags if extra_tags is None else observation.tags | extra_tags
-        mlflow.set_tags(tags)
-
-        for key, value in observation.params.items():
-            mlflow.log_param(key, value)
-        for metric in observation.metrics:
-            mlflow.log_metric(metric.name, metric.value, step=metric.step)
-
-        self._log_evaluations(observation)
-
-    def _log_evaluations(self, observation: RunObservation) -> None:
-        if not observation.evaluations:
+    def _log_prediction_tables(self, prediction_tables: PredictionTableAccumulator) -> None:
+        if not prediction_tables:
             return
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=FutureWarning)
-            log_evaluations(evaluations=[_make_mlflow_evaluation(evaluation) for evaluation in observation.evaluations])
-        mlflow.log_table(
-            data=table_rows_to_columns(observation.table_rows),
-            artifact_file=ARTIFACT_EVALUATION_TABLE,
-        )
-
-    def _write_artifacts(
-        self,
-        params: PipelineConfig,
-        result: PipelineRunRecord,
-        temp_dir: Path,
-        *,
-        include_evaluation_table: bool,
-        prediction_tables: PredictionTableAccumulator | None,
-    ) -> _ArtifactPaths:
-        config_path = temp_dir / ARTIFACT_CONFIG
-        result_path = temp_dir / ARTIFACT_PIPELINE_RESULT
-        environment_path = temp_dir / ARTIFACT_ENVIRONMENT
-        manifest_path = temp_dir / ARTIFACT_MANIFEST
-        cv_dir = temp_dir / ARTIFACT_CV_RESULTS
-        cv_dir.mkdir()
-        prediction_dir = temp_dir / ARTIFACT_TEST_PREDICTIONS
-        prediction_dir.mkdir()
-
-        config_path.write_text(canonical_json(pipeline_config_to_dict(params)), encoding="utf-8")
-        result_path.write_text(canonical_json(pipeline_result_to_dict(result)), encoding="utf-8")
-        environment_path.write_text(canonical_json(_environment_info()), encoding="utf-8")
-
-        for model_run in result.model_runs:
-            training_result = model_run.training_result
-            if training_result.tuning_result is None:
-                continue
-            cv_path = cv_dir / f"{model_run.model_instance_id}.json"
-            cv_path.write_text(
-                canonical_json(
-                    cv_result_to_dict(
-                        model_run.model_instance_id,
-                        training_result.task_type,
-                        training_result.tuning_result,
-                    )
-                ),
-                encoding="utf-8",
-            )
-
-        cv_result_names = tuple(sorted(path.name for path in cv_dir.iterdir()))
-        if prediction_tables is not None:
-            prediction_tables.write_csvs(prediction_dir)
-        prediction_names = tuple(sorted(path.name for path in prediction_dir.glob("*.csv")))
-        manifest_path.write_text(
-            canonical_json(
-                artifact_manifest(
-                    cv_result_names,
-                    include_evaluation_table=include_evaluation_table,
-                    test_prediction_names=prediction_names,
-                ).to_dict()
-            ),
-            encoding="utf-8",
-        )
-        return _ArtifactPaths(
-            config_path,
-            result_path,
-            environment_path,
-            manifest_path,
-            cv_dir,
-            prediction_dir,
-        )
-
-    def _log_artifacts(
-        self,
-        artifact_paths: _ArtifactPaths,
-        config_path: Path | None,
-    ) -> None:
-        mlflow.log_artifact(str(artifact_paths.config))
-        mlflow.log_artifact(str(artifact_paths.pipeline_result))
-        mlflow.log_artifact(str(artifact_paths.environment))
-
-        if any(artifact_paths.cv_dir.iterdir()):
-            mlflow.log_artifacts(str(artifact_paths.cv_dir), artifact_path=ARTIFACT_CV_RESULTS)
-        prediction_csvs = sorted(artifact_paths.prediction_dir.glob("*.csv"))
-        for prediction_csv in prediction_csvs:
+        with TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir) / ARTIFACT_TEST_PREDICTIONS
+            prediction_tables.write(directory)
+            for dataset in ("mimic", "tudd"):
+                mlflow.log_artifact(str(directory / f"{dataset}.csv"), artifact_path=ARTIFACT_TEST_PREDICTIONS)
             mlflow.log_artifact(
-                str(prediction_csv),
-                artifact_path=ARTIFACT_TEST_PREDICTIONS,
-            )
-        prediction_manifest = artifact_paths.prediction_dir / PREDICTION_MANIFEST_FILENAME
-        if prediction_manifest.exists():
-            # Upload after both CSVs so hashes identify a complete generation.
-            mlflow.log_artifact(
-                str(prediction_manifest),
+                str(directory / PREDICTION_MANIFEST_FILENAME),
                 artifact_path=ARTIFACT_TEST_PREDICTIONS,
             )
 
-        # Write the tracking manifest last so it marks a complete cumulative snapshot.
-        mlflow.log_artifact(str(artifact_paths.manifest))
+    def _log_classification_evaluation(self, evaluation: ClassificationModelEvaluation) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            metrics_path = root / ARTIFACT_CLASSIFICATION_METRICS
+            bootstrap_path = root / ARTIFACT_BOOTSTRAP_METRICS
+            evaluation.metrics.to_csv(metrics_path, index=False)
+            evaluation.bootstrap_scores.to_csv(bootstrap_path, index=False)
+            mlflow.log_artifact(str(metrics_path))
+            mlflow.log_artifact(str(bootstrap_path))
 
-        if config_path is not None and config_path.exists():
-            mlflow.log_artifact(str(config_path), artifact_path="config_source")
-
-        uv_lock = config.dir_root / "uv.lock"
-        if uv_lock.exists():
-            mlflow.log_artifact(str(uv_lock), artifact_path="environment")
-
-        log_path = config.dir_log / "active.log"
-        if log_path.exists():
-            mlflow.log_artifact(str(log_path), artifact_path="environment")
-
-
-def _make_mlflow_evaluation(evaluation: EvaluationLog) -> Evaluation:
-    return Evaluation(
-        inputs=evaluation.inputs,
-        outputs=evaluation.outputs,
-        targets=evaluation.targets,
-        metrics=evaluation.metrics,
-        tags=evaluation.tags,
-    )
+            pairwise_dir = root / ARTIFACT_PAIRWISE_WINS
+            pairwise_dir.mkdir()
+            for name, matrix in evaluation.pairwise_wins.items():
+                matrix.to_csv(pairwise_dir / f"{name}.csv")
+            mlflow.log_artifacts(str(pairwise_dir), artifact_path=ARTIFACT_PAIRWISE_WINS)
 
 
-def _find_child_observation(
-    observation: RunObservation,
-    run_name: str,
-) -> RunObservation:
-    for child in observation.children:
-        if child.run_name == run_name:
-            return child
-    raise ValueError(f"No MLflow observation found for model run {run_name!r}")
+@cache
+def _environment() -> dict[str, object]:
+    packages = {
+        name: distribution.version
+        for distribution in metadata.distributions()
+        if (name := distribution.metadata.get("Name"))
+    }
+    return {
+        "python": sys.version,
+        "platform": platform.platform(),
+        "packages": dict(sorted(packages.items(), key=lambda item: item[0].lower())),
+    }
+
+
+def _training_tags(params: PipelineConfig) -> dict[str, str]:
+    sources = [split.dataset for split in params.dataset.train_on]
+    return {
+        TAG_TRAINED_ON: sources[0] if len(sources) == 1 else "mixed",
+        TAG_TRAIN_SOURCES: ",".join(sources),
+    }
 
 
 def _find_pipeline_run(params: PipelineConfig) -> Run | None:
@@ -348,11 +275,10 @@ def _find_pipeline_run(params: PipelineConfig) -> Run | None:
     experiment = client.get_experiment_by_name(params.mlflow.experiment_name)
     if experiment is None:
         return None
-
     runs = client.search_runs(
         [experiment.experiment_id],
         filter_string=(
-            f"tags.{TAG_PIPELINE_ID} = '{_mlflow_filter_value(params.run_id)}' "
+            f"tags.{TAG_PIPELINE_ID} = '{params.run_id}' "
             f"and tags.{TAG_RUN_TYPE} = '{RUN_TYPE_PIPELINE}' "
             f"and tags.{TAG_TRACKING_SCHEMA_VERSION} = '{TRACKING_SCHEMA_VERSION}'"
         ),
@@ -360,35 +286,3 @@ def _find_pipeline_run(params: PipelineConfig) -> Run | None:
         order_by=["attributes.start_time ASC"],
     )
     return runs[0] if runs else None
-
-
-def _mlflow_filter_value(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("'", "\\'")
-
-
-def _set_experiment(params: PipelineConfig) -> None:
-    client = mlflow.MlflowClient()
-    experiment = client.get_experiment_by_name(params.mlflow.experiment_name)
-    if experiment is None:
-        experiment_id = client.create_experiment(
-            params.mlflow.experiment_name,
-            artifact_location=params.mlflow.artifact_location,
-        )
-        mlflow.set_experiment(experiment_id=experiment_id)
-        return
-
-    mlflow.set_experiment(experiment_name=params.mlflow.experiment_name)
-
-
-def _environment_info() -> JsonObject:
-    packages: JsonObject = {}
-    for package in ("mlflow", "numpy", "pandas", "scikit-learn", "xgboost"):
-        try:
-            packages[package] = metadata.version(package)
-        except metadata.PackageNotFoundError:
-            packages[package] = None
-
-    return {
-        "python": sys.version,
-        "packages": packages,
-    }
