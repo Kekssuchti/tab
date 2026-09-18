@@ -33,6 +33,7 @@ def _():
         ranking_correlation_table,
     )
     from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig
+    from src.schemas.pipeline_schemas import RandomStates
     from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 
     return (
@@ -40,6 +41,7 @@ def _():
         Dataset,
         DatasetConfig,
         ImputerConfig,
+        RandomStates,
         ScalerEncoderConfig,
         Trainer,
         comparison_summary,
@@ -160,6 +162,7 @@ def _(
     FORCE_REPREPROCESS,
     ImputerConfig,
     RUN_INTERPRETABILITY,
+    RandomStates,
     ScalerEncoderConfig,
     TARGET,
     TRAIN_ON,
@@ -182,17 +185,21 @@ def _(
         imputer=ImputerConfig(**DATASET_IMPUTER),
         scaler_encoder=ScalerEncoderConfig(**DATASET_SCALER),
     )
-    return dataset_config, task_type
+    # The per-run model seeds are injected through the model parameters below.
+    # These pipeline states only cover the dataset sample and the training path.
+    random_states = RandomStates.from_seed(DATASET_RANDOM_STATE)
+    return dataset_config, random_states, task_type
 
 
 @app.cell
-def _(Dataset, Trainer, dataset_config, task_type):
-    dataset = Dataset(dataset_config)
+def _(Dataset, Trainer, dataset_config, random_states, task_type):
+    dataset = Dataset(dataset_config, sample_seed=random_states.training_sample_seed)
     data = dataset.get_dataset()
     trainer = Trainer(
         task_type=task_type,
         default_imputer=dataset_config.imputer,
         default_scaler=dataset_config.scaler_encoder,
+        random_states=random_states,
         log_transform_target=dataset_config.log_transform_target,
     )
     return data, trainer
@@ -403,7 +410,6 @@ def _(
             ],
         ]
     )
-    return
 
 
 if __name__ == "__main__":

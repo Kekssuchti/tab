@@ -1,3 +1,11 @@
+random_states:
+  model_training_seed: 11
+  model_inference_seed: 11
+  cv_split_seed: 11
+  tuning_sampler_seed: 11
+  training_sample_seed: 11
+  evaluation_bootstrap_seed: 11
+
 dataset:
   target: mortality
   random_state: 11
@@ -26,11 +34,9 @@ training:
         learning_rate: [0.3]
         subsample: [1.0]
         n_jobs: [1]
-        random_state: [11]
       cv:
         n_splits: 2
         shuffle: true
-        random_state: 11
   - name: tabpfn-3
     tuning:
       method: grid
@@ -38,9 +44,7 @@ training:
       grid:
         n_estimators: [2]
         device: [cpu]
-        random_state: [11]
         show_progress_bar: [false]
       cv:
         n_splits: 2
         shuffle: true
-        random_state: 11

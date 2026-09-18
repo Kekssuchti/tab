@@ -6,6 +6,7 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import json
     import sys
     from pathlib import Path
     from tempfile import TemporaryDirectory
@@ -18,9 +19,11 @@ def _():
 
     from mlflow import MlflowClient
     from src.config import config
+    from src.mlflow.evaluation_recovery import add_run_metadata
     from src.mlflow.tracking_contract import (
         ARTIFACT_BOOTSTRAP_METRICS,
         ARTIFACT_CLASSIFICATION_METRICS,
+        ARTIFACT_CONFIG,
         ARTIFACT_PAIRWISE_WINS,
         ARTIFACT_TEST_PREDICTIONS,
         TAG_TASK_TYPE,
@@ -33,6 +36,7 @@ def _():
     return (
         ARTIFACT_BOOTSTRAP_METRICS,
         ARTIFACT_CLASSIFICATION_METRICS,
+        ARTIFACT_CONFIG,
         ARTIFACT_PAIRWISE_WINS,
         ARTIFACT_TEST_PREDICTIONS,
         MlflowClient,
@@ -41,7 +45,9 @@ def _():
         TAG_TRACKING_SCHEMA_VERSION,
         TRACKING_SCHEMA_VERSION,
         TemporaryDirectory,
+        add_run_metadata,
         config,
+        json,
         load_prediction_snapshot,
         mo,
         evaluate_classification_models,
@@ -96,7 +102,7 @@ def _(
     **Tracking URI:** {TRACKING_URI}  
     **Parent run ID:** {PIPELINE_MLFLOW_RUN_ID or "not set"}  
     **Bootstrap samples:** {N_BOOTSTRAP:,}  
-    **Random state:** {RANDOM_STATE}  
+    **Bootstrap seed:** read from the selected run's `config.json`, falling back to {RANDOM_STATE} for older runs  
     **Run enabled:** {RUN_RECOMPUTATION}  
     **Replace MLflow artifact:** {LOG_TO_MLFLOW}
     """)
@@ -106,6 +112,7 @@ def _(
 def _(
     ARTIFACT_BOOTSTRAP_METRICS,
     ARTIFACT_CLASSIFICATION_METRICS,
+    ARTIFACT_CONFIG,
     ARTIFACT_PAIRWISE_WINS,
     ARTIFACT_TEST_PREDICTIONS,
     LOG_TO_MLFLOW,
@@ -120,7 +127,9 @@ def _(
     TRACKING_SCHEMA_VERSION,
     TRACKING_URI,
     TemporaryDirectory,
+    add_run_metadata,
     evaluate_classification_models,
+    json,
     load_prediction_snapshot,
     mo,
 ):
@@ -143,19 +152,40 @@ def _(
             )
         )
         snapshot = load_prediction_snapshot(snapshot_dir)
+        logged_config_path = Path(
+            client.download_artifacts(
+                PIPELINE_MLFLOW_RUN_ID,
+                ARTIFACT_CONFIG,
+                dst_path=temp_dir,
+            )
+        )
+        logged_config = json.loads(logged_config_path.read_text(encoding="utf-8"))
+        # Reuse the bootstrap seed the run was produced with, so recomputed
+        # intervals and win matrices match the pipeline's own artifacts. Runs
+        # logged before seeds became configurable fall back to the default.
+        bootstrap_seed = logged_config.get("random_states", {}).get(
+            "evaluation_bootstrap_seed",
+            RANDOM_STATE,
+        )
         classification_evaluation = evaluate_classification_models(
             snapshot.tables,
             n_bootstrap=N_BOOTSTRAP,
-            random_state=RANDOM_STATE,
+            random_state=bootstrap_seed,
         )
 
+    plotting_metrics = classification_evaluation.metrics
     logged_artifacts = None
     if LOG_TO_MLFLOW:
+        plotting_metrics = add_run_metadata(
+            plotting_metrics,
+            client=client,
+            pipeline_run_id=PIPELINE_MLFLOW_RUN_ID,
+        )
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             metrics_path = root / ARTIFACT_CLASSIFICATION_METRICS
             bootstrap_path = root / ARTIFACT_BOOTSTRAP_METRICS
-            classification_evaluation.metrics.to_csv(metrics_path, index=False)
+            plotting_metrics.to_csv(metrics_path, index=False)
             classification_evaluation.bootstrap_scores.to_csv(bootstrap_path, index=False)
             client.log_artifact(PIPELINE_MLFLOW_RUN_ID, str(metrics_path))
             client.log_artifact(PIPELINE_MLFLOW_RUN_ID, str(bootstrap_path))
@@ -170,11 +200,11 @@ def _(
                 artifact_path=ARTIFACT_PAIRWISE_WINS,
             )
         logged_artifacts = f"{ARTIFACT_CLASSIFICATION_METRICS}, {ARTIFACT_BOOTSTRAP_METRICS}, {ARTIFACT_PAIRWISE_WINS}/"
-    return classification_evaluation, logged_artifacts, snapshot
+    return classification_evaluation, logged_artifacts, plotting_metrics, snapshot
 
 
 @app.cell
-def _(classification_evaluation, logged_artifacts, mo, snapshot):
+def _(classification_evaluation, logged_artifacts, mo, plotting_metrics, snapshot):
     mo.vstack(
         [
             mo.md(
@@ -184,7 +214,7 @@ def _(classification_evaluation, logged_artifacts, mo, snapshot):
                 MLflow artifacts: **{logged_artifacts or "not replaced"}**
                 """
             ),
-            classification_evaluation.metrics,
+            plotting_metrics,
             *(
                 mo.vstack([mo.md(f"### {name}"), matrix])
                 for name, matrix in classification_evaluation.pairwise_wins.items()

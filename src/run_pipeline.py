@@ -49,7 +49,10 @@ def run_pipeline_params(
         classification_evaluation = None
         if pipeline.prediction_tables:
             try:
-                classification_evaluation = evaluate_classification_models(pipeline.prediction_tables.frames())
+                classification_evaluation = evaluate_classification_models(
+                    pipeline.prediction_tables.frames(),
+                    random_state=pipeline_config.random_states.evaluation_bootstrap_seed,
+                )
             except Exception:  # noqa: BLE001 - the notebook can recover from the saved predictions
                 logger.exception("Post-pipeline metric calculation failed; prediction CSVs remain available")
         try:

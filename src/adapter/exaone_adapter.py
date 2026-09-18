@@ -4,8 +4,7 @@ import numpy as np
 from exaonetabular.classifier import EXAONETabularClassifier
 from exaonetabular.regressor import EXAONETabularRegressor
 
-from src.config import config
-from src.interfaces.model_interface import ModelAdapter, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
 from src.schemas.base_schemas import TaskType
 
 
@@ -13,11 +12,15 @@ class EXAONEAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "classification",
+        random_state: int | None = None,
+        inference_state: int | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
         self.task_type = task_type
-        default_kwargs = {"seed": config.seed, "device": "cuda"}
+        self.random_state = random_state
+        self.inference_state = inference_state
+        default_kwargs = {**seed_kwargs("seed", random_state), "device": "cuda"}
 
         self.kwargs = {**default_kwargs, **kwargs}
         self.model = self._load_model()

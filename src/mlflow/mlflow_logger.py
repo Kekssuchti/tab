@@ -11,6 +11,7 @@ from importlib import metadata
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import pandas as pd
 import yaml
 
 import mlflow
@@ -28,6 +29,7 @@ from src.mlflow.tracking_contract import (
     ARTIFACT_ENVIRONMENT,
     ARTIFACT_PAIRWISE_WINS,
     ARTIFACT_TEST_PREDICTIONS,
+    METRIC_TRAIN_CV_TIME,
     METRIC_TRAIN_FIT_TIME,
     RUN_TYPE_MODEL,
     RUN_TYPE_PIPELINE,
@@ -60,6 +62,7 @@ class MLflowPipelineLogger:
 
     def __init__(self, source_config_path: str | Path | None = None) -> None:
         self.source_config_path = Path(source_config_path) if source_config_path is not None else None
+        self._model_run_ids: dict[str, str] = {}
 
     def log_model_run(
         self,
@@ -75,7 +78,8 @@ class MLflowPipelineLogger:
             if model_run.evaluation is None:
                 return
 
-            with mlflow.start_run(run_name=model_run.model_instance_id, nested=True):
+            with mlflow.start_run(run_name=model_run.model_instance_id, nested=True) as nested_run:
+                self._model_run_ids[model_run.model_instance_id] = nested_run.info.run_id
                 mlflow.set_tags(
                     {
                         TAG_RUN_TYPE: RUN_TYPE_MODEL,
@@ -89,7 +93,11 @@ class MLflowPipelineLogger:
                         **_training_tags(params),
                     }
                 )
-                metrics = {METRIC_TRAIN_FIT_TIME: model_run.evaluation.fit_time}
+                tuning = model_run.training_result.tuning_result
+                metrics = {
+                    METRIC_TRAIN_CV_TIME: tuning.total_time if tuning is not None else 0.0,
+                    METRIC_TRAIN_FIT_TIME: model_run.evaluation.fit_time,
+                }
                 for test_result in model_run.evaluation.test_results:
                     metrics[test_predict_time_metric(test_result.dataset_name)] = test_result.predict_time
                     metrics.update(
@@ -108,11 +116,16 @@ class MLflowPipelineLogger:
         classification_evaluation: ClassificationModelEvaluation | None,
     ) -> None:
         self._configure(params)
-        with self._parent_run(params):
+        with self._parent_run(params) as parent:
             self._log_parent_metadata(params, result)
             self._log_prediction_tables(prediction_tables)
             if classification_evaluation is not None:
-                self._log_classification_evaluation(classification_evaluation)
+                self._log_classification_evaluation(
+                    classification_evaluation,
+                    params,
+                    result,
+                    parent,
+                )
 
     def _configure(self, params: PipelineConfig) -> None:
         mlflow.set_tracking_uri(params.mlflow.tracking_uri)
@@ -231,12 +244,25 @@ class MLflowPipelineLogger:
                 artifact_path=ARTIFACT_TEST_PREDICTIONS,
             )
 
-    def _log_classification_evaluation(self, evaluation: ClassificationModelEvaluation) -> None:
+    def _log_classification_evaluation(
+        self,
+        evaluation: ClassificationModelEvaluation,
+        params: PipelineConfig,
+        result: PipelineRunRecord,
+        parent: Run,
+    ) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             metrics_path = root / ARTIFACT_CLASSIFICATION_METRICS
             bootstrap_path = root / ARTIFACT_BOOTSTRAP_METRICS
-            evaluation.metrics.to_csv(metrics_path, index=False)
+            plotting_metrics = _plotting_metrics_frame(
+                evaluation.metrics,
+                params,
+                result,
+                parent,
+                self._model_run_ids,
+            )
+            plotting_metrics.to_csv(metrics_path, index=False)
             evaluation.bootstrap_scores.to_csv(bootstrap_path, index=False)
             mlflow.log_artifact(str(metrics_path))
             mlflow.log_artifact(str(bootstrap_path))
@@ -246,6 +272,61 @@ class MLflowPipelineLogger:
             for name, matrix in evaluation.pairwise_wins.items():
                 matrix.to_csv(pairwise_dir / f"{name}.csv")
             mlflow.log_artifacts(str(pairwise_dir), artifact_path=ARTIFACT_PAIRWISE_WINS)
+
+
+def _plotting_metrics_frame(
+    metrics: pd.DataFrame,
+    params: PipelineConfig,
+    result: PipelineRunRecord,
+    parent: Run,
+    model_run_ids: dict[str, str],
+) -> pd.DataFrame:
+    """Attach stable run, model, and timing metadata before writing the CSV."""
+    model_rows = []
+    for model_run in result.model_runs:
+        if model_run.evaluation is None:
+            continue
+        predict_times = {
+            test_result.dataset_name: test_result.predict_time
+            for test_result in model_run.evaluation.test_results
+        }
+        tuning = model_run.training_result.tuning_result
+        cv_time = tuning.total_time if tuning is not None else 0.0
+        model_rows.append(
+            {
+                "model_instance": model_run.model_instance_id,
+                "model_mlflow_run_id": model_run_ids.get(model_run.model_instance_id),
+                "model_name": model_run.model_name,
+                "cv_time": cv_time,
+                "fit_time": model_run.evaluation.fit_time,
+                "predict_time_mimic": predict_times.get("mimic"),
+                "predict_time_tudd": predict_times.get("tudd"),
+                "training_time": cv_time + model_run.evaluation.fit_time,
+                "total_time": cv_time + model_run.evaluation.total_time,
+            }
+        )
+
+    model_metadata = pd.DataFrame(model_rows)
+    missing_models = set(metrics["model_instance"]) - set(model_metadata["model_instance"])
+    if missing_models:
+        raise ValueError("Missing model metadata for: " + ", ".join(sorted(missing_models)))
+
+    frame = metrics.merge(model_metadata, on="model_instance", how="left", validate="many_to_one")
+    training_tags = _training_tags(params)
+    pipeline_columns = (
+        ("pipeline_mlflow_run_id", parent.info.run_id),
+        ("pipeline_id", params.run_id),
+        ("pipeline_run_name", parent.data.tags.get("mlflow.runName") or params.mlflow.run_name or params.run_id),
+        ("experiment_name", params.mlflow.experiment_name),
+        ("target", params.dataset.target),
+        ("task_type", dataset_task_for_target(params.dataset.target).task_type),
+        ("trained_on", training_tags[TAG_TRAINED_ON]),
+        ("train_sources", training_tags[TAG_TRAIN_SOURCES]),
+        ("training_size", result.dataset_summary.train.row_count),
+    )
+    for index, (column, value) in enumerate(pipeline_columns):
+        frame.insert(index, column, value)
+    return frame
 
 
 @cache

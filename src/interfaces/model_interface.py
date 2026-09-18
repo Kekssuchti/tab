@@ -30,12 +30,46 @@ def _prediction_array(values: Any) -> np.ndarray:
     return np.asarray(values)
 
 
+def seed_kwargs(seed_param: str | None, random_state: int | None) -> dict[str, Any]:
+    """Return the wrapped estimator's seed keyword, or nothing when unseeded.
+
+    Adapters merge the result into their default parameters, so a `None` seed
+    omits the keyword entirely instead of forcing the estimator into an
+    unseeded explicit state.
+    """
+    if seed_param is None or random_state is None:
+        return {}
+    return {seed_param: random_state}
+
+
 class ModelAdapter(ABC):
-    """Common interface for trainable tabular model adapters."""
+    """Common interface for trainable tabular model adapters.
+
+    Every adapter accepts the two pipeline seeds under the canonical keyword
+    names ``random_state`` and ``inference_state`` and maps them to whatever
+    keyword its wrapped estimator expects. Wrapped estimators disagree here
+    (scikit-learn, XGBoost, EBM, TabPFN, TabICL and TabSwift use
+    ``random_state``, Mitra, EXAONE and LimiX use ``seed``), so callers such as
+    the trainer never need to know the local name.
+
+    ---
+    Attributes:
+        random_state: int or None
+            Seed for the estimator the adapter constructs. It is forwarded to the
+            wrapped estimator, so it governs the randomness of fitting.
+
+        inference_state: int or None
+            Seed for randomness drawn while predicting. Adapters whose library
+            exposes a predict-time seed apply it; the rest keep it for
+            provenance, because their predictions only depend on the
+            construction seed.
+    """
 
     task_type: TaskType
     kwargs: dict
     model: Any
+    random_state: int | None
+    inference_state: int | None
 
     @abstractmethod
     def fit(self, X_train, y_train) -> float:
@@ -100,6 +134,8 @@ class PreprocessedModelAdapter(ModelAdapter):
         self.task_type = adapter.task_type
         self.kwargs = adapter.kwargs
         self.model = adapter.model
+        self.random_state = getattr(adapter, "random_state", None)
+        self.inference_state = getattr(adapter, "inference_state", None)
 
     def fit(self, X_train, y_train) -> float:
         start = timer()
@@ -132,6 +168,8 @@ class LogTargetModelAdapter(ModelAdapter):
         self.task_type = adapter.task_type
         self.kwargs = adapter.kwargs
         self.model = adapter.model
+        self.random_state = getattr(adapter, "random_state", None)
+        self.inference_state = getattr(adapter, "inference_state", None)
 
     def fit(self, X_train, y_train) -> float:
         targets = np.asarray(y_train, dtype=float)

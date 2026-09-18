@@ -5,8 +5,7 @@ from autogluon.tabular.models.mitra.sklearn_interface import (
     MitraRegressor,
 )
 
-from src.config import config
-from src.interfaces.model_interface import ModelAdapter, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
 from src.schemas.base_schemas import TaskType
 
 
@@ -14,16 +13,20 @@ class MitraAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "classification",
+        random_state: int | None = None,
+        inference_state: int | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
         self.task_type = task_type
+        self.random_state = random_state
+        self.inference_state = inference_state
         default_params = {
             "device": "cuda",
             "fine_tune": False,
             "fine_tune_steps": 0,
-            "seed": config.seed,
             "n_estimators": 1,
+            **seed_kwargs("seed", random_state),
         }
         self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()

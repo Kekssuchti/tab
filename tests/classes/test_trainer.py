@@ -9,6 +9,7 @@ from src.classes.trainer import Trainer
 from src.interfaces.model_interface import TimedPrediction
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.metrics import FinalTestMetrics
+from src.schemas.pipeline_schemas import RandomStates
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.training_schemas import CrossValidationConfig, ModelConfig, OptunaConfig, TuningConfig
 from src.utils import model_registry
@@ -27,6 +28,7 @@ def _preprocess_pipeline():
     return {
         "default_imputer": ImputerConfig(imputation_method="none"),
         "default_scaler": ScalerEncoderConfig(type="none"),
+        "random_states": RandomStates.from_seed(1),
     }
 
 
@@ -50,7 +52,7 @@ def _model_config(
         "method": method,
         "grid": grid,
         "scoring": scoring,
-        "cv": CrossValidationConfig(n_splits=n_splits, random_state=1),
+        "cv": CrossValidationConfig(n_splits=n_splits),
     }
     if search_space is not None:
         tuning_kwargs["search_space"] = search_space
@@ -327,6 +329,7 @@ def test_trainer_uses_model_specific_preprocessing_override():
         task_type="classification",
         default_imputer=ImputerConfig(imputation_method="none"),
         default_scaler=ScalerEncoderConfig(type="none"),
+        random_states=RandomStates.from_seed(1),
     )
 
     result = trainer.train_evaluate_model(
@@ -350,6 +353,7 @@ def test_trainer_encodes_categorical_columns_before_xgboost():
         task_type="classification",
         default_imputer=ImputerConfig(imputation_method="none"),
         default_scaler=ScalerEncoderConfig(type="none"),
+        random_states=RandomStates.from_seed(1),
     )
 
     result = trainer.train_evaluate_model(
@@ -403,7 +407,7 @@ def test_trainer_releases_adapter_when_fit_fails():
     model_config = ModelConfig(name="failing")
 
     class _Spec:
-        def create(self, task_type, params):
+        def create(self, task_type, params, *, random_state=None, inference_state=None):
             return _FitFailureAdapter()
 
     _FitFailureAdapter.releases = 0

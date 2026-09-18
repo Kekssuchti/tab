@@ -16,7 +16,7 @@ from src.schemas.dataset_schemas import (
     Target,
 )
 from src.schemas.metrics import ClassificationMetrics, FinalTestMetrics, RegressionMetrics
-from src.schemas.pipeline_schemas import MLflowConfig, PipelineConfig
+from src.schemas.pipeline_schemas import MLflowConfig, PipelineConfig, RandomStates
 from src.schemas.run_records import (
     FoldRecord,
     ModelEvaluationRecord,
@@ -71,6 +71,7 @@ def pipeline_config(
 ) -> PipelineConfig:
     return PipelineConfig(
         run_id=run_id,
+        random_states=RandomStates.from_seed(42),
         dataset={
             "target": target,
             "random_state": 42,

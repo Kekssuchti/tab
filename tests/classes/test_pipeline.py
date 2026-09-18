@@ -8,6 +8,7 @@ from src.classes.pipeline import Pipeline
 from src.classes.trainer import TrainingOutcome
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.metrics import FinalTestMetrics
+from src.schemas.pipeline_schemas import RandomStates
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 from src.utils.prediction_tables import BinaryTestPredictions, FinalTestPredictions
 from tests.factories import classification_metrics
@@ -80,7 +81,7 @@ def _build_pipeline(monkeypatch, train_fn):
             )
 
     class FakeTrainer:
-        def __init__(self, task_type, default_imputer, default_scaler, log_transform_target):
+        def __init__(self, task_type, default_imputer, default_scaler, random_states, log_transform_target):
             self.task_type = task_type
 
         def validate_model_configs(self):
@@ -102,6 +103,7 @@ def _build_pipeline(monkeypatch, train_fn):
     pipeline.dataset = FakeDataset()
     pipeline.pipeline_config = SimpleNamespace(
         run_id="run",
+        random_states=RandomStates.from_seed(1),
         dataset=SimpleNamespace(target="mortality", imputer=None, scaler_encoder=None, log_transform_target=False),
         training=(
             SimpleNamespace(name="model-a"),

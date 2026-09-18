@@ -5,8 +5,7 @@ import numpy as np
 from tabpfn import TabPFNClassifier, TabPFNRegressor
 from tabpfn.classifier import ModelVersion
 
-from src.config import config
-from src.interfaces.model_interface import ModelAdapter, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
 from src.schemas.base_schemas import TaskType
 
 
@@ -15,15 +14,19 @@ class TabPFNAdapter(ModelAdapter):
         self,
         task_type: TaskType = "classification",
         version: ModelVersion = ModelVersion.V3,
+        random_state: int | None = None,
+        inference_state: int | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
         self.task_type = task_type
         self.version = version
+        self.random_state = random_state
+        self.inference_state = inference_state
         self.predict_batch_size = kwargs.pop("predict_batch_size", 2048)  # default no batching
         default_kwargs = {
             "fit_mode": "fit_with_cache",
-            "random_state": config.seed,
+            **seed_kwargs("random_state", random_state),
         }
         # override default kwargs with user-provided kwargs
         self.kwargs = self._normalize_kwargs({**default_kwargs, **kwargs})

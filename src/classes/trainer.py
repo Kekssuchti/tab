@@ -11,6 +11,7 @@ from src.classes.preprocessor import Preprocessor
 from src.interfaces.model_interface import LogTargetModelAdapter, ModelAdapter, PreprocessedModelAdapter
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import DatasetBundle
+from src.schemas.pipeline_schemas import RandomStates
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 from src.schemas.training_schemas import (
@@ -62,11 +63,13 @@ class Trainer:
         task_type: TaskType,
         default_imputer: ImputerConfig,
         default_scaler: ScalerEncoderConfig,
+        random_states: RandomStates,
         log_transform_target: bool = False,
     ) -> None:
         self.task_type = task_type
         self.default_imputer = default_imputer
         self.default_scaler = default_scaler
+        self.random_states = random_states
         self.log_transform_target = log_transform_target
 
     def train_evaluate_model(
@@ -90,8 +93,20 @@ class Trainer:
         model_params: dict[str, Any],
         X_train,
         y_train,
+        *,
+        random_state: int | None = None,
     ) -> tuple[ModelAdapter, float]:
-        adapter = model_spec.create(self.task_type, model_params)
+        """Fit one adapter with the configured model seeds.
+
+        `random_state` overrides the configured model training seed for callers
+        that steer every model individually, such as the interpretability runs.
+        """
+        adapter = model_spec.create(
+            self.task_type,
+            model_params,
+            random_state=self.random_states.model_training_seed if random_state is None else random_state,
+            inference_state=self.random_states.model_inference_seed,
+        )
         model = PreprocessedModelAdapter(
             adapter,
             self._build_preprocess_pipeline(model_config),
@@ -420,9 +435,8 @@ class Trainer:
             test_predictions=final_evaluation.test_predictions,
         )
 
-    @staticmethod
-    def _build_optuna_sampler(tuning):
-        seed = tuning.cv.random_state
+    def _build_optuna_sampler(self, tuning):
+        seed = self.random_states.tuning_sampler_seed
         if tuning.optuna.sampler == "tpe":
             return optuna.samplers.TPESampler(
                 seed=seed,
@@ -450,7 +464,7 @@ class Trainer:
         return cv_cls(
             n_splits=tuning.cv.n_splits,
             shuffle=tuning.cv.shuffle,
-            random_state=tuning.cv.random_state,
+            random_state=self.random_states.cv_split_seed,
         )
 
     def _build_cv_folds(self, tuning, X_train, y_train) -> list[tuple[np.ndarray, np.ndarray]]:

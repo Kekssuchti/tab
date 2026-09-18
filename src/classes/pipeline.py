@@ -25,7 +25,10 @@ class Pipeline:
     def __init__(self, pipeline_config: PipelineConfig):
         self.pipeline_config = pipeline_config
 
-        self.dataset = Dataset(pipeline_config.dataset)
+        self.dataset = Dataset(
+            pipeline_config.dataset,
+            sample_seed=pipeline_config.random_states.training_sample_seed,
+        )
         self.prediction_tables = PredictionTableAccumulator()
 
     def run(
@@ -44,6 +47,7 @@ class Pipeline:
             task_type=task_type,
             default_imputer=self.pipeline_config.dataset.imputer,
             default_scaler=self.pipeline_config.dataset.scaler_encoder,
+            random_states=self.pipeline_config.random_states,
             log_transform_target=self.pipeline_config.dataset.log_transform_target,
         )
 

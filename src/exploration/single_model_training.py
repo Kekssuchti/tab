@@ -22,16 +22,17 @@ def _():
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
+
     from src.classes.data_registry import dataset_task_for_target
     from src.classes.dataset import Dataset
     from src.classes.trainer import Trainer
     from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig
+    from src.schemas.pipeline_schemas import RandomStates
     from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
     from src.schemas.training_schemas import ModelConfig, TuningConfig
     from src.utils.evaluation_utils import evaluate_classification_predictions
     from src.utils.model_lifecycle import release_model
     from src.utils.model_registry import get_model_spec
-    from tabpfn.classifier import ModelVersion
 
     return (
         DataSplitConfig,
@@ -39,6 +40,7 @@ def _():
         DatasetConfig,
         ImputerConfig,
         ModelConfig,
+        RandomStates,
         ScalerEncoderConfig,
         Trainer,
         TuningConfig,
@@ -118,6 +120,7 @@ def _(
     MODEL_PREPROCESSING,
     ModelConfig,
     RANDOM_STATE,
+    RandomStates,
     ScalerEncoderConfig,
     TARGET,
     TRAIN_ON,
@@ -148,12 +151,13 @@ def _(
         tuning=TuningConfig(method="grid"),
     )
     task_type = dataset_task_for_target(TARGET).task_type
-    return dataset_params, model_config, model_param_sets, task_type
+    random_states = RandomStates.from_seed(RANDOM_STATE)
+    return dataset_params, model_config, model_param_sets, random_states, task_type
 
 
 @app.cell
-def _(Dataset, asdict, dataset_params, mo, pd):
-    dataset = Dataset(dataset_params)
+def _(Dataset, asdict, dataset_params, mo, pd, random_states):
+    dataset = Dataset(dataset_params, sample_seed=random_states.training_sample_seed)
     data = dataset.get_dataset()
     dataset_summary = dataset.summarize(data)
 
@@ -191,11 +195,12 @@ def _(Dataset, asdict, dataset_params, mo, pd):
 
 
 @app.cell
-def _(Trainer, dataset_params, task_type):
+def _(Trainer, dataset_params, random_states, task_type):
     trainer = Trainer(
         task_type=task_type,
         default_imputer=dataset_params.imputer,
         default_scaler=dataset_params.scaler_encoder,
+        random_states=random_states,
         log_transform_target=dataset_params.log_transform_target,
     )
     return (trainer,)
@@ -302,7 +307,6 @@ def _(evaluation_table, mo, speed_table):
             evaluation_table,
         ]
     )
-    return
 
 
 @app.cell
@@ -312,7 +316,6 @@ def _(TEST_SETS, speed_table):
         speeds = " / ".join(f"{round(row[f'rows_per_second_{dataset}']):,}" for dataset in TEST_SETS)
         latex_line = f"{row['model']} & {params_s} & {row['fit_time_s']:.2f} & {speeds} " + r"\\"
         print(latex_line)
-    return
 
 
 if __name__ == "__main__":

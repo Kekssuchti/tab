@@ -3,8 +3,7 @@ from timeit import default_timer as timer
 import numpy as np
 from tabicl import TabICLClassifier, TabICLRegressor
 
-from src.config import config
-from src.interfaces.model_interface import ModelAdapter, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
 from src.schemas.base_schemas import TaskType
 
 
@@ -12,10 +11,14 @@ class TabICLAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "classification",
+        random_state: int | None = None,
+        inference_state: int | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
         self.task_type = task_type
+        self.random_state = random_state
+        self.inference_state = inference_state
         self.predict_batch_size = kwargs.pop("predict_batch_size", 9999999)
         if self.predict_batch_size is not None and self.predict_batch_size < 1:
             raise ValueError("predict_batch_size must be at least 1")
@@ -26,7 +29,11 @@ class TabICLAdapter(ModelAdapter):
         n_estimators = kwargs.pop("n_estimators", 8)
         cache_type = "kv" if n_estimators <= 8 else "repr"
         kv_cache = kwargs.pop("kv_cache", cache_type)
-        default_kwargs = {"random_state": config.seed, "kv_cache": kv_cache, "n_estimators": n_estimators}
+        default_kwargs = {
+            **seed_kwargs("random_state", random_state),
+            "kv_cache": kv_cache,
+            "n_estimators": n_estimators,
+        }
 
         self.kwargs = {**default_kwargs, **kwargs}
         self.model = self._load_model()

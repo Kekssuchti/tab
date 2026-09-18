@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from external.tabfm.tabfm import TabFMClassifier, tabfm_v1_0_0_pytorch
-from src.interfaces.model_interface import ModelAdapter, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
 from src.schemas.base_schemas import TaskType
 
 
@@ -18,13 +18,17 @@ class TabfmAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "classification",
+        random_state: int | None = None,
+        inference_state: int | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
         self.task_type = task_type
+        self.random_state = random_state
+        self.inference_state = inference_state
         self.predict_batch_size = kwargs.pop("predict_batch_size", 99999999)
 
-        default_params = {"random_state": config.seed, "n_estimators": 1}
+        default_params = {**seed_kwargs("random_state", random_state), "n_estimators": 1}
         self.kwargs = {**default_params, **kwargs}
         self.model = self._load_model()
 

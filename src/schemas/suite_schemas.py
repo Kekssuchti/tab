@@ -51,7 +51,9 @@ class SuiteOverrideConfig(StrictConfig):
             Dot path to the pipeline config field being changed.
 
         values: tuple or None, default=None
-            Explicit values to test.
+            Explicit values to test. A dictionary value merges into the config
+            block it targets, so only the listed keys change and every other key
+            keeps the value from the base config.
 
         range: OverrideRangeConfig or None, default=None
             Numeric range of values to test.

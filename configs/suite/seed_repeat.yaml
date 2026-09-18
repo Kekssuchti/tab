@@ -1,0 +1,18 @@
+# Repeats one baseline with several seed realizations.
+#
+# Each entry is one realization: the model seed, the training subsample seed and
+# the cross-validation fold seed move together, so a realization redraws the
+# whole training procedure. The held-out train/test split (dataset.random_state)
+# and the evaluation bootstrap seed are deliberately not listed here: both stay
+# fixed, which keeps every realization evaluated on the same test sets and makes
+# confidence intervals and paired win matrices comparable across realizations.
+name: seed-repeat
+base_config: ../pipeline/tudd_baseline.yaml
+matrix:
+  - path: random_states
+    values:
+      - {model_training_seed: 1337, training_sample_seed: 1337, cv_split_seed: 1337}
+      - {model_training_seed: 1338, training_sample_seed: 1338, cv_split_seed: 1338}
+      - {model_training_seed: 1339, training_sample_seed: 1339, cv_split_seed: 1339}
+      - {model_training_seed: 1340, training_sample_seed: 1340, cv_split_seed: 1340}
+      - {model_training_seed: 1341, training_sample_seed: 1341, cv_split_seed: 1341}

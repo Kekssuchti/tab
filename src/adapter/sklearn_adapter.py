@@ -8,8 +8,7 @@ from interpret.glassbox import (
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from xgboost import XGBClassifier, XGBRegressor
 
-from src.config import config
-from src.interfaces.model_interface import ModelAdapter, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
 from src.schemas.base_schemas import TaskType
 
 
@@ -17,18 +16,17 @@ class LinearModelAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: TaskType = "regression",
+        random_state: int | None = None,
+        inference_state: int | None = None,
         **kwargs,
     ) -> None:
         self.task_type = task_type
-        default_params = (
-            {
-                "random_state": config.seed,
-                "penalty": "l2",
-            }
-            if task_type == "classification"
-            else {}
-        )
-        self.kwargs = {**default_params, **kwargs}
+        self.random_state = random_state
+        self.inference_state = inference_state
+        # Plain LinearRegression accepts no seed at all.
+        seed_param = "random_state" if task_type == "classification" else None
+        default_params = {"penalty": "l2"} if task_type == "classification" else {}
+        self.kwargs = {**seed_kwargs(seed_param, random_state), **default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):
@@ -50,11 +48,15 @@ class XGBoostAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",
+        random_state: int | None = None,
+        inference_state: int | None = None,
         **kwargs,
     ) -> None:
         self.task_type = task_type
-        default_params = {"random_state": config.seed, "eval_metric": "logloss"}
-        self.kwargs = {**default_params, **kwargs}
+        self.random_state = random_state
+        self.inference_state = inference_state
+        default_params = {"eval_metric": "logloss"}
+        self.kwargs = {**seed_kwargs("random_state", random_state), **default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):
@@ -77,14 +79,15 @@ class EBMAdapter(ModelAdapter):
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",
+        random_state: int | None = None,
+        inference_state: int | None = None,
         **kwargs,
     ) -> None:
         self.task_type = task_type
-        default_params = {
-            "random_state": config.seed,
-            "interactions": 0,
-        }
-        self.kwargs = {**default_params, **kwargs}
+        self.random_state = random_state
+        self.inference_state = inference_state
+        default_params = {"interactions": 0}
+        self.kwargs = {**seed_kwargs("random_state", random_state), **default_params, **kwargs}
         self.model = self._load_model()
 
     def _load_model(self):

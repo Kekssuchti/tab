@@ -31,6 +31,7 @@ ARTIFACT_CLASSIFICATION_METRICS = "prediction_metrics.csv"
 ARTIFACT_BOOTSTRAP_METRICS = "bootstrap_metrics.csv"
 ARTIFACT_PAIRWISE_WINS = "pairwise_wins"
 
+METRIC_TRAIN_CV_TIME = "train.cv_time"
 METRIC_TRAIN_FIT_TIME = "train.fit_time"
 
 
