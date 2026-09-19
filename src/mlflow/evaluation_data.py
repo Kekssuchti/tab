@@ -9,6 +9,7 @@ from mlflow import MlflowClient
 from mlflow.entities import Experiment, Run
 from mlflow.exceptions import MlflowException
 from src.mlflow.tracking_contract import (
+    ARTIFACT_BOOTSTRAP_METRICS,
     ARTIFACT_CLASSIFICATION_METRICS,
     RUN_TYPE_PIPELINE,
     TAG_MODEL_INSTANCES,
@@ -21,7 +22,6 @@ from src.mlflow.tracking_contract import (
     TAG_TRAINED_ON,
     TRACKING_SCHEMA_VERSION,
 )
-from src.schemas.training_schemas import LOWER_IS_BETTER_SCORING
 
 DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
 DEFAULT_EXPERIMENT_NAME = "tab"
@@ -113,7 +113,105 @@ def load_evaluation_data(
 
     combined = pd.concat(frames, ignore_index=True)
     combined["train_sources"] = combined["train_sources"].map(_parse_sources)
-    return _add_generalizability_losses(combined)
+    return combined
+
+
+def load_bootstrap_data(
+    experiment_names: str | Sequence[str] = DEFAULT_EXPERIMENT_NAME,
+    *,
+    pipeline_runs: str | Sequence[str] | None = None,
+    models: str | Sequence[str] | None = None,
+    tracking_uri: str = DEFAULT_TRACKING_URI,
+) -> pd.DataFrame:
+    """Load logged bootstrap metric scores in a model-long plotting format.
+
+    Each output row identifies one pipeline run, test dataset, metric,
+    bootstrap draw, and model instance. Model names are recovered from the
+    matching ``prediction_metrics.csv`` artifact rather than inferred from the
+    bootstrap column name. This keeps duplicate model instances unambiguous and
+    lets callers average aligned bootstrap IDs across repeated pipeline runs.
+    """
+    client = MlflowClient(tracking_uri=tracking_uri)
+    requested_runs = _selectors(pipeline_runs)
+    requested_models = _selectors(models)
+    frames = []
+
+    for experiment in _experiments(client, experiment_names):
+        for parent in _runs(client, experiment):
+            if requested_runs and not requested_runs.intersection(_run_selectors(parent)):
+                continue
+            try:
+                bootstrap_path = client.download_artifacts(parent.info.run_id, ARTIFACT_BOOTSTRAP_METRICS)
+                metrics_path = client.download_artifacts(parent.info.run_id, ARTIFACT_CLASSIFICATION_METRICS)
+            except MlflowException:
+                continue
+
+            bootstrap = pd.read_csv(Path(bootstrap_path))
+            metrics = pd.read_csv(Path(metrics_path))
+            _validate_plotting_frame(metrics, parent.info.run_id)
+            required = {"dataset", "metric", "bootstrap_id"}
+            missing = sorted(required - set(bootstrap.columns))
+            if missing:
+                raise ValueError(
+                    f"Run {parent.info.run_id} has an invalid {ARTIFACT_BOOTSTRAP_METRICS} artifact; "
+                    f"missing columns: {', '.join(missing)}"
+                )
+
+            identity = metrics[["model_instance", "model_name"]].drop_duplicates()
+            if identity.isna().any().any():
+                raise ValueError(f"Run {parent.info.run_id} has missing model identity metadata")
+            identity = identity.astype(str)
+            conflicting = identity.groupby("model_instance", dropna=False)["model_name"].nunique(dropna=False)
+            conflicting = conflicting[conflicting.ne(1)]
+            if not conflicting.empty:
+                raise ValueError(
+                    f"Run {parent.info.run_id} maps model instances to multiple model names: "
+                    + ", ".join(map(str, conflicting.index))
+                )
+            instance_to_name = identity.set_index("model_instance")["model_name"].astype(str)
+            model_columns = [column for column in bootstrap.columns if column not in required]
+            unknown_instances = sorted(set(model_columns) - set(instance_to_name.index.astype(str)))
+            if unknown_instances:
+                raise ValueError(
+                    f"Run {parent.info.run_id} has bootstrap columns without metric metadata: "
+                    + ", ".join(unknown_instances)
+                )
+
+            long = bootstrap.melt(
+                id_vars=["dataset", "metric", "bootstrap_id"],
+                value_vars=model_columns,
+                var_name="model_instance",
+                value_name="score",
+            )
+            long["model_name"] = long["model_instance"].map(instance_to_name)
+            if requested_models:
+                selected = long[["model_instance", "model_name"]].astype(str).isin(requested_models).any(axis=1)
+                long = long.loc[selected].copy()
+            if long.empty:
+                continue
+
+            metadata_columns = [
+                "pipeline_id",
+                "pipeline_run_name",
+                "target",
+                "task_type",
+                "trained_on",
+                "train_sources",
+                "training_size",
+            ]
+            metadata = metrics.iloc[0]
+            long.insert(0, "pipeline_mlflow_run_id", parent.info.run_id)
+            long.insert(1, "experiment_name", experiment.name)
+            for column in metadata_columns:
+                long[column] = metadata[column]
+            frames.append(long)
+
+    if not frames:
+        return pd.DataFrame()
+
+    combined = pd.concat(frames, ignore_index=True)
+    combined["train_sources"] = combined["train_sources"].map(_parse_sources)
+    return combined
 
 
 def _experiments(client: MlflowClient, names: str | Sequence[str]) -> list[Experiment]:
@@ -171,32 +269,3 @@ def _parse_sources(value: object) -> tuple[str, ...]:
     if pd.isna(value):
         return ()
     return tuple(filter(None, str(value).split(",")))
-
-
-def _add_generalizability_losses(frame: pd.DataFrame) -> pd.DataFrame:
-    metric_columns = [
-        column for column in ("roc_auc", "prc_auc", "f1", "accuracy", "sensitivity", "precision") if column in frame
-    ]
-    test_rows = frame["scope"].eq("test")
-    external = test_rows & frame["dataset"].ne(frame["trained_on"])
-    training = test_rows & frame["dataset"].eq(frame["trained_on"])
-    identity_columns = ["pipeline_mlflow_run_id", "model_instance"]
-
-    for metric in metric_columns:
-        loss = f"generalizability_loss_{metric}"
-        comparative = f"comparative_generalizability_loss_{metric}"
-        frame[loss] = float("nan")
-        frame[comparative] = float("nan")
-
-        training_scores = frame.loc[training].set_index(identity_columns)[metric]
-        external_index = pd.MultiIndex.from_frame(frame.loc[external, identity_columns])
-        reference = training_scores.reindex(external_index).to_numpy()
-        if metric in LOWER_IS_BETTER_SCORING:
-            frame.loc[external, loss] = reference - frame.loc[external, metric].to_numpy()
-            best = frame.loc[external].groupby(["target", "dataset"])[metric].transform("min")
-            frame.loc[external, comparative] = best - frame.loc[external, metric]
-        else:
-            frame.loc[external, loss] = frame.loc[external, metric].to_numpy() - reference
-            best = frame.loc[external].groupby(["target", "dataset"])[metric].transform("max")
-            frame.loc[external, comparative] = frame.loc[external, metric] - best
-    return frame

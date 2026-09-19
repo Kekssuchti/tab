@@ -110,9 +110,6 @@ MODEL_STYLES: dict[str, ModelStyle] = {
     "ebm": ModelStyle("#B3B3B3", "-", BASELINE_MARKER, "EBM"),
     "xgboost": ModelStyle("#222222", "-", BASELINE_MARKER, "XGBoost"),
     # Retained foundation models receive the strongest accessible colors.
-    "tabpfn-2.5": ModelStyle("#A6CEE3", "-", TFM_MARKER, "TabPFNv2.5"),
-    "tabpfn-2.6": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv2.6"),
-    "tabpfn-3": ModelStyle(PALETTE["blue"], "-", TFM_MARKER, "TabPFNv3"),
     "tabpfn-3.5": ModelStyle(PALETTE["blue"], "-", TFM_MARKER, "TabPFNv3.5"),
     "tabpfn-3.5-fast": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv3.5 Fast"),
     "tabicl-2": ModelStyle(PALETTE["orange"], "-", TFM_MARKER, "TabICLv2"),
@@ -120,6 +117,9 @@ MODEL_STYLES: dict[str, ModelStyle] = {
     "exaone": ModelStyle(PALETTE["purple"], "-", TFM_MARKER, "EXAONE"),
     "causilo": ModelStyle(PALETTE["red"], "-", TFM_MARKER, "Causilo"),
     # Legacy models keep stable but less prominent secondary colors.
+    "tabpfn-2.5": ModelStyle("#A6CEE3", "-", TFM_MARKER, "TabPFNv2.5"),
+    "tabpfn-2.6": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv2.6"),
+    "tabpfn-3": ModelStyle(PALETTE["blue"], "-", TFM_MARKER, "TabPFNv3"),
     "limix-2m": ModelStyle("#D5C4D8", "-", TFM_MARKER, "LimiX2M"),
     "limix-16m": ModelStyle("#A98BB5", "-", TFM_MARKER, "LimiX16M"),
     "mitra": ModelStyle("#8A7A00", "-", TFM_MARKER, "Mitra"),
