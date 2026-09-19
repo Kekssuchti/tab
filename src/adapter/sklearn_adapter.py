@@ -55,7 +55,7 @@ class XGBoostAdapter(ModelAdapter):
         self.task_type = task_type
         self.random_state = random_state
         self.inference_state = inference_state
-        default_params = {"eval_metric": "logloss"}
+        default_params = {"eval_metric": "logloss", "n_jobs": 6}
         self.kwargs = {**seed_kwargs("random_state", random_state), **default_params, **kwargs}
         self.model = self._load_model()
 
@@ -86,7 +86,7 @@ class EBMAdapter(ModelAdapter):
         self.task_type = task_type
         self.random_state = random_state
         self.inference_state = inference_state
-        default_params = {"interactions": 0}
+        default_params = {"interactions": 0, "n_jobs": 6}
         self.kwargs = {**seed_kwargs("random_state", random_state), **default_params, **kwargs}
         self.model = self._load_model()
 

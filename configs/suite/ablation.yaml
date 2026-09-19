@@ -1,5 +1,116 @@
-name: feature_scaler
-base_config: ../pipeline/tudd_baseline_no_preprocessing.yaml
+name: n_estimators
+base_config: ../pipeline/temp.yaml
 matrix:
-  - path: dataset.imputer.imputation_method
-    values: ["mean", "none", "median"]
+  # Replace the complete training list so all ensemble sizes move together in
+  # each run rather than producing a Cartesian product across models.
+  - path: training
+    values:
+      - - name: tabpfn-3.5
+          tuning: &tuning-1
+            method: grid
+            search_space: default
+            grid: { "n_estimators": [1] }
+            scoring: roc_auc
+        - name: tabpfn-3.5-fast
+          tuning: *tuning-1
+        - name: tabicl-2
+          tuning: *tuning-1
+        - name: tabfm
+          preprocessing:
+            imputer: { imputation_method: mean }
+          tuning: *tuning-1
+        - name: exaone
+          tuning:
+            method: grid
+            search_space: default
+            grid: { "ensemble_count": [1] }
+            scoring: roc_auc
+        - name: causilo
+          tuning: *tuning-1
+
+      - - name: tabpfn-3.5
+          tuning: &tuning-2
+            method: grid
+            search_space: default
+            grid: { "n_estimators": [2] }
+            scoring: roc_auc
+        - name: tabpfn-3.5-fast
+          tuning: *tuning-2
+        - name: tabicl-2
+          tuning: *tuning-2
+        - name: tabfm
+          preprocessing:
+            imputer: { imputation_method: mean }
+          tuning: *tuning-2
+        - name: exaone
+          tuning:
+            method: grid
+            search_space: default
+            grid: { "ensemble_count": [2] }
+            scoring: roc_auc
+        - name: causilo
+          tuning: *tuning-2
+
+      - - name: tabpfn-3.5
+          tuning: &tuning-4
+            method: grid
+            search_space: default
+            grid: { "n_estimators": [4] }
+            scoring: roc_auc
+        - name: tabpfn-3.5-fast
+          tuning: *tuning-4
+        - name: tabicl-2
+          tuning: *tuning-4
+        - name: tabfm
+          preprocessing:
+            imputer: { imputation_method: mean }
+          tuning: *tuning-4
+        - name: exaone
+          tuning:
+            method: grid
+            search_space: default
+            grid: { "ensemble_count": [4] }
+            scoring: roc_auc
+        - name: causilo
+          tuning: *tuning-4
+
+      - - name: tabpfn-3.5
+          tuning: &tuning-8
+            method: grid
+            search_space: default
+            grid: { "n_estimators": [8] }
+            scoring: roc_auc
+        - name: tabpfn-3.5-fast
+          tuning: *tuning-8
+        - name: tabicl-2
+          tuning: *tuning-8
+        - name: exaone
+          tuning:
+            method: grid
+            search_space: default
+            grid: { "ensemble_count": [8] }
+            scoring: roc_auc
+        - name: causilo
+          tuning: *tuning-8
+
+      - - name: tabpfn-3.5
+          tuning: &tuning-16
+            method: grid
+            search_space: default
+            grid: { "n_estimators": [16] }
+            scoring: roc_auc
+        - name: tabpfn-3.5-fast
+          tuning: *tuning-16
+        - name: tabicl-2
+          tuning: *tuning-16
+
+      - - name: tabpfn-3.5
+          tuning: &tuning-32
+            method: grid
+            search_space: default
+            grid: { "n_estimators": [32] }
+            scoring: roc_auc
+        - name: tabpfn-3.5-fast
+          tuning: *tuning-32
+        - name: tabicl-2
+          tuning: *tuning-32

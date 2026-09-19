@@ -263,7 +263,7 @@ SEARCH_SPACES = {
             "n_estimators": [8],
         },
         "best": {
-            "n_estimators": [8],
+            "n_estimators": [32],
         },
         "tune_default": {
             "n_estimators": [4, 8, 16],
@@ -306,10 +306,14 @@ SEARCH_SPACES = {
         },
     },
     "exaone": {
-        "default": {"ensemble_count": [8]},
+        "default": {
+            "ensemble_count": [8],
+        },
     },
     "causilo": {
-        "default": {"n_estimators": [8]},
+        "default": {
+            "n_estimators": [8],
+        },
     },
 }
 

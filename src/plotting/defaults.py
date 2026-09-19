@@ -113,9 +113,12 @@ MODEL_STYLES: dict[str, ModelStyle] = {
     "tabpfn-2.5": ModelStyle("#A6CEE3", "-", TFM_MARKER, "TabPFNv2.5"),
     "tabpfn-2.6": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv2.6"),
     "tabpfn-3": ModelStyle(PALETTE["blue"], "-", TFM_MARKER, "TabPFNv3"),
+    "tabpfn-3.5": ModelStyle(PALETTE["blue"], "-", TFM_MARKER, "TabPFNv3.5"),
+    "tabpfn-3.5-fast": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv3.5 Fast"),
     "tabicl-2": ModelStyle(PALETTE["orange"], "-", TFM_MARKER, "TabICLv2"),
     "tabfm": ModelStyle(PALETTE["green"], "-", TFM_MARKER, "TabFM"),
     "exaone": ModelStyle(PALETTE["purple"], "-", TFM_MARKER, "EXAONE"),
+    "causilo": ModelStyle(PALETTE["red"], "-", TFM_MARKER, "Causilo"),
     # Legacy models keep stable but less prominent secondary colors.
     "limix-2m": ModelStyle("#D5C4D8", "-", TFM_MARKER, "LimiX2M"),
     "limix-16m": ModelStyle("#A98BB5", "-", TFM_MARKER, "LimiX16M"),

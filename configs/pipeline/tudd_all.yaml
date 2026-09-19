@@ -12,7 +12,7 @@ dataset:
   train_size: 0.8
   train_on:
     - dataset: tudd
-      fraction: 1000
+      fraction: 1.0
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
@@ -24,72 +24,6 @@ dataset:
     knn_neighbors: 5
 
 training:
-  - name: tabpfn-3.5
-    tuning:
-      method: grid
-      search_space: default
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-
-  - name: tabpfn-3.5-fast
-    tuning:
-      method: grid
-      search_space: default
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-
-  - name: tabicl-2
-    tuning:
-      method: grid
-      search_space: default
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-
-  - name: limix-2
-    tuning:
-      method: grid
-      search_space: default
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-
-  - name: tabfm
-    preprocessing:
-      imputer:
-        imputation_method: mean
-    tuning:
-      method: grid
-      search_space: default
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-
-  - name: exaone
-    tuning:
-      method: grid
-      search_space: default
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-
-  - name: causilo
-    tuning:
-      method: grid
-      search_space: default
-      scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
-
   - name: logistic-regression
     preprocessing:
       imputer:
@@ -137,8 +71,65 @@ training:
         n_splits: 5
         shuffle: true
 
+  - name: tabpfn-3.5
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+
+  - name: tabpfn-3.5-fast
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+
+  - name: tabicl-2
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+
+  - name: tabfm
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+
+  - name: exaone
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+
+  - name: causilo
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+      cv:
+        n_splits: 5
+        shuffle: true
+
 mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tudd_all
+  experiment_name: tudd_baseline
