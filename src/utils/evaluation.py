@@ -6,7 +6,6 @@ from src.schemas.metrics import FinalTestMetrics
 from src.utils.classification_metrics import classification_metrics
 from src.utils.evaluation_utils import (
     classification_prediction_batch,
-    evaluate_regression_predictions,
 )
 from src.utils.prediction_tables import BinaryTestPredictions, FinalTestPredictions
 

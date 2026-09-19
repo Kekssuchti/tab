@@ -279,19 +279,23 @@ def _(
     run_manifest = global_rankings[
         ["run", "model_seed", "background_seed", "explanation_seed", "explainer_seed"]
     ].drop_duplicates(ignore_index=True)
-    stability_summary = rank_correlations[
-        rank_correlations["scope"] == "run stability"
-    ].groupby("comparison", as_index=False).agg(
-        median_rho=("spearman_rho", "median"),
-        minimum_rho=("spearman_rho", "min"),
-        maximum_rho=("spearman_rho", "max"),
+    stability_summary = (
+        rank_correlations[rank_correlations["scope"] == "run stability"]
+        .groupby("comparison", as_index=False)
+        .agg(
+            median_rho=("spearman_rho", "median"),
+            minimum_rho=("spearman_rho", "min"),
+            maximum_rho=("spearman_rho", "max"),
+        )
     )
-    agreement_summary = rank_correlations[
-        rank_correlations["scope"] == "model agreement"
-    ].groupby("comparison", as_index=False).agg(
-        median_rho=("spearman_rho", "median"),
-        minimum_rho=("spearman_rho", "min"),
-        maximum_rho=("spearman_rho", "max"),
+    agreement_summary = (
+        rank_correlations[rank_correlations["scope"] == "model agreement"]
+        .groupby("comparison", as_index=False)
+        .agg(
+            median_rho=("spearman_rho", "median"),
+            minimum_rho=("spearman_rho", "min"),
+            maximum_rho=("spearman_rho", "max"),
+        )
     )
 
     if ranking_output_dir is not None:
@@ -404,10 +408,7 @@ def _(
             correlation_figure,
             mo.md("## Saved outputs\n" + "\n".join(f"- {location}" for location in saved_locations)),
             mo.md(f"# Feature plots displayed for run {DISPLAY_RUN}"),
-            *[
-                mo.vstack([mo.md(f"## {feature_name}"), figure])
-                for feature_name, figure in display_feature_figures
-            ],
+            *[mo.vstack([mo.md(f"## {feature_name}"), figure]) for feature_name, figure in display_feature_figures],
         ]
     )
 

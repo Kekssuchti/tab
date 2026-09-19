@@ -80,9 +80,7 @@ def load_run_level_differences() -> tuple[pd.DataFrame, tuple[str, ...]]:
             pipeline_runs=pipeline_runs["mlflow_run_id"],
         )
         selected = data.loc[
-            data["scope"].eq("test")
-            & data["statistic"].eq("point")
-            & data["dataset"].isin(("tudd", "mimic")),
+            data["scope"].eq("test") & data["statistic"].eq("point") & data["dataset"].isin(("tudd", "mimic")),
             [
                 "pipeline_mlflow_run_id",
                 "pipeline_run_name",

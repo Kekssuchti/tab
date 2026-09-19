@@ -17,7 +17,6 @@ class TabSwiftAdapter(ModelAdapter):
         super().__init__()
         self.task_type = task_type
         self.random_state = random_state
-        self.inference_state = inference_state
         default_params = {
             "model_path": "swift.ckpt",
             **seed_kwargs("random_state", random_state),

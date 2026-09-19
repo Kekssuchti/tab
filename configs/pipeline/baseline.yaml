@@ -13,6 +13,8 @@ dataset:
   train_on:
     - dataset: tudd
       fraction: 1.0
+    - dataset: mimic
+      fraction: 0.0
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
@@ -71,23 +73,23 @@ training:
         n_splits: 5
         shuffle: true
 
-  - name: tabpfn-3
+  - name: tabpfn-3.5
     tuning:
       method: grid
-      search_space: best
+      search_space: default
       scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
+
+  - name: tabpfn-3.5-fast
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
 
   - name: tabicl-2
     tuning:
       method: grid
-      search_space: best
+      search_space: default
       scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
 
   - name: tabfm
     preprocessing:
@@ -95,14 +97,23 @@ training:
         imputation_method: mean
     tuning:
       method: grid
-      search_space: best
+      search_space: default
       scoring: roc_auc
-      cv:
-        n_splits: 5
-        shuffle: true
+
+  - name: exaone
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+
+  - name: causilo
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
 
 mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: mimic_baseline
+  experiment_name: tudd_baseline

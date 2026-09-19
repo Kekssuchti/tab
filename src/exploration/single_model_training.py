@@ -22,7 +22,6 @@ def _():
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-
     from src.classes.data_registry import dataset_task_for_target
     from src.classes.dataset import Dataset
     from src.classes.trainer import Trainer
@@ -63,9 +62,7 @@ def _():
 
     # Training sources are always origins; the target selects normal/readmission files.
     TARGET = "mortality"
-    TRAIN_ON = (
-        ("tudd", 1.0),
-    )
+    TRAIN_ON = (("tudd", 0.1),)
 
     TEST_SETS = ("mimic", "tudd")
     RANDOM_STATE = 1337
@@ -79,10 +76,10 @@ def _():
     }
     DATASET_SCALER = {"type": "none"}
 
-    MODEL_NAME = "limix-2"
+    MODEL_NAME = "tabpfn-3.5"
 
     MODEL_PARAMS = {
-        "softmax_temperature": [0.9],
+        "n_estimators": ["auto"]
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None

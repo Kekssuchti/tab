@@ -18,10 +18,7 @@ class TabICLAdapter(ModelAdapter):
         super().__init__()
         self.task_type = task_type
         self.random_state = random_state
-        self.inference_state = inference_state
         self.predict_batch_size = kwargs.pop("predict_batch_size", 9999999)
-        if self.predict_batch_size is not None and self.predict_batch_size < 1:
-            raise ValueError("predict_batch_size must be at least 1")
 
         # for full mimic tabicl runs OOM with more than 8 estimators
         # this is therefore the safety default

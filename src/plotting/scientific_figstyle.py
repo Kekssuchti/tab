@@ -56,9 +56,23 @@ DIVERGING = "RdBu_r"
 # Two-sided 95% t critical values by degrees of freedom. Seed counts are small
 # enough that the normal approximation understates the interval.
 _T95 = {
-    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,
-    8: 2.306, 9: 2.262, 10: 2.228, 12: 2.179, 15: 2.131, 20: 2.086, 30: 2.042,
-    40: 2.021, 60: 2.000, 120: 1.980,
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+    7: 2.365,
+    8: 2.306,
+    9: 2.262,
+    10: 2.228,
+    12: 2.179,
+    15: 2.131,
+    20: 2.086,
+    30: 2.042,
+    40: 2.021,
+    60: 2.000,
+    120: 1.980,
 }
 
 
@@ -69,8 +83,12 @@ _T95 = {
 # TeX/Linux clones next, and matplotlib's bundled fonts last so a script still
 # renders on a bare box.
 SANS = [
-    "Helvetica Neue", "Helvetica", "Arial",
-    "TeX Gyre Heros", "Liberation Sans", "Nimbus Sans",
+    "Helvetica Neue",
+    "Helvetica",
+    "Arial",
+    "TeX Gyre Heros",
+    "Liberation Sans",
+    "Nimbus Sans",
     "DejaVu Sans",
 ]
 # STIXGeneral leads the serif stack over Times New Roman deliberately: it has
@@ -102,48 +120,50 @@ def use_style(family: str = "sans") -> None:
     mpl.use("Agg")
     global _resolved_font
     _resolved_font = _available_font(SERIF if family == "serif" else SANS)
-    mpl.rcParams.update({
-        "font.family": "serif" if family == "serif" else "sans-serif",
-        "font.serif": SERIF,
-        "font.sans-serif": SANS,
-        # stixsans pairs with a Helvetica-metric text face and is bundled, so
-        # math in a figure does not fall back to a different-looking family.
-        "mathtext.fontset": "stix" if family == "serif" else "stixsans",
-        # arXiv rejects Type 3 fonts; 42 embeds TrueType outlines instead.
-        "pdf.fonttype": 42,
-        "ps.fonttype": 42,
-        "svg.fonttype": "none",
-        "font.size": 8,
-        "axes.labelsize": 8,
-        "axes.titlesize": 8,
-        "legend.fontsize": 7,
-        "xtick.labelsize": 7,
-        "ytick.labelsize": 7,
-        "figure.dpi": 200,
-        "savefig.dpi": 600,
-        "savefig.transparent": False,
-        "axes.prop_cycle": mpl.cycler(color=CYCLE),
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "axes.linewidth": 0.6,
-        "axes.grid": True,
-        "axes.grid.axis": "y",
-        "axes.axisbelow": True,
-        "grid.color": "#D9D9D9",
-        "grid.linewidth": 0.4,
-        "lines.linewidth": 1.2,
-        "lines.markersize": 3.5,
-        "xtick.direction": "out",
-        "ytick.direction": "out",
-        "xtick.major.width": 0.6,
-        "ytick.major.width": 0.6,
-        "xtick.major.size": 2.5,
-        "ytick.major.size": 2.5,
-        "legend.frameon": False,
-        "legend.handlelength": 1.4,
-        "legend.columnspacing": 1.0,
-        "legend.borderaxespad": 0.3,
-    })
+    mpl.rcParams.update(
+        {
+            "font.family": "serif" if family == "serif" else "sans-serif",
+            "font.serif": SERIF,
+            "font.sans-serif": SANS,
+            # stixsans pairs with a Helvetica-metric text face and is bundled, so
+            # math in a figure does not fall back to a different-looking family.
+            "mathtext.fontset": "stix" if family == "serif" else "stixsans",
+            # arXiv rejects Type 3 fonts; 42 embeds TrueType outlines instead.
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+            "svg.fonttype": "none",
+            "font.size": 8,
+            "axes.labelsize": 8,
+            "axes.titlesize": 8,
+            "legend.fontsize": 7,
+            "xtick.labelsize": 7,
+            "ytick.labelsize": 7,
+            "figure.dpi": 200,
+            "savefig.dpi": 600,
+            "savefig.transparent": False,
+            "axes.prop_cycle": mpl.cycler(color=CYCLE),
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.linewidth": 0.6,
+            "axes.grid": True,
+            "axes.grid.axis": "y",
+            "axes.axisbelow": True,
+            "grid.color": "#D9D9D9",
+            "grid.linewidth": 0.4,
+            "lines.linewidth": 1.2,
+            "lines.markersize": 3.5,
+            "xtick.direction": "out",
+            "ytick.direction": "out",
+            "xtick.major.width": 0.6,
+            "ytick.major.width": 0.6,
+            "xtick.major.size": 2.5,
+            "ytick.major.size": 2.5,
+            "legend.frameon": False,
+            "legend.handlelength": 1.4,
+            "legend.columnspacing": 1.0,
+            "legend.borderaxespad": 0.3,
+        }
+    )
 
 
 def figure(width: float = COLUMN, ratio: float = 0.68, **kwargs):
@@ -154,9 +174,7 @@ def figure(width: float = COLUMN, ratio: float = 0.68, **kwargs):
 
 def figure_grid(nrows: int = 1, ncols: int = 2, width: float = TEXT, ratio: float = 0.4, **kwargs):
     """A panel grid at a final printed size, sharing one constrained layout."""
-    fig, axes = plt.subplots(
-        nrows, ncols, figsize=(width, width * ratio), layout="constrained", **kwargs
-    )
+    fig, axes = plt.subplots(nrows, ncols, figsize=(width, width * ratio), layout="constrained", **kwargs)
     return fig, axes
 
 
@@ -172,9 +190,13 @@ def panel_labels(axes, labels=None, weight: str = "bold", pad: float = 2.0):
     for ax, text in zip(flat, labels):
         ax.annotate(
             text,
-            xy=(0, 1), xycoords="axes fraction",
-            xytext=(0, pad), textcoords="offset points",
-            ha="left", va="bottom", fontweight=weight,
+            xy=(0, 1),
+            xycoords="axes fraction",
+            xytext=(0, pad),
+            textcoords="offset points",
+            ha="left",
+            va="bottom",
+            fontweight=weight,
             fontsize=mpl.rcParams["axes.labelsize"],
         )
 
@@ -221,9 +243,7 @@ def _audit(fig) -> list[str]:
             if axis.get_label().get_text() or not ax.get_visible():
                 continue
             # A shared axis is labelled once, on whichever panel shows the ticks.
-            if any(
-                getattr(sib, f"get_{name}label")() for sib in shared.get_siblings(ax) if sib is not ax
-            ):
+            if any(getattr(sib, f"get_{name}label")() for sib in shared.get_siblings(ax) if sib is not ax):
                 continue
             # Categorical ticks (benchmark or variant names) label themselves;
             # an axis title over them just repeats the tick text. Only a linear
@@ -231,19 +251,13 @@ def _audit(fig) -> list[str]:
             # construction, and its formatter emits mathtext that no numeric
             # test would accept.
             ticks = [t.get_text() for t in axis.get_ticklabels() if t.get_text().strip()]
-            if (
-                axis.get_scale() == "linear"
-                and ticks
-                and not all(_looks_numeric(t) for t in ticks)
-            ):
+            if axis.get_scale() == "linear" and ticks and not all(_looks_numeric(t) for t in ticks):
                 continue
             problems.append(f"an axes has no {name} label")
 
     # Anything below 5pt is unreadable in print. Bar value labels sit at 5.
     tiny = {
-        round(t.get_fontsize(), 1)
-        for t in fig.findobj(mpl.text.Text)
-        if t.get_text().strip() and t.get_fontsize() < 5
+        round(t.get_fontsize(), 1) for t in fig.findobj(mpl.text.Text) if t.get_text().strip() and t.get_fontsize() < 5
     }
     if tiny:
         problems.append(f"text below the 5pt floor: sizes {sorted(tiny)}")
@@ -308,9 +322,7 @@ def _text_collisions(fig) -> list[str]:
         or box.y1 > fig.bbox.y1 + tolerance
     ]
     if clipped:
-        problems.append(
-            f"text runs off the canvas and will be clipped: {sorted(set(clipped))[:3]}"
-        )
+        problems.append(f"text runs off the canvas and will be clipped: {sorted(set(clipped))[:3]}")
 
     hits = []
     for i, (text_a, box_a) in enumerate(boxes):
@@ -491,9 +503,7 @@ def label_ends(ax, lines, labels, pad: float = 3.0, min_gap: float = 7.0, **kwar
     if need < axes_px:
         scale = ax.xaxis.get_transform()
         s_lo, s_hi = scale.transform([x_lo, x_hi])
-        room = scale.inverted().transform(
-            [s_lo + (s_hi - s_lo) * axes_px / (axes_px - need)]
-        )[0]
+        room = scale.inverted().transform([s_lo + (s_hi - s_lo) * axes_px / (axes_px - need)])[0]
         ax.set_xlim(x_lo, room)
 
     ends = []
@@ -553,7 +563,11 @@ def annotate_matrix(ax, values, fmt: str = "{:.2f}", image=None, threshold: floa
         rgba = cmap(norm(value))
         luminance = 0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2]
         ax.text(
-            col, row, fmt.format(value),
-            ha="center", va="center", fontsize=6,
+            col,
+            row,
+            fmt.format(value),
+            ha="center",
+            va="center",
+            fontsize=6,
             color="black" if luminance > threshold else "white",
         )

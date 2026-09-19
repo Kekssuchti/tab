@@ -122,7 +122,7 @@ def _(
                 metric="roc_auc",
                 runtime_metric="training_time",
                 show_ci=False,
-                x_axis_label="Model preparation time (s, log scale)"
+                x_axis_label="Model preparation time (s, log scale)",
             )
             fig.set_size_inches(*figure_size, forward=True)
             if save_figs:
@@ -148,7 +148,7 @@ def _(
                 metric="roc_auc",
                 runtime_metric="predict_time_tudd",
                 show_ci=False,
-                x_axis_label="Predict time (s, log scale)"
+                x_axis_label="Predict time (s, log scale)",
             )
             _fig.set_size_inches(*figure_size, forward=True)
             if save_figs:

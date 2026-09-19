@@ -22,7 +22,6 @@ class LinearModelAdapter(ModelAdapter):
     ) -> None:
         self.task_type = task_type
         self.random_state = random_state
-        self.inference_state = inference_state
         # Plain LinearRegression accepts no seed at all.
         seed_param = "random_state" if task_type == "classification" else None
         default_params = {"penalty": "l2"} if task_type == "classification" else {}
@@ -54,7 +53,6 @@ class XGBoostAdapter(ModelAdapter):
     ) -> None:
         self.task_type = task_type
         self.random_state = random_state
-        self.inference_state = inference_state
         default_params = {"eval_metric": "logloss", "n_jobs": 6}
         self.kwargs = {**seed_kwargs("random_state", random_state), **default_params, **kwargs}
         self.model = self._load_model()
@@ -85,7 +83,6 @@ class EBMAdapter(ModelAdapter):
     ) -> None:
         self.task_type = task_type
         self.random_state = random_state
-        self.inference_state = inference_state
         default_params = {"interactions": 0, "n_jobs": 6}
         self.kwargs = {**seed_kwargs("random_state", random_state), **default_params, **kwargs}
         self.model = self._load_model()

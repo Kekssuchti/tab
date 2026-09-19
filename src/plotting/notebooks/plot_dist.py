@@ -33,7 +33,6 @@ def _(config, pd):
 @app.cell
 def _(tudd_data):
     tudd_data
-    return
 
 
 @app.cell
@@ -63,7 +62,6 @@ def _(
         if save_plots:
             fig.savefig(f"{plots_output_dir}/{feature_name}.svg")
         plt.show()
-    return
 
 
 @app.cell
@@ -82,19 +80,16 @@ def _(config, filtered_data_dir, pd):
 @app.cell
 def _(read_mimic_data):
     read_mimic_data
-    return
 
 
 @app.cell
 def _(read_mimic_data):
-    read_mimic_data["hours_to_readmit"].gt(3*24).sum()
-    return
+    read_mimic_data["hours_to_readmit"].gt(3 * 24).sum()
 
 
 @app.cell
 def _(read_mimic_data):
     read_mimic_data_c = read_mimic_data[read_mimic_data["hours_to_readmit"] < 24000]
-    return
 
 
 @app.cell
@@ -108,7 +103,7 @@ def _(
 ):
     figs_r = plot_feature_distributions(
         tudd=read_tudd_data,
-        #mimic=read_mimic_data_c,
+        # mimic=read_mimic_data_c,
         exclude_features=exclude_cols,
     )
 
@@ -116,7 +111,6 @@ def _(
         if save_plots:
             fig_r.savefig(f"{plots_output_dir_read}/{feature_name_r}.svg")
         plt.show()
-    return
 
 
 if __name__ == "__main__":

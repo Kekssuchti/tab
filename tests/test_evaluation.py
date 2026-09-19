@@ -4,7 +4,6 @@ import pytest
 
 from src.interfaces.model_interface import TimedPrediction
 from src.schemas.dataset_schemas import DatasetBundle, XYDataset
-from src.schemas.metrics import RegressionMetrics
 from src.utils.evaluation import evaluate_trained_model
 from src.utils.evaluation_utils import classification_prediction_batch
 

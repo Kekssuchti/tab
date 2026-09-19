@@ -25,7 +25,6 @@ class TabfmAdapter(ModelAdapter):
         super().__init__()
         self.task_type = task_type
         self.random_state = random_state
-        self.inference_state = inference_state
         self.predict_batch_size = kwargs.pop("predict_batch_size", 99999999)
 
         default_params = {**seed_kwargs("random_state", random_state), "n_estimators": 1}

@@ -110,7 +110,7 @@ def _(setting_run_ids):
             "Native": ["tabswift", "orion-msp", "tabfm", "logistic-regression"],
         },
         "dataset": "tudd",
-        "x_axis_label": None
+        "x_axis_label": None,
     }
     save_figs = True
     return common_kwargs, model_setups, save_figs
@@ -205,7 +205,7 @@ def _(scaler_setting_run_ids):
         "setting_run_ids": scaler_setting_run_ids,
         "excluded_models_by_setting": None,
         "dataset": "tudd",
-        "x_axis_label": None
+        "x_axis_label": None,
     }
     return (common_kwargs_scaler,)
 

@@ -144,7 +144,6 @@ def _(df_mimic_cleaned, df_tudd_cleaned, plot_feature_comparision):
 @app.cell
 def _(df_mimic_read):
     df_mimic_read.columns
-    return
 
 
 @app.cell
@@ -193,7 +192,6 @@ def _(df_mimic_read_cleaned, df_tudd_read_cleaned, plot_feature_comparision):
             save=True,
             path_addition="features_read",
         )
-    return
 
 
 @app.cell
@@ -229,7 +227,6 @@ def _(features, pd):
 @app.cell
 def _(describe_features, df_tudd):
     describe_features(df_tudd, "tudd")
-    return
 
 
 if __name__ == "__main__":

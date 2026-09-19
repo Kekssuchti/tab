@@ -1,10 +1,9 @@
 random_states:
-  model_training_seed: 1337
-  model_inference_seed: 1337
-  cv_split_seed: 1337
-  tuning_sampler_seed: 1337
-  training_sample_seed: 1337
-  evaluation_bootstrap_seed: 1337
+  model_training_seed: 123
+  cv_split_seed: 123
+  tuning_sampler_seed: 123
+  training_sample_seed: 123
+  evaluation_bootstrap_seed: 123
 
 dataset:
   target: mortality

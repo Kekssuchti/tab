@@ -287,8 +287,7 @@ def _plotting_metrics_frame(
         if model_run.evaluation is None:
             continue
         predict_times = {
-            test_result.dataset_name: test_result.predict_time
-            for test_result in model_run.evaluation.test_results
+            test_result.dataset_name: test_result.predict_time for test_result in model_run.evaluation.test_results
         }
         tuning = model_run.training_result.tuning_result
         cv_time = tuning.total_time if tuning is not None else 0.0

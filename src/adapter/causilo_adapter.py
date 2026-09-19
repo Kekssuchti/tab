@@ -17,7 +17,6 @@ class CausiloAdapter(ModelAdapter):
         super().__init__()
         self.task_type = task_type
         self.random_state = random_state
-        self.inference_state = inference_state
 
         default_kwargs = {
             **seed_kwargs("random_state", random_state),

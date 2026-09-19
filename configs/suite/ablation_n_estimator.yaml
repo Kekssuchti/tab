@@ -1,8 +1,8 @@
+# ablation experiment to determine best n_estimators
+
 name: n_estimators
-base_config: ../pipeline/temp.yaml
+base_config: ../pipeline/tfm_only.yaml
 matrix:
-  # Replace the complete training list so all ensemble sizes move together in
-  # each run rather than producing a Cartesian product across models.
   - path: training
     values:
       - - name: tabpfn-3.5

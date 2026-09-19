@@ -1,6 +1,5 @@
 from timeit import default_timer as timer
 
-import numpy as np
 from exaonetabular.classifier import EXAONETabularClassifier
 from exaonetabular.regressor import EXAONETabularRegressor
 
@@ -19,7 +18,6 @@ class EXAONEAdapter(ModelAdapter):
         super().__init__()
         self.task_type = task_type
         self.random_state = random_state
-        self.inference_state = inference_state
         default_kwargs = {**seed_kwargs("seed", random_state), "device": "cuda"}
 
         self.kwargs = {**default_kwargs, **kwargs}

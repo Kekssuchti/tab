@@ -160,7 +160,7 @@ def _(
             use_ci = True
         else:
             use_ci = False
-        
+
         for exp_data, base_save_path in setups.values():
             for setting, included_models in model_setups.items():
                 fig = plot_over_training_size(
@@ -170,8 +170,8 @@ def _(
                     run_aggregation="average",
                     show_title=False,
                     metric=use_metric,
-                    y_label= use_label,
-                    show_ci=use_ci
+                    y_label=use_label,
+                    show_ci=use_ci,
                 )
                 if save_figs:
                     fig.tight_layout()

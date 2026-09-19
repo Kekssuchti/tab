@@ -1,12 +1,12 @@
 from copy import deepcopy
 from timeit import default_timer as timer
 
-import numpy as np
 from tabpfn import TabPFNClassifier, TabPFNRegressor
 from tabpfn.classifier import ModelVersion
 
 from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
 from src.schemas.base_schemas import TaskType
+from src.utils.logger import logger
 
 
 class TabPFNAdapter(ModelAdapter):
@@ -22,8 +22,6 @@ class TabPFNAdapter(ModelAdapter):
         self.task_type = task_type
         self.version = version
         self.random_state = random_state
-        self.inference_state = inference_state
-        self.predict_batch_size = kwargs.pop("predict_batch_size", 2048)  # default no batching
         default_kwargs = {
             "fit_mode": "fit_with_cache",
             **seed_kwargs("random_state", random_state),
@@ -51,6 +49,10 @@ class TabPFNAdapter(ModelAdapter):
             model = TabPFNClassifier.create_default_for_version(self.version, **self.kwargs)
         else:
             model = TabPFNRegressor.create_default_for_version(self.version, **self.kwargs)
+
+        # defaults to 8 estimators
+        logger.debug(f"TabPFN inf config {model.get_inference_config()}")
+
         return model
 
     def fit(self, X_train, y_train):
@@ -60,27 +62,10 @@ class TabPFNAdapter(ModelAdapter):
 
     def predict(self, X_test) -> TimedPrediction:
         start_time = timer()
-        if len(X_test) > self.predict_batch_size:
-            result = self._predict_batched(X_test)
-            return self.timed_prediction(result, start_time)
 
-        result = self._predict_single_batch(X_test)
-        return self.timed_prediction(result, start_time)
-
-    def _predict_batched(self, X_test):
-        predictions = []
-        for start in range(0, len(X_test), self.predict_batch_size):
-            stop = start + self.predict_batch_size
-            predictions.append(self._predict_single_batch(self._slice_rows(X_test, start, stop)))
-        return np.concatenate(predictions, axis=0)
-
-    def _predict_single_batch(self, X_test):
         if self.task_type == "classification":
-            return self.model.predict_proba(X_test)
-        return self.model.predict(X_test, output_type="mean", quantiles=None)
+            result = self.model.predict_proba(X_test)
+        else:
+            result = self.model.predict(X_test, output_type="mean", quantiles=None)
 
-    @staticmethod
-    def _slice_rows(X, start: int, stop: int):
-        if hasattr(X, "iloc"):
-            return X.iloc[start:stop]
-        return X[start:stop]
+        return self.timed_prediction(result, start_time)
