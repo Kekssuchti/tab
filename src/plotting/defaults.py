@@ -177,7 +177,6 @@ def model_styles(model_names: Sequence[str]) -> dict[str, ModelStyle]:
 # separation at the configured level. Both halves are given the same lightness,
 # so neither side draws the eye and the printed numerals stay the authority.
 PAIRWISE_CMAP = DIVERGING
-PAIRWISE_TABLE_COLOR_NAMES = {"win": "pairwiseWin", "neutral": "pairwiseNeutral", "loss": "pairwiseLoss"}
 
 # Rank axes always read best to worst from the left, so rank 1 is the best model.
 RANK_AXIS_LABEL = "Average rank (1 = best)"
@@ -198,30 +197,23 @@ def pairwise_decision_bounds(alpha: float = 0.05) -> tuple[float, float]:
     return alpha / 2.0, 1.0 - alpha / 2.0
 
 
-def pairwise_table_colors(alpha: float = 0.05, lightness: float = 0.66) -> dict[str, str]:
-    """Return light table-cell colors for the loss, neutral, and win states.
+def pairwise_table_colors(lightness: float = 0.66) -> dict[str, str]:
+    """Return light table-cell colors keyed by decision state.
 
-    Sampling the same colormap as the figures keeps a shaded LaTeX table and its
-    companion heatmap on one color language. The decided states are blended
-    toward white so that black table text stays legible; the neutral state is a
-    grey rather than the colormap center, which is white enough to read as an
-    empty cell instead of as "no separation".
+    The keys are the states a pairwise cell can be in: the row model decided it,
+    nobody did, or the column model did. Sampling the same colormap as the figures
+    keeps a shaded LaTeX table and its companion heatmap on one color language; the
+    decided states are blended toward white so black table text stays legible, and
+    the undecided state is a grey rather than the colormap center, which is white
+    enough to read as an empty cell instead of as "no separation".
     """
-    del alpha  # the state is decided elsewhere; kept for a single call signature
     cmap = plt.get_cmap(PAIRWISE_CMAP)
     return {
-        "loss": _blend_toward_white(to_hex(cmap(0.0)), lightness),
-        "neutral": _blend_toward_white(MUTED, 0.5),
-        "win": _blend_toward_white(to_hex(cmap(1.0)), lightness),
+        "row": _blend_toward_white(to_hex(cmap(1.0)), lightness),
+        "none": _blend_toward_white(MUTED, 0.5),
+        "column": _blend_toward_white(to_hex(cmap(0.0)), lightness),
     }
 
-
-def latex_color_definitions(colors: dict[str, str]) -> list[str]:
-    """Return the ``\\definecolor`` lines a shaded table needs in its preamble."""
-    return [
-        f"\\definecolor{{{PAIRWISE_TABLE_COLOR_NAMES[state]}}}{{HTML}}{{{color.lstrip('#').upper()}}}"
-        for state, color in colors.items()
-    ]
 
 
 def _blend_toward_white(color: str, amount: float) -> str:

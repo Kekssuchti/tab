@@ -9,25 +9,28 @@ with a difference in metric units.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
 from src.plotting.defaults import (
-    PAIRWISE_TABLE_COLOR_NAMES,
     dataset_label,
-    latex_color_definitions,
     metric_label,
     model_label,
     pairwise_decision_bounds,
     pairwise_table_colors,
 )
-from src.plotting.utils.aggregation import AggregatedEvaluation
+from src.plotting.utils.aggregation import AggregatedEvaluation, aggregate_evaluation_runs
+from src.plotting.utils.artifacts import load_plot_artifacts
+from src.plotting.utils.ranking import RankSummary, prepare_rank_summary
+from src.plotting.utils.settings import assign_settings
 from src.schemas.training_schemas import LOWER_IS_BETTER_SCORING
 from src.utils.prediction_metrics import pairwise_win_matrices
 
-STATE_COLORS = {"row": "win", "column": "loss", "none": "neutral"}
+# Table-cell color names are declared once here and defined in the table preamble.
+TABLE_COLOR_NAMES = {"row": "pairwiseWin", "none": "pairwiseNeutral", "column": "pairwiseLoss"}
 
 
 @dataclass(frozen=True)
@@ -111,8 +114,6 @@ def prepare_pairwise_summary(
     The reference model anchors the difference forest, because a difference
     against one anchor is the only way to read effect size at a common scale.
     """
-    if not 0 < alpha < 1:
-        raise ValueError("alpha must lie strictly between zero and one")
     external_datasets = [dataset for dataset in aggregated.datasets if dataset != aggregated.trained_on]
     if aggregated.trained_on not in aggregated.datasets or len(external_datasets) != 1:
         raise ValueError(
@@ -139,17 +140,68 @@ def prepare_pairwise_summary(
     )
 
 
-def _interval_tail(ci_level: float | None) -> float | None:
-    """Return the two-sided tail probability, or None when no interval is drawn."""
-    return None if ci_level is None else (1.0 - ci_level) / 2.0
-
-
-def _quantile_interval(draws: pd.Series, tail: float | None) -> tuple[float, float]:
+def _quantile_interval(draws: pd.Series, ci_level: float | None) -> tuple[float, float]:
     """Return the percentile interval of a paired difference, or two NaNs."""
-    if tail is None:
+    if ci_level is None:
         return float("nan"), float("nan")
+    tail = (1.0 - ci_level) / 2.0
     lower, upper = draws.quantile([tail, 1.0 - tail])
     return float(lower), float(upper)
+
+
+def load_pairwise_inputs(
+    experiment_name: str,
+    *,
+    metrics: Sequence[str],
+    rank_metrics: Sequence[str] | None = None,
+    exclude_models: Sequence[str] | None = None,
+    ci_level: float | None = 0.95,
+    alpha: float = 0.05,
+    reference_model: str | None = None,
+    pipeline_runs: Sequence[str] | None = None,
+    rank_pipeline_runs: Sequence[str] | None = None,
+    full_training_only: bool = True,
+    setting_source: str = "training_size",
+    setting_pattern: str | None = None,
+) -> tuple[PairwiseSummary, dict[str, RankSummary]]:
+    """Load the pairwise contrasts and the per-metric rank summaries of an experiment.
+
+    The pairwise views read the full-training runs and need the bootstrap
+    artifacts; the rank views read every run, because a setting only exists
+    between runs. Both pairwise scripts start here.
+    """
+    artifacts = load_plot_artifacts(
+        experiment_name,
+        pipeline_runs=pipeline_runs,
+        exclude_models=exclude_models,
+        full_training_only=full_training_only and pipeline_runs is None,
+    )
+    aggregated = aggregate_evaluation_runs(artifacts, metrics=metrics, ci_level=ci_level)
+    summary = prepare_pairwise_summary(aggregated, reference_model=reference_model, alpha=alpha)
+
+    rank_artifacts = load_plot_artifacts(
+        experiment_name,
+        pipeline_runs=rank_pipeline_runs,
+        exclude_models=exclude_models,
+        include_bootstrap=False,
+    )
+    setting_by_run, setting_order = assign_settings(
+        rank_artifacts.metrics,
+        rank_artifacts.run_ids,
+        source=setting_source,
+        pattern=setting_pattern,
+    )
+    ranks = {
+        name: prepare_rank_summary(
+            rank_artifacts.metrics,
+            metric=name,
+            setting_by_run=setting_by_run,
+            setting_order=setting_order,
+            alpha=alpha,
+        )
+        for name in rank_metrics or metrics
+    }
+    return summary, ranks
 
 
 def metric_direction(metric: str) -> float:
@@ -209,7 +261,6 @@ def _matrix_cells(
 ) -> pd.DataFrame:
     """Describe every unordered model pair on every test dataset."""
     lower_bound, upper_bound = pairwise_decision_bounds(alpha)
-    alpha_tail = _interval_tail(aggregated.ci_level)
     rows: list[dict[str, object]] = []
 
     for metric in aggregated.metrics:
@@ -228,7 +279,7 @@ def _matrix_cells(
                 for column_instance in instances[index + 1 :]:
                     share = float(matrix.loc[row_instance, column_instance]) / aggregated.bootstrap_count
                     draws = direction * (scores[row_instance] - scores[column_instance])
-                    delta_lower, delta_upper = _quantile_interval(draws, alpha_tail)
+                    delta_lower, delta_upper = _quantile_interval(draws, aggregated.ci_level)
                     if share > upper_bound:
                         state = "row"
                     elif share < lower_bound:
@@ -347,7 +398,6 @@ def _forest(
     alpha: float,
 ) -> pd.DataFrame:
     """Measure every model against the reference on every test dataset."""
-    alpha_tail = _interval_tail(aggregated.ci_level)
     rows: list[dict[str, object]] = []
 
     for metric in aggregated.metrics:
@@ -364,7 +414,7 @@ def _forest(
                 # the model doing better than the reference, so the reader cannot
                 # mistake a positive bar for a loss.
                 draws = direction * (scores[instance] - scores[reference_instance])
-                lower, upper = _quantile_interval(draws, alpha_tail)
+                lower, upper = _quantile_interval(draws, aggregated.ci_level)
                 rows.append(
                     {
                         "dataset": dataset,
@@ -417,12 +467,15 @@ def pairwise_matrix_to_latex(
         lookup[(row.row_instance, row.column_instance)] = row
         lookup[(row.column_instance, row.row_instance)] = row
 
-    colors = pairwise_table_colors(summary.alpha)
+    colors = pairwise_table_colors()
     columns = " ".join(["l", *["c"] * len(instances)])
     header = " & ".join(["\\textbf{Row model}", *[f"\\textbf{{{index}}}" for index in range(1, len(instances) + 1)]])
     lines = [
         "% Requires \\usepackage{booktabs, graphicx, colortbl} and these preamble colors:",
-        *[f"% {line}" for line in latex_color_definitions(colors)],
+        *[
+            f"% \\definecolor{{{TABLE_COLOR_NAMES[state]}}}{{HTML}}{{{colors[state].lstrip('#').upper()}}}"
+            for state in ("row", "none", "column")
+        ],
         "\\begin{table}[htbp]",
         "    \\centering",
         "    \\resizebox{\\linewidth}{!}{%",
@@ -446,7 +499,7 @@ def pairwise_matrix_to_latex(
                 text = f"{share:.{win_digits}f}"
                 if cell.decided:
                     text = f"\\textbf{{{text}}}"
-                color_name = PAIRWISE_TABLE_COLOR_NAMES[STATE_COLORS[state]]
+                color_name = TABLE_COLOR_NAMES[state]
                 entries.append(f"\\cellcolor{{{color_name}}} {text}")
             else:
                 cell = lookup[(row_instance, column_instance)]

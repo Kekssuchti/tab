@@ -96,36 +96,27 @@ def load_plot_artifacts(
     )
 
 
-def _drop_instances(bootstrap_scores: pd.DataFrame, instances: Sequence[str]) -> pd.DataFrame:
-    """Remove the given model instances from a bootstrap frame.
+def _drop_instances(frame: pd.DataFrame, instances: Sequence[str]) -> pd.DataFrame:
+    """Remove model instances from a bootstrap frame.
 
     The artifact is long (one row per run, dataset, metric, bootstrap, and model),
-    so the rows are filtered. Wide frames, whose model columns are named after the
-    instances, are handled too, so either artifact shape can be dropped here.
+    so the rows are filtered; a wide frame, whose columns are named after the
+    instances, is filtered by column.
     """
-    if "model_instance" in bootstrap_scores.columns:
-        remaining = bootstrap_scores.loc[~bootstrap_scores["model_instance"].astype(str).isin(set(instances))]
-        return remaining.drop(columns=[name for name in instances if name in remaining.columns])
-    return bootstrap_scores.drop(columns=[name for name in instances if name in bootstrap_scores.columns])
+    if "model_instance" in frame.columns:
+        frame = frame.loc[~frame["model_instance"].astype(str).isin(set(instances))]
+    return frame.drop(columns=[name for name in instances if name in frame.columns])
 
 
 def _exclude_models(metrics: pd.DataFrame, exclude_models: str | Sequence[str]) -> tuple[pd.DataFrame, tuple[str, ...]]:
     """Drop the named models and report the instances that were removed."""
-    _require_columns(metrics, {"model_name", "model_instance"}, "evaluation metrics")
-    names = (exclude_models,) if isinstance(exclude_models, str) else tuple(exclude_models)
-    if not names:
-        return metrics, ()
-    present = set(metrics["model_name"].astype(str))
-    unknown = sorted(set(names) - present)
+    names = {exclude_models} if isinstance(exclude_models, str) else set(exclude_models)
+    unknown = names - set(metrics["model_name"].astype(str))
     if unknown:
-        available = sorted(present)
-        raise ValueError(f"Cannot exclude unknown models {unknown}; available: {available}")
-    removed = metrics.loc[metrics["model_name"].astype(str).isin(names)]
-    instances = tuple(removed["model_instance"].astype(str).drop_duplicates())
-    remaining = metrics.loc[~metrics["model_name"].astype(str).isin(names)].copy()
-    if remaining.empty:
-        raise ValueError("Excluding these models leaves no evaluation data")
-    return remaining, instances
+        available = sorted(set(metrics["model_name"].astype(str)))
+        raise ValueError(f"Cannot exclude unknown models {sorted(unknown)}; available: {available}")
+    excluded = metrics["model_name"].astype(str).isin(names)
+    return metrics.loc[~excluded].copy(), tuple(metrics.loc[excluded, "model_instance"].astype(str).drop_duplicates())
 
 
 def select_full_training_run_ids(metrics: pd.DataFrame) -> tuple[str, ...]:

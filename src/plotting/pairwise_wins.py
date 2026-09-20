@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -39,21 +39,10 @@ from src.plotting.defaults import (
     set_plot_style,
 )
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure, figure_grid, label_ends, panel_labels, save
-from src.plotting.utils import (
-    PairwiseSummary,
-    RankSummary,
-    aggregate_evaluation_runs,
-    load_plot_artifacts,
-    prepare_pairwise_summary,
-    prepare_rank_summary,
-)
+from src.plotting.utils import PairwiseSummary, RankSummary, load_pairwise_inputs
 from src.plotting.utils.ranking import nemenyi_p_values
 from src.plotting.utils.rendering import draw_model_forest, instance_plot_styles
-from src.plotting.utils.settings import assign_settings, setting_display
-
-# ---------------------------------------------------------------------------
-# EDIT THESE SETTINGS
-# ---------------------------------------------------------------------------
+from src.plotting.utils.settings import setting_display
 
 
 @dataclass(frozen=True)
@@ -176,9 +165,7 @@ def make_cross_cohort_figure(summary: PairwiseSummary, metric: str, visual: Visu
             fontsize=5.5,
             color="white" if abs(share - 0.5) > 0.3 else "black",
         )
-    # Uniform white rules on every interior cell edge, on both sides of the
-    # diagonal: a frame on only some cells reads as an accident rather than as a
-    # mark. The outer edges are left to the spines, which a rule would cover.
+
     for index in range(1, size):
         ax.plot([-0.5, size - 0.5], [index - 0.5, index - 0.5], color="#FFFFFF", linewidth=0.8, zorder=3)
         ax.plot([index - 0.5, index - 0.5], [-0.5, size - 0.5], color="#FFFFFF", linewidth=0.8, zorder=3)
@@ -224,8 +211,7 @@ def make_paired_forest_figure(summary: PairwiseSummary, visual: VisualSettings =
                 marker_size=visual.marker_size,
             )
             ax.axvline(0, color=BASELINE, linewidth=0.8, linestyle="--", zorder=1)
-            # Without intervals the whiskers carry no values, so the axis is sized
-            # from the point estimates alone.
+            # Without intervals axis is sized from the point estimates only
             columns = ["lower", "upper"] if show_intervals else ["estimate"]
             spread = panel[columns].to_numpy(dtype=float)
             limit = max(float(np.nanmax(np.abs(spread))) * visual.score_scale * 1.35, 1.0)
@@ -248,8 +234,9 @@ def make_rank_figure(ranks: RankSummary, setting_label: str, visual: VisualSetti
     """Draw the experiment-level ranks, their path across settings, and their net movement."""
     set_plot_style()
     styles = instance_plot_styles(ranks.model_metadata)
+    show_movement = visual.show_rank_movement and len(ranks.settings) > 1
     heights = [visual.rank_diagram_height, visual.trajectory_height]
-    if visual.show_rank_movement:
+    if show_movement:
         heights.append(visual.movement_height)
     fig, axes = figure_grid(
         len(heights),
@@ -261,7 +248,7 @@ def make_rank_figure(ranks: RankSummary, setting_label: str, visual: VisualSetti
     )
     draw_rank_diagram(axes[0, 0], ranks, styles, setting=None)
     _draw_rank_trajectory(axes[1, 0], ranks, styles, setting_label, visual)
-    if visual.show_rank_movement:
+    if show_movement:
         _draw_rank_movement(axes[2, 0], ranks, styles, visual)
     panel_labels(axes)
     return fig
@@ -320,34 +307,27 @@ def draw_rank_diagram(
         marker_props={"s": 14},
     )
     ax.set_xlabel(RANK_AXIS_LABEL)
-    _draw_rank_axis(ax, ranks.model_count)
-    _open_headroom(ax)
+    _style_rank_axis(ax, ranks.model_count)
 
 
-def _draw_rank_axis(ax, model_count: int) -> None:
-    """Put the rank scale back on the diagram.
+def _style_rank_axis(ax, model_count: int) -> None:
+    """Finish the rank axis the library leaves half-drawn.
 
-    The library autoscales the x axis to the elbow lines, which start left of the
-    best rank, so the extreme ticks fall outside the view and the numbers appear
-    without a scale under them. Widening the view to the full rank range and
-    styling the spine as the axis makes the numbers sit on a line again.
+    Two separate gaps need closing. The library autoscales x to its elbow lines,
+    which start left of the best rank, so the extreme ticks fall outside the view
+    and get dropped; and it uses the top spine as the rank line, which the house
+    style switches off. The upper quarter of the panel also has to stay empty,
+    because the rank numbers sit above the axis line and the panel letter sits
+    above the axes.
     """
     ax.set_xlim(0.5, model_count + 0.5)
-    spine = ax.spines["top"]  # the library moves this spine to the rank line
+    spine = ax.spines["top"]
     spine.set_position("zero")
     spine.set_visible(True)
     spine.set_color(RANK_GROUP_COLOR)
     spine.set_linewidth(0.8)
     ax.tick_params(axis="x", length=2.6, width=0.8, color=RANK_GROUP_COLOR, pad=1.2)
     ax.tick_params(axis="x", which="minor", length=0)
-
-
-def _open_headroom(ax) -> None:
-    """Leave the top quarter of a rank diagram empty.
-
-    The rank numbers are drawn above the axis line, and the panel letter is drawn
-    above the axes, so without headroom the two meet. The library reserves none.
-    """
     bottom, _ = ax.get_ylim()
     if np.isfinite(bottom) and bottom < 0:
         ax.set_ylim(bottom, -bottom / 3.0)
@@ -364,15 +344,10 @@ def _draw_rank_trajectory(
     settings = list(ranks.settings)
     positions = np.arange(len(settings), dtype=float)
     table = ranks.setting_ranks()
+    spread = ranks.setting_spread()
     lines = []
     for instance in ranks.model_instances:
         values = table[instance].to_numpy(dtype=float)
-        spread = (
-            ranks.by_setting.loc[ranks.by_setting["model_instance"].eq(instance)]
-            .set_index("setting")
-            .reindex(settings)["sd_rank"]
-            .to_numpy(dtype=float)
-        )
         style, _ = styles[instance]
         (line,) = ax.plot(
             positions,
@@ -384,11 +359,12 @@ def _draw_rank_trajectory(
             zorder=3,
         )
         lines.append(line)
-        if visual.show_rank_spread and np.isfinite(spread).any():
+        run_spread = spread[instance].to_numpy(dtype=float)
+        if visual.show_rank_spread and np.isfinite(run_spread).any():
             ax.errorbar(
                 positions,
                 values,
-                yerr=np.nan_to_num(spread),
+                yerr=np.nan_to_num(run_spread),
                 fmt="none",
                 ecolor=style.color,
                 elinewidth=0.7,
@@ -415,8 +391,6 @@ def _draw_rank_movement(
 ) -> None:
     """Draw how far each model moves between the smallest and the largest setting."""
     settings = list(ranks.settings)
-    if len(settings) < 2:
-        raise ValueError("A rank movement panel needs at least two settings")
     table = ranks.setting_ranks()
     start_setting, end_setting = settings[0], settings[-1]
     instances = list(table.loc[end_setting].sort_values(kind="stable").index)
@@ -533,7 +507,7 @@ def rank_caption(ranks: RankSummary, setting_label: str, visual: VisualSettings 
     p_text = "p < 0.001" if p_value < 0.001 else f"p = {p_value:.3f}"
     movement = (
         "Bottom panel: average rank in the smallest and the largest setting, with the net movement annotated. "
-        if visual.show_rank_movement
+        if visual.show_rank_movement and len(ranks.settings) > 1
         else ""
     )
     spread = (
@@ -553,12 +527,12 @@ def rank_caption(ranks: RankSummary, setting_label: str, visual: VisualSettings 
 
 def _rank_headline(ranks: RankSummary) -> str:
     """State the ranking result the figure shows, without hard-coding a claim."""
-    leader_instance = str(ranks.overall.sort_values("rank_position", kind="stable")["model_instance"].iloc[0])
-    leader = model_label(str(ranks.labels()[leader_instance]))
+    leader = model_label(str(ranks.labels()[ranks.overall_ranks().index[0]]))
     metric = metric_label(ranks.metric)
     if len(ranks.settings) < 2:
         return rf"\textbf{{Average {metric} rank over {ranks.block_count} evaluation blocks: {leader} leads.}}"
-    movement = (ranks.setting_ranks().iloc[0] - ranks.setting_ranks().iloc[-1]).abs()
+    table = ranks.setting_ranks()
+    movement = (table.iloc[0] - table.iloc[-1]).abs()
     movers = int(movement.ge(1.0).sum())
     claim = (
         "no model moves a full rank position"
@@ -590,11 +564,6 @@ def setting_rank_caption(ranks: RankSummary) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# DATA SELECTION AND EXECUTION
-# ---------------------------------------------------------------------------
-
-
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--experiment-name", default=DATA.experiment_name)
@@ -604,84 +573,26 @@ def _parse_args() -> argparse.Namespace:
         dest="run_ids",
         help="Explicit pipeline MLflow run ID for the pairwise views; repeat to average runs.",
     )
-    parser.add_argument("--setting-source", choices=("training_size", "run_name"), default=DATA.setting_source)
-    parser.add_argument("--setting-label", default=DATA.setting_label)
-    parser.add_argument(
-        "--setting-pattern",
-        default=DATA.setting_pattern,
-        help="Regex with one group, applied to pipeline run names when --setting-source is run_name.",
-    )
-    parser.add_argument(
-        "--reference-model",
-        default=VISUAL.reference_model,
-        help="Model name every paired difference is measured against; 'auto' anchors on the strongest external model.",
-    )
-    parser.add_argument(
-        "--exclude-model",
-        action="append",
-        dest="exclude_models",
-        help="Model name to leave out of every figure; repeat for several models.",
-    )
-    parser.add_argument("--no-ci", action="store_true", help="Draw no confidence intervals.")
     parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    if args.exclude_models or args.no_ci:
-        global VISUAL
-        VISUAL = replace(
-            VISUAL,
-            exclude_models=tuple(args.exclude_models) if args.exclude_models else VISUAL.exclude_models,
-            ci_level=None if args.no_ci else VISUAL.ci_level,
-        )
-    data = DataSettings(
-        experiment_name=args.experiment_name,
-        pipeline_runs=tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs,
-        full_training_only=DATA.full_training_only and not args.run_ids,
-        rank_pipeline_runs=DATA.rank_pipeline_runs,
-        setting_source=args.setting_source,
-        setting_pattern=args.setting_pattern,
-        setting_label=args.setting_label,
-        output_dir=args.output_dir,
-    )
-
-    artifacts = load_plot_artifacts(
-        data.experiment_name,
-        pipeline_runs=data.pipeline_runs,
+    summary, ranks = load_pairwise_inputs(
+        args.experiment_name,
+        metrics=VISUAL.comparison_metrics,
+        rank_metrics=VISUAL.rank_metrics,
         exclude_models=VISUAL.exclude_models,
-        full_training_only=data.full_training_only,
-    )
-    aggregated = aggregate_evaluation_runs(artifacts, metrics=VISUAL.comparison_metrics, ci_level=VISUAL.ci_level)
-    summary = prepare_pairwise_summary(
-        aggregated,
-        reference_model=None if args.reference_model in (None, "auto") else args.reference_model,
+        ci_level=VISUAL.ci_level,
         alpha=VISUAL.alpha,
+        reference_model=VISUAL.reference_model,
+        pipeline_runs=tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs,
+        rank_pipeline_runs=DATA.rank_pipeline_runs,
+        full_training_only=DATA.full_training_only,
+        setting_source=DATA.setting_source,
+        setting_pattern=DATA.setting_pattern,
     )
-
-    rank_artifacts = load_plot_artifacts(
-        data.experiment_name,
-        pipeline_runs=data.rank_pipeline_runs,
-        exclude_models=VISUAL.exclude_models,
-        include_bootstrap=False,
-    )
-    setting_by_run, setting_order = assign_settings(
-        rank_artifacts.metrics,
-        rank_artifacts.run_ids,
-        source=data.setting_source,
-        pattern=data.setting_pattern,
-    )
-    ranks = {
-        metric: prepare_rank_summary(
-            rank_artifacts.metrics,
-            metric=metric,
-            setting_by_run=setting_by_run,
-            setting_order=setting_order,
-            alpha=VISUAL.alpha,
-        )
-        for metric in VISUAL.rank_metrics
-    }
 
     print("Selected pipeline runs (pairwise view): " + ", ".join(summary.run_ids))
     for metric, metric_ranks in ranks.items():
@@ -716,10 +627,10 @@ def main() -> None:
 
     for metric, metric_ranks in ranks.items():
         rank_figure = output_dir / f"{prefix}_{metric}_ranks"
-        save(make_rank_figure(metric_ranks, data.setting_label), str(rank_figure), formats=VISUAL.output_formats)
+        save(make_rank_figure(metric_ranks, DATA.setting_label), str(rank_figure), formats=VISUAL.output_formats)
         stems.append(rank_figure)
         print(f"\nRank figure caption ({metric}):")
-        print(f"\\caption{{{rank_caption(metric_ranks, data.setting_label)}}}")
+        print(f"\\caption{{{rank_caption(metric_ranks, DATA.setting_label)}}}")
 
         if VISUAL.setting_panels and len(metric_ranks.settings) > 1:
             smallest = int(metric_ranks.tests.loc[metric_ranks.tests["scope"].eq("setting"), "n_blocks"].min())
@@ -730,7 +641,7 @@ def main() -> None:
                 )
             setting_figure = output_dir / f"{prefix}_{metric}_ranks_by_setting"
             save(
-                make_setting_rank_figure(metric_ranks, data.setting_source),
+                make_setting_rank_figure(metric_ranks, DATA.setting_source),
                 str(setting_figure),
                 formats=VISUAL.output_formats,
             )
@@ -741,7 +652,7 @@ def main() -> None:
     print("\nFigures:")
     for stem in stems:
         for extension in VISUAL.output_formats:
-            print(_display_path(stem.with_suffix(f".{extension}")))
+            print(str(stem.with_suffix(f".{extension}")).removeprefix(f"{config.dir_root}/"))
 
 
 def _p_value(value: float) -> str:
@@ -749,14 +660,6 @@ def _p_value(value: float) -> str:
     if value <= 0.0:
         return "< 1e-300"
     return f"{value:.4g}"
-
-
-def _display_path(path: Path) -> str:
-    """Shorten a path for the console when it sits inside the repository."""
-    try:
-        return str(path.relative_to(config.dir_root))
-    except ValueError:
-        return str(path)
 
 
 if __name__ == "__main__":

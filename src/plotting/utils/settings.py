@@ -7,11 +7,9 @@ same derivation, so it lives here rather than in each of them.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
 import pandas as pd
-
-SETTING_SOURCES = ("training_size", "run_name")
 
 
 def assign_settings(
@@ -28,9 +26,6 @@ def assign_settings(
     setting from the pipeline run name, for experiments whose setting is not a
     column of the result table.
     """
-    if source not in SETTING_SOURCES:
-        raise ValueError(f"Unknown setting source {source!r}; expected one of {SETTING_SOURCES}")
-
     selected = metrics.loc[metrics["pipeline_mlflow_run_id"].astype(str).isin(set(run_ids))]
     runs = selected[["pipeline_mlflow_run_id", "pipeline_run_name", "training_size"]].drop_duplicates(
         "pipeline_mlflow_run_id"
@@ -66,11 +61,3 @@ def setting_display(setting: str, source: str) -> str:
         return f"{int(float(setting)):,}"
     except ValueError:
         return setting
-
-
-def settings_by_run(setting_by_run: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
-    """Group run IDs by their setting, keeping the order they were given in."""
-    grouped: dict[str, list[str]] = {}
-    for run_id, setting in setting_by_run.items():
-        grouped.setdefault(str(setting), []).append(str(run_id))
-    return {setting: tuple(run_ids) for setting, run_ids in grouped.items()}

@@ -24,10 +24,6 @@ from src.plotting.utils import aggregate_evaluation_runs, load_plot_artifacts, p
 from src.plotting.utils.rendering import draw_model_forest, instance_plot_styles, interval_axis_limits
 from src.plotting.utils.transfer import TransferSummary
 
-# ---------------------------------------------------------------------------
-# EDIT THESE SETTINGS
-# ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class DataSettings:
@@ -242,9 +238,7 @@ def _uncertainty_caption(data: TransferSummary, visual: VisualSettings) -> str:
         return f"No uncertainty intervals are shown; estimates summarize {run_text}."
     confidence = round(100 * visual.ci_level)
     aggregation_text = (
-        "for one pipeline run"
-        if data.run_count == 1
-        else f"after averaging {data.run_count} repeated pipeline runs"
+        "for one pipeline run" if data.run_count == 1 else f"after averaging {data.run_count} repeated pipeline runs"
     )
     return (
         rf"Whiskers are {confidence}\% percentile intervals from {data.bootstrap_count:,} aligned cohort-bootstrap "

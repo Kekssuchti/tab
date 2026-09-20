@@ -19,23 +19,12 @@ Two tables per metric:
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from src.plotting.defaults import dataset_label, metric_label
-from src.plotting.utils import (
-    PairwiseSummary,
-    RankSummary,
-    aggregate_evaluation_runs,
-    load_plot_artifacts,
-    prepare_pairwise_summary,
-    prepare_rank_summary,
-)
+from src.plotting.utils import PairwiseSummary, RankSummary, load_pairwise_inputs
 from src.plotting.utils.pairwise import pairwise_matrix_to_latex, rank_table_to_latex
-from src.plotting.utils.settings import assign_settings, setting_display
-
-# ---------------------------------------------------------------------------
-# EDIT THESE SETTINGS
-# ---------------------------------------------------------------------------
+from src.plotting.utils.settings import setting_display
 
 
 @dataclass(frozen=True)
@@ -69,11 +58,6 @@ class TableSettings:
 
 DATA = DataSettings()
 TABLES = TableSettings()
-
-
-# ---------------------------------------------------------------------------
-# TABLES
-# ---------------------------------------------------------------------------
 
 
 def matrix_table(
@@ -111,23 +95,6 @@ def rank_table(ranks: RankSummary, setting_label: str, setting_source: str, tabl
     )
 
 
-# ---------------------------------------------------------------------------
-# LOCAL HELPERS
-# ---------------------------------------------------------------------------
-
-
-def table_requirements() -> str:
-    """Return the LaTeX preamble a shaded matrix table needs."""
-    return (
-        "% Tables need \\usepackage{booktabs, graphicx, colortbl} and the \\definecolor lines printed with each table."
-    )
-
-
-# ---------------------------------------------------------------------------
-# DATA SELECTION AND EXECUTION
-# ---------------------------------------------------------------------------
-
-
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--experiment-name", default=DATA.experiment_name)
@@ -137,73 +104,26 @@ def _parse_args() -> argparse.Namespace:
         dest="run_ids",
         help="Explicit pipeline MLflow run ID for the matrix tables; repeat to average runs.",
     )
-    parser.add_argument("--setting-source", choices=("training_size", "run_name"), default=DATA.setting_source)
-    parser.add_argument("--setting-label", default=DATA.setting_label)
-    parser.add_argument(
-        "--setting-pattern",
-        default=DATA.setting_pattern,
-        help="Regex with one group, applied to pipeline run names when --setting-source is run_name.",
-    )
-    parser.add_argument(
-        "--exclude-model",
-        action="append",
-        dest="exclude_models",
-        help="Model name to leave out of every table; repeat for several models.",
-    )
-    parser.add_argument("--no-ci", action="store_true", help="Print no interval-based marks.")
-    parser.add_argument(
-        "--reference-model",
-        default=TABLES.reference_model,
-        help="Model name every paired difference is measured against; 'auto' anchors on the strongest external model.",
-    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    if args.exclude_models or args.no_ci:
-        global TABLES
-        TABLES = replace(
-            TABLES,
-            exclude_models=tuple(args.exclude_models) if args.exclude_models else TABLES.exclude_models,
-            ci_level=None if args.no_ci else TABLES.ci_level,
-        )
-    data = DataSettings(
-        experiment_name=args.experiment_name,
-        pipeline_runs=tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs,
-        full_training_only=DATA.full_training_only and not args.run_ids,
-        rank_pipeline_runs=DATA.rank_pipeline_runs,
-        setting_source=args.setting_source,
-        setting_pattern=args.setting_pattern,
-        setting_label=args.setting_label,
-    )
-    artifacts = load_plot_artifacts(
-        data.experiment_name,
-        pipeline_runs=data.pipeline_runs,
+    summary, ranks = load_pairwise_inputs(
+        args.experiment_name,
+        metrics=TABLES.metrics,
         exclude_models=TABLES.exclude_models,
-        full_training_only=data.full_training_only,
-    )
-    aggregated = aggregate_evaluation_runs(artifacts, metrics=TABLES.metrics, ci_level=TABLES.ci_level)
-    summary = prepare_pairwise_summary(
-        aggregated,
-        reference_model=None if args.reference_model in (None, "auto") else args.reference_model,
+        ci_level=TABLES.ci_level,
         alpha=TABLES.alpha,
+        reference_model=TABLES.reference_model,
+        pipeline_runs=tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs,
+        rank_pipeline_runs=DATA.rank_pipeline_runs,
+        full_training_only=DATA.full_training_only,
+        setting_source=DATA.setting_source,
+        setting_pattern=DATA.setting_pattern,
     )
 
-    rank_artifacts = load_plot_artifacts(
-        data.experiment_name,
-        pipeline_runs=data.rank_pipeline_runs,
-        exclude_models=TABLES.exclude_models,
-        include_bootstrap=False,
-    )
-    setting_by_run, setting_order = assign_settings(
-        rank_artifacts.metrics,
-        rank_artifacts.run_ids,
-        source=data.setting_source,
-        pattern=data.setting_pattern,
-    )
-
-    print(table_requirements())
+    print("% Tables need \\usepackage{booktabs, graphicx, colortbl} and the \\definecolor lines printed below.")
     print("Selected pipeline runs: " + ", ".join(summary.run_ids))
 
     for metric in TABLES.metrics:
@@ -211,16 +131,9 @@ def main() -> None:
             print(f"\n%% Split-encoded pairwise matrix: {dataset} / {metric}")
             print(matrix_table(summary, dataset, metric))
 
-    for metric in TABLES.metrics:
-        ranks = prepare_rank_summary(
-            rank_artifacts.metrics,
-            metric=metric,
-            setting_by_run=setting_by_run,
-            setting_order=setting_order,
-            alpha=TABLES.alpha,
-        )
-        print(f"\n%% Average rank table: {metric} ({ranks.block_count} blocks)")
-        print(rank_table(ranks, data.setting_label, data.setting_source))
+    for metric, metric_ranks in ranks.items():
+        print(f"\n%% Average rank table: {metric} ({metric_ranks.block_count} blocks)")
+        print(rank_table(metric_ranks, DATA.setting_label, DATA.setting_source))
 
 
 if __name__ == "__main__":

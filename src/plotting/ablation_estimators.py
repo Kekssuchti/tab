@@ -24,10 +24,6 @@ from src.plotting.utils.grouped import GroupedEvaluation
 from src.plotting.utils.rendering import instance_plot_styles
 from src.utils.prediction_metrics import pairwise_win_matrices
 
-# ---------------------------------------------------------------------------
-# EDIT THESE SETTINGS
-# ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class DataSettings:

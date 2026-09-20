@@ -27,7 +27,14 @@ Shared mechanics live in `utils/`:
 The Nemenyi diagrams themselves come from `scikit-posthocs`.
 ## Regeneration
 
+`recreate_all_figs.sh` runs every figure script below and reports any step that
+failed; pass a substring to run only the matching steps (`recreate_all_figs.sh
+pairwise`). The interpretability figures come from the marimo notebook instead and
+are regenerated interactively.
+
 ```bash
+src/plotting/recreate_all_figs.sh
+
 uv run python -m src.plotting.baseline_transfer
 uv run python -m src.plotting.sample_size
 uv run python -m src.plotting.ablation_estimators

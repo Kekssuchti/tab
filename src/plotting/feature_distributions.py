@@ -19,10 +19,6 @@ from src.plotting.defaults import FEATURE_ALIASES, set_plot_style
 from src.plotting.scientific_figstyle import COLUMN, figure, save
 from src.plotting.utils.distributions import draw_feature_distribution
 
-# ---------------------------------------------------------------------------
-# EDIT THESE SETTINGS
-# ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class DataSettings:
@@ -34,7 +30,7 @@ class DataSettings:
     )
     features: tuple[str, ...] | None = None
     exclude_features: tuple[str, ...] = ("mortality", "LOS", "hours_to_readmit")
-    output_dir: Path = config.dir_plots / "feature_distributions"
+    output_dir: Path = config.dir_plots / "feature_distributions" / "both"
 
 
 @dataclass(frozen=True)

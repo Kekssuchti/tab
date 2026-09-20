@@ -24,10 +24,6 @@ from src.plotting.utils import load_plot_artifacts, prepare_sample_size_evaluati
 from src.plotting.utils.rendering import instance_plot_styles, interval_axis_limits
 from src.plotting.utils.sample_size import SampleSizeEvaluation
 
-# ---------------------------------------------------------------------------
-# EDIT THESE SETTINGS
-# ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class DataSettings:
