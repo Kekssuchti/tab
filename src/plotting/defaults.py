@@ -7,9 +7,9 @@ from typing import NamedTuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import to_hex
+from matplotlib.colors import to_hex, to_rgb
 
-from src.plotting.scientific_figstyle import PALETTE, use_style
+from src.plotting.scientific_figstyle import DIVERGING, MUTED, PALETTE, use_style
 
 # Metric alias
 
@@ -58,7 +58,7 @@ TASK_COLORS = {
 TASK_NAMES = {
     "mortality": "Mortality",
     "LOS7": "LOS > 7 d",
-    "hours_to_readmit_72": "72 h readmission",
+    "hours_to_readmit_72": "Readmission within 72h",
 }
 TASK_ORDER = ["mortality", "LOS7", "hours_to_readmit_72"]
 
@@ -167,6 +167,69 @@ def model_styles(model_names: Sequence[str]) -> dict[str, ModelStyle]:
             )
         styles[name] = style
     return styles
+
+
+# --- Pairwise contrast defaults -------------------------------------------
+#
+# A win/loss contrast has two sides and carries no model identity, so it uses
+# the diverging scale rather than the model colors: warm is the row (or upper)
+# side winning, cool is the row side losing, and the desaturated center means no
+# separation at the configured level. Both halves are given the same lightness,
+# so neither side draws the eye and the printed numerals stay the authority.
+PAIRWISE_CMAP = DIVERGING
+PAIRWISE_TABLE_COLOR_NAMES = {"win": "pairwiseWin", "neutral": "pairwiseNeutral", "loss": "pairwiseLoss"}
+
+# Rank axes always read best to worst from the left, so rank 1 is the best model.
+RANK_AXIS_LABEL = "Average rank (1 = best)"
+RANK_GROUP_COLOR = "#4D4D4D"
+
+
+def pairwise_decision_bounds(alpha: float = 0.05) -> tuple[float, float]:
+    """Return the win shares below and above which a pair is decided.
+
+    The bootstrap win share is the fraction of paired resamples in which the row
+    entity scored higher, which makes it a resampled one-sided p-value: a share
+    above ``1 - alpha / 2`` means fewer than ``alpha / 2`` of the draws disagree,
+    and that is exactly the paired two-sided percentile interval at ``alpha``
+    excluding zero.
+    """
+    if not 0 < alpha < 1:
+        raise ValueError("alpha must lie strictly between zero and one")
+    return alpha / 2.0, 1.0 - alpha / 2.0
+
+
+def pairwise_table_colors(alpha: float = 0.05, lightness: float = 0.66) -> dict[str, str]:
+    """Return light table-cell colors for the loss, neutral, and win states.
+
+    Sampling the same colormap as the figures keeps a shaded LaTeX table and its
+    companion heatmap on one color language. The decided states are blended
+    toward white so that black table text stays legible; the neutral state is a
+    grey rather than the colormap center, which is white enough to read as an
+    empty cell instead of as "no separation".
+    """
+    del alpha  # the state is decided elsewhere; kept for a single call signature
+    cmap = plt.get_cmap(PAIRWISE_CMAP)
+    return {
+        "loss": _blend_toward_white(to_hex(cmap(0.0)), lightness),
+        "neutral": _blend_toward_white(MUTED, 0.5),
+        "win": _blend_toward_white(to_hex(cmap(1.0)), lightness),
+    }
+
+
+def latex_color_definitions(colors: dict[str, str]) -> list[str]:
+    """Return the ``\\definecolor`` lines a shaded table needs in its preamble."""
+    return [
+        f"\\definecolor{{{PAIRWISE_TABLE_COLOR_NAMES[state]}}}{{HTML}}{{{color.lstrip('#').upper()}}}"
+        for state, color in colors.items()
+    ]
+
+
+def _blend_toward_white(color: str, amount: float) -> str:
+    """Blend `color` toward white by `amount` in [0, 1]."""
+    if not 0 <= amount <= 1:
+        raise ValueError("lightness must lie between zero and one")
+    red, green, blue = to_rgb(color)
+    return to_hex(tuple(channel + (1.0 - channel) * amount for channel in (red, green, blue)))
 
 
 # --- Figure style ----------------------------------------------------------

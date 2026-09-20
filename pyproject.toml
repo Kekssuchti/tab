@@ -38,6 +38,7 @@ dependencies = [
     "exaonetabular",
     "causilo>=1.0.2",
     "nvtx>=0.2.16", # for limix
+    "scikit-posthocs>=0.17.0",
 ]
 
 [tool.uv.sources]

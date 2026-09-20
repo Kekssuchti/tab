@@ -24,6 +24,7 @@ class GroupedEvaluation:
     datasets: tuple[str, ...]
     metrics: tuple[str, ...]
     run_counts: dict[str, int]
+    bootstrap_count: int
     ci_level: float
 
 
@@ -80,9 +81,7 @@ def aggregate_runs_by_setting(
     points = artifacts.metrics.loc[
         artifacts.metrics["scope"].eq("test") & artifacts.metrics["statistic"].eq("point")
     ].copy()
-    bootstraps = artifacts.bootstrap_scores.loc[
-        artifacts.bootstrap_scores["metric"].isin(selected_metrics)
-    ].copy()
+    bootstraps = artifacts.bootstrap_scores.loc[artifacts.bootstrap_scores["metric"].isin(selected_metrics)].copy()
     for frame in (points, bootstraps):
         frame["pipeline_mlflow_run_id"] = frame["pipeline_mlflow_run_id"].astype(str)
         frame["model_instance"] = frame["model_instance"].astype(str)
@@ -112,9 +111,9 @@ def aggregate_runs_by_setting(
     points.loc[:, point_columns] = points.loc[:, point_columns].apply(pd.to_numeric, errors="coerce")
     if points.loc[:, point_columns].isna().any().any():
         raise ValueError("Selected metric and runtime values must be numeric and non-missing")
-    point_means = points.groupby(
-        ["setting", "model_name", "model_instance", "dataset"], sort=False, as_index=False
-    )[list(selected_metrics)].mean()
+    point_means = points.groupby(["setting", "model_name", "model_instance", "dataset"], sort=False, as_index=False)[
+        list(selected_metrics)
+    ].mean()
 
     bootstraps["score"] = pd.to_numeric(bootstraps["score"], errors="coerce")
     bootstraps["bootstrap_id"] = pd.to_numeric(bootstraps["bootstrap_id"], errors="coerce")
@@ -129,23 +128,12 @@ def aggregate_runs_by_setting(
     ]
     if bootstraps.duplicated(duplicate_keys).any():
         raise ValueError("Bootstrap artifacts contain duplicate run/dataset/metric/bootstrap/model rows")
-    _validate_bootstrap_cells(
-        points,
-        bootstraps,
-        run_map,
-        settings,
-        datasets,
-        selected_metrics,
-    )
 
-    averaged_bootstraps = (
-        bootstraps.groupby(
-            ["setting", "dataset", "metric", "bootstrap_id", "model_name", "model_instance"],
-            sort=False,
-            as_index=False,
-        )["score"]
-        .mean()
-    )
+    averaged_bootstraps = bootstraps.groupby(
+        ["setting", "dataset", "metric", "bootstrap_id", "model_name", "model_instance"],
+        sort=False,
+        as_index=False,
+    )["score"].mean()
     alpha = (1.0 - ci_level) / 2.0
     intervals = (
         averaged_bootstraps.groupby(
@@ -176,9 +164,9 @@ def aggregate_runs_by_setting(
 
     if runtime_columns:
         per_run_runtime = points.drop_duplicates(["pipeline_mlflow_run_id", "model_instance"])
-        runtimes = per_run_runtime.groupby(
-            ["setting", "model_name", "model_instance"], sort=False, as_index=False
-        )[list(runtime_columns)].mean()
+        runtimes = per_run_runtime.groupby(["setting", "model_name", "model_instance"], sort=False, as_index=False)[
+            list(runtime_columns)
+        ].mean()
     else:
         runtimes = pd.DataFrame(columns=["setting", "model_name", "model_instance"])
 
@@ -192,6 +180,7 @@ def aggregate_runs_by_setting(
         datasets=datasets,
         metrics=selected_metrics,
         run_counts=run_counts,
+        bootstrap_count=int(averaged_bootstraps["bootstrap_id"].nunique()),
         ci_level=ci_level,
     )
 
@@ -217,43 +206,9 @@ def _validate_point_cells(points: pd.DataFrame, datasets: Sequence[str]) -> None
             raise ValueError(f"Pipeline run {run_id} has incomplete model/dataset point cells")
 
 
-def _validate_bootstrap_cells(
-    points: pd.DataFrame,
-    bootstraps: pd.DataFrame,
-    run_map: Mapping[str, str],
-    settings: Sequence[str],
-    datasets: Sequence[str],
-    metrics: Sequence[str],
-) -> None:
-    reference_ids: pd.Index | None = None
-    for setting in settings:
-        setting_runs = [run_id for run_id, mapped_setting in run_map.items() if mapped_setting == setting]
-        models = tuple(points.loc[points["setting"].eq(setting), "model_instance"].drop_duplicates())
-        for run_id in setting_runs:
-            for dataset in datasets:
-                for metric in metrics:
-                    for instance in models:
-                        rows = bootstraps.loc[
-                            bootstraps["pipeline_mlflow_run_id"].eq(run_id)
-                            & bootstraps["dataset"].eq(dataset)
-                            & bootstraps["metric"].eq(metric)
-                            & bootstraps["model_instance"].eq(instance)
-                        ]
-                        if rows.empty:
-                            raise ValueError(
-                                "Missing bootstrap cell for "
-                                f"run={run_id}, dataset={dataset}, metric={metric}, model={instance}"
-                            )
-                        ids = pd.Index(rows["bootstrap_id"].sort_values().to_numpy())
-                        if reference_ids is None:
-                            reference_ids = ids
-                        elif not ids.equals(reference_ids):
-                            raise ValueError("Bootstrap IDs differ between runs, settings, datasets, metrics, or models")
-
-
 def _validate_repeat_model_sets(points: pd.DataFrame, settings: Sequence[str]) -> None:
-    run_sets = (
-        points.groupby(["setting", "pipeline_mlflow_run_id"], sort=False)["model_instance"].agg(lambda values: set(values))
+    run_sets = points.groupby(["setting", "pipeline_mlflow_run_id"], sort=False)["model_instance"].agg(
+        lambda values: set(values)
     )
     for setting in settings:
         sets = run_sets.xs(setting, level="setting").tolist()

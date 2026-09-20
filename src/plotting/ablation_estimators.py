@@ -38,6 +38,8 @@ class DataSettings:
     dataset: str = "mimic"
     metric: str = "roc_auc"
     runtime_metric: str = "total_time"
+    # Model names to leave out of every figure.
+    exclude_models: tuple[str, ...] | None = None
     output_dir: Path = config.dir_plots / "ablation_n_estimators"
 
 
@@ -58,7 +60,7 @@ class VisualSettings:
     log_estimator_axis: bool = True
     log_runtime_axis: bool = True
     performance_axis_label: str = "{metric} on {dataset} (%)"
-    runtime_axis_label: str = "Total runtime (seconds, log scale)"
+    runtime_axis_label: str = "Total runtime (seconds)"
     estimator_axis_label: str = "Number of estimators"
     legend_columns: int = 3
     print_pairwise_wins: bool = True
@@ -223,7 +225,7 @@ def runtime_caption() -> str:
 
 
 def main() -> None:
-    artifacts = load_plot_artifacts(DATA.experiment_name)
+    artifacts = load_plot_artifacts(DATA.experiment_name, exclude_models=DATA.exclude_models)
     setting_by_run, setting_order = _setting_map(artifacts.metrics)
     prepared = aggregate_runs_by_setting(
         artifacts,

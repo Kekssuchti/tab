@@ -26,7 +26,7 @@ class AggregatedEvaluation:
     target: str
     run_ids: tuple[str, ...]
     bootstrap_count: int
-    ci_level: float
+    ci_level: float | None
 
     @property
     def run_count(self) -> int:
@@ -41,7 +41,7 @@ def aggregate_evaluation_runs(
     artifacts: PlotArtifacts,
     *,
     metrics: Sequence[str],
-    ci_level: float = 0.95,
+    ci_level: float | None = 0.95,
 ) -> AggregatedEvaluation:
     """Average selected runs and recompute intervals from bootstrap scores.
 
@@ -50,11 +50,14 @@ def aggregate_evaluation_runs(
     are averaged across runs. Percentile intervals are then calculated from the
     run-averaged bootstrap distribution; per-run interval endpoints are never
     averaged.
+
+    Pass ``ci_level=None`` to skip the intervals entirely: the interval columns
+    then hold no values, and figures that would draw them leave them out.
     """
     selected_metrics = tuple(dict.fromkeys(metrics))
     if not selected_metrics:
         raise ValueError("metrics must contain at least one metric")
-    if not 0 < ci_level < 1:
+    if ci_level is not None and not 0 < ci_level < 1:
         raise ValueError("ci_level must lie strictly between zero and one")
 
     metric_required = {
@@ -179,13 +182,17 @@ def aggregate_evaluation_runs(
 
     averaged_bootstraps = wide_bootstraps.groupby(["dataset", "metric", "bootstrap_id"], sort=False).mean()
     point_means = points.groupby(["model_instance", "dataset"], sort=False)[list(selected_metrics)].mean()
-    alpha = (1.0 - ci_level) / 2.0
+    alpha = None if ci_level is None else (1.0 - ci_level) / 2.0
     performance_rows: list[dict[str, object]] = []
     for metric in selected_metrics:
         for dataset in datasets:
             scores = averaged_bootstraps.xs((dataset, metric), level=("dataset", "metric"))
             for instance in model_instances:
-                lower, upper = scores[instance].quantile([alpha, 1.0 - alpha])
+                lower, upper = (
+                    (float("nan"), float("nan"))
+                    if alpha is None
+                    else tuple(scores[instance].quantile([alpha, 1.0 - alpha]))
+                )
                 performance_rows.append(
                     {
                         "model_name": str(names_by_instance.loc[instance]),

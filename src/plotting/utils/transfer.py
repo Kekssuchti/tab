@@ -53,7 +53,7 @@ class TransferSummary:
         return self.aggregated.bootstrap_count
 
     @property
-    def ci_level(self) -> float:
+    def ci_level(self) -> float | None:
         return self.aggregated.ci_level
 
 
@@ -70,6 +70,8 @@ def prepare_transfer_summary(aggregated: AggregatedEvaluation) -> TransferSummar
             "Transfer summaries require exactly one in-domain and one external test dataset; "
             f"trained_on={aggregated.trained_on!r}, datasets={list(aggregated.datasets)}"
         )
+    if aggregated.ci_level is None:
+        raise ValueError("Transfer summaries report interval endpoints, so they need a ci_level")
     external_dataset = external_datasets[0]
 
     performance = aggregated.performance.copy()

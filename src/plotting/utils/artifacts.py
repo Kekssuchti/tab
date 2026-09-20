@@ -25,6 +25,7 @@ def load_plot_artifacts(
     *,
     pipeline_runs: str | Sequence[str] | None = None,
     models: str | Sequence[str] | None = None,
+    exclude_models: str | Sequence[str] | None = None,
     full_training_only: bool = False,
     include_bootstrap: bool = True,
     tracking_uri: str = DEFAULT_TRACKING_URI,
@@ -34,6 +35,11 @@ def load_plot_artifacts(
     When ``full_training_only`` is true and no explicit run selector is given,
     all runs at the largest observed training size are retained. This naturally
     keeps repeated full-data runs together for downstream averaging.
+
+    ``exclude_models`` drops models by name from every returned frame, point
+    metrics and bootstrap columns alike, so a figure can leave out a model
+    without touching the run artifacts. It is the way to answer "the same figure
+    without LimiX" for any script that loads artifacts through here.
     """
     if pipeline_runs is not None and full_training_only:
         raise ValueError("pipeline_runs and full_training_only cannot be combined")
@@ -46,6 +52,10 @@ def load_plot_artifacts(
     )
     if metrics.empty:
         raise ValueError(f"No evaluation data found for experiment {experiment_name!r}")
+
+    dropped_instances: tuple[str, ...] = ()
+    if exclude_models is not None:
+        metrics, dropped_instances = _exclude_models(metrics, exclude_models)
 
     if full_training_only:
         run_ids = select_full_training_run_ids(metrics)
@@ -69,6 +79,8 @@ def load_plot_artifacts(
     )
     if bootstrap_scores.empty:
         raise ValueError("No bootstrap_metrics.csv artifacts found for the selected pipeline runs")
+    if dropped_instances:
+        bootstrap_scores = _drop_instances(bootstrap_scores, dropped_instances)
     bootstrap_run_ids = set(bootstrap_scores["pipeline_mlflow_run_id"].astype(str))
     if bootstrap_run_ids != set(run_ids):
         raise ValueError(
@@ -82,6 +94,38 @@ def load_plot_artifacts(
         experiment_name=experiment_name,
         run_ids=run_ids,
     )
+
+
+def _drop_instances(bootstrap_scores: pd.DataFrame, instances: Sequence[str]) -> pd.DataFrame:
+    """Remove the given model instances from a bootstrap frame.
+
+    The artifact is long (one row per run, dataset, metric, bootstrap, and model),
+    so the rows are filtered. Wide frames, whose model columns are named after the
+    instances, are handled too, so either artifact shape can be dropped here.
+    """
+    if "model_instance" in bootstrap_scores.columns:
+        remaining = bootstrap_scores.loc[~bootstrap_scores["model_instance"].astype(str).isin(set(instances))]
+        return remaining.drop(columns=[name for name in instances if name in remaining.columns])
+    return bootstrap_scores.drop(columns=[name for name in instances if name in bootstrap_scores.columns])
+
+
+def _exclude_models(metrics: pd.DataFrame, exclude_models: str | Sequence[str]) -> tuple[pd.DataFrame, tuple[str, ...]]:
+    """Drop the named models and report the instances that were removed."""
+    _require_columns(metrics, {"model_name", "model_instance"}, "evaluation metrics")
+    names = (exclude_models,) if isinstance(exclude_models, str) else tuple(exclude_models)
+    if not names:
+        return metrics, ()
+    present = set(metrics["model_name"].astype(str))
+    unknown = sorted(set(names) - present)
+    if unknown:
+        available = sorted(present)
+        raise ValueError(f"Cannot exclude unknown models {unknown}; available: {available}")
+    removed = metrics.loc[metrics["model_name"].astype(str).isin(names)]
+    instances = tuple(removed["model_instance"].astype(str).drop_duplicates())
+    remaining = metrics.loc[~metrics["model_name"].astype(str).isin(names)].copy()
+    if remaining.empty:
+        raise ValueError("Excluding these models leaves no evaluation data")
+    return remaining, instances
 
 
 def select_full_training_run_ids(metrics: pd.DataFrame) -> tuple[str, ...]:

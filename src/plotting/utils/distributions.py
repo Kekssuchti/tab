@@ -21,10 +21,10 @@ def draw_feature_distribution(
     alpha: float,
 ) -> None:
     """Draw density-normalized feature histograms on an existing axes."""
-    available = [dataset for dataset in ordered_datasets(list(frames)) if feature in frames[dataset].columns]
-    if not available:
-        raise ValueError(f"Feature {feature!r} is absent from every selected dataset")
-    for dataset in available:
+    missing = [dataset for dataset, frame in frames.items() if feature not in frame.columns]
+    if missing:
+        raise ValueError(f"Feature {feature!r} is missing from datasets: {', '.join(missing)}")
+    for dataset in ordered_datasets(list(frames)):
         sns.histplot(
             data=frames[dataset],
             x=feature,

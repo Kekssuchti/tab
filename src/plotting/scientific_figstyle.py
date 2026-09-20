@@ -240,7 +240,9 @@ def _audit(fig) -> list[str]:
             (ax.xaxis, "x", ax.get_shared_x_axes()),
             (ax.yaxis, "y", ax.get_shared_y_axes()),
         ):
-            if axis.get_label().get_text() or not ax.get_visible():
+            # An axis that is switched off never draws a label, so it cannot be
+            # missing one. One-dimensional diagrams (a rank axis) rely on this.
+            if not axis.get_visible() or axis.get_label().get_text() or not ax.get_visible():
                 continue
             # A shared axis is labelled once, on whichever panel shows the ticks.
             if any(getattr(sib, f"get_{name}label")() for sib in shared.get_siblings(ax) if sib is not ax):

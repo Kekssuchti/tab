@@ -36,6 +36,9 @@ class DataSettings:
     experiment_name: str = "sample_size_mimic_mortality"
     pipeline_runs: tuple[str, ...] | None = None
     full_training_only: bool = True
+    # Model names to leave out of every figure, for example a model that a
+    # reviewer asked to see separately.
+    exclude_models: tuple[str, ...] | None = None
     output_dir: Path = config.dir_plots / "baseline"
 
 
@@ -268,6 +271,7 @@ def main() -> None:
     artifacts = load_plot_artifacts(
         args.experiment_name,
         pipeline_runs=run_ids,
+        exclude_models=DATA.exclude_models,
         full_training_only=run_ids is None and DATA.full_training_only,
     )
     aggregated = aggregate_evaluation_runs(
