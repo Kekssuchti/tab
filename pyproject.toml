@@ -40,6 +40,7 @@ dependencies = [
     "nvtx>=0.2.16", # for limix
     "scikit-posthocs>=0.17.0",
     "tabdpt>=1.3.1",
+    "mlflow-export-import",
 ]
 
 [tool.uv.sources]
@@ -51,6 +52,7 @@ torchvision = [
 ]
 tabfm = { path = "external/tabfm", editable = true }
 exaonetabular = { git = "https://github.com/LGAI-Research/EXAONE-Tabular.git" }
+mlflow-export-import = { git = "https://github.com/mlflow/mlflow-export-import", rev = "2a5c2422b580421bb80b082f6766d66d2a17f43a" }
 
 # Without `unsafe-first-match` the AMD mirror
 # would win for shared packages such as numpy (we dont want that, only for rocm)
