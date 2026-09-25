@@ -17,6 +17,7 @@ DatasetOrigin = Literal["mimic", "tudd"]
 DatasetKind = Literal["normal", "readmission"]
 Target = Literal["mortality", "LOS7", "hours_to_readmit", "LOS", "hours_to_readmit_72"]
 SelectionStrategy = Literal["random", "knn", "knn-diverse"]
+RetrieverDistanceMetric = Literal["euclidean", "manhattan"]
 
 
 class SplitResult(TypedDict):
@@ -165,9 +166,10 @@ class CustomRetrieverConfig(StrictConfig):
     test_on DataSplitConfigs MUST use absolute numbers and not fractions
     """
 
-    train_size: int
+    train_size: int = Field(gt=0)
     test_on: tuple[DataSplitConfig, ...]
     selection_strategy: SelectionStrategy = Field(default="random")
+    distance_metric: RetrieverDistanceMetric = Field(default="euclidean")
 
     @field_validator("test_on")
     @classmethod

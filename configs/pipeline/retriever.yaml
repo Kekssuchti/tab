@@ -19,6 +19,7 @@ dataset:
       - dataset: tudd
         fraction: 1000
     selection_strategy: random
+    distance_metric: euclidean
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5

@@ -4,6 +4,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.neighbors import NearestNeighbors
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.utils import resample
 
 from src.config import config
@@ -14,6 +18,7 @@ from src.schemas.dataset_schemas import (
     DatasetOrigin,
     DatasetPartSummary,
     RegressionTargetSummary,
+    RetrieverDistanceMetric,
     SplitResult,
     XYDataset,
 )
@@ -236,6 +241,57 @@ def hash_file_sha256(path: Path) -> str | None:
     return digest.hexdigest()
 
 
+def _knn_train_positions(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    train_size: int,
+    distance_metric: RetrieverDistanceMetric,
+) -> np.ndarray:
+    """Retrieve a fixed budget of training rows nearest to the test cohort.
+
+    Features are median-imputed and standardized using training data only. Each
+    test row then ranks the training pool by the configured distance. Neighbors are
+    consumed rank-by-rank across test rows so that the selected set represents
+    the complete test cohort rather than only its densest region.
+    """
+    if train_size > len(X_train):
+        raise ValueError(f"Retriever train_size={train_size} exceeds the {len(X_train)} available training rows")
+
+    try:
+        train_values = X_train.to_numpy(dtype=float)
+        test_values = X_test.to_numpy(dtype=float)
+    except (TypeError, ValueError) as error:
+        raise TypeError("KNN retrieval only supports numeric feature columns") from error
+
+    preprocessing = make_pipeline(SimpleImputer(strategy="median"), StandardScaler())
+    train_values = preprocessing.fit_transform(train_values)
+    test_values = preprocessing.transform(test_values)
+
+    retriever = NearestNeighbors(metric=distance_metric, n_jobs=6).fit(train_values)
+    # we start with 2x budget for search since its expected that some test samples will have
+    # the same nearest train samples
+    n_neighbors = min(
+        train_size,
+        max(1, (train_size + len(test_values) - 1) // len(test_values)) * 2,
+    )
+
+    while True:
+        neighbor_positions = retriever.kneighbors(
+            test_values,
+            n_neighbors=n_neighbors,
+            return_distance=False,
+        )
+        # returns in order of rank
+        # this means its first-rank neighbor of sample 1, first-rank neighbor of sample 2 ...
+        # therefore having more neighbors than needed is not a problem
+        rank_ordered_positions = neighbor_positions.T.reshape(-1)
+        unique_positions = pd.unique(rank_ordered_positions)
+        if len(unique_positions) >= train_size:
+            return np.asarray(unique_positions[:train_size], dtype=int)
+
+        n_neighbors = min(train_size, n_neighbors * 2)
+
+
 def retriever_resample(
     retriever_config: CustomRetrieverConfig,
     data: dict[DatasetOrigin, SplitResult],
@@ -279,8 +335,7 @@ def retriever_resample(
 
     test_set = XYDataset(X=X_test, y=y_test)
 
-    # now we have a test set that is fully working we can sample the train data
-    # sampling is now dependend on the strategy
+    # Sample the fixed training budget according to the configured strategy.
     if retriever_config.selection_strategy == "random":
         train_indices = resample(
             train_data.X.index,
@@ -289,10 +344,16 @@ def retriever_resample(
             random_state=random_state,
             stratify=train_data.y,
         )
+        train_set = XYDataset(X=train_data.X.loc[train_indices], y=train_data.y.loc[train_indices])
     elif retriever_config.selection_strategy == "knn":
-        # here actual "smart / similarity" based sampling would come
-        pass
-
-    train_set = XYDataset(X=train_data.X.loc[train_indices], y=train_data.y.loc[train_indices])
+        train_positions = _knn_train_positions(
+            train_data.X,
+            test_set.X,
+            retriever_config.train_size,
+            retriever_config.distance_metric,
+        )
+        train_set = XYDataset(X=train_data.X.iloc[train_positions], y=train_data.y.iloc[train_positions])
+    else:
+        raise NotImplementedError(f"Retriever strategy {retriever_config.selection_strategy!r} is not implemented")
 
     return train_set, test_set

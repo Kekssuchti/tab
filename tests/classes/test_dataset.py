@@ -11,13 +11,14 @@ from src.classes.data_registry import TARGET_LIKE_COLUMNS, DatasetTask, dataset_
 from src.classes.dataset import Dataset
 from src.schemas.dataset_schemas import (
     ClassificationTargetSummary,
+    CustomRetrieverConfig,
     DatasetBundle,
     DatasetConfig,
     DataSplitConfig,
     RegressionTargetSummary,
     XYDataset,
 )
-from src.utils.dataset_utils import summarize_data_part
+from src.utils.dataset_utils import retriever_resample, summarize_data_part
 
 
 def _make_rows(source: str, start_id: int, n_rows: int) -> pd.DataFrame:
@@ -405,6 +406,114 @@ def test_training_sampling_seed_keeps_the_test_split_fixed():
     assert list(first_bundle.test_mimic.X["record_id"]) == list(second_bundle.test_mimic.X["record_id"])
     assert list(first_bundle.test_tudd.X["record_id"]) == list(second_bundle.test_tudd.X["record_id"])
     assert list(first_bundle.train_data.X["record_id"]) != list(second_bundle.train_data.X["record_id"])
+
+
+def test_knn_retriever_selects_fixed_budget_nearest_to_sampled_test_cohort():
+    train_X = pd.DataFrame(
+        {
+            "position": [0.0, 1.0, 2.0, 8.0, 9.0, 10.0],
+            "partly_missing": [0.0, None, 0.0, 0.0, 0.0, 0.0],
+        }
+    )
+    train_data = XYDataset(X=train_X, y=pd.Series([0, 1, 0, 1, 0, 1]))
+    test_X = pd.DataFrame(
+        {
+            "position": [0.1, 0.2, 9.8, 9.9],
+            "partly_missing": [0.0, None, 0.0, 0.0],
+        },
+        index=[100, 101, 102, 103],
+    )
+    test_y = pd.Series([0, 0, 1, 1], index=test_X.index)
+    data = {
+        "tudd": {
+            "X_train": train_X,
+            "X_test": test_X,
+            "y_train": train_data.y,
+            "y_test": test_y,
+        }
+    }
+    retriever_config = CustomRetrieverConfig(
+        train_size=4,
+        test_on=(DataSplitConfig(dataset="tudd", fraction=2),),
+        selection_strategy="knn",
+    )
+
+    train_set, test_set = retriever_resample(retriever_config, data, train_data, random_state=7)
+
+    assert len(train_set.X) == 4
+    assert train_set.X.index.is_unique
+    assert set(train_set.X["position"]) == {0.0, 1.0, 9.0, 10.0}
+    assert train_set.X.index.equals(train_set.y.index)
+    assert len(test_set.X) == 2
+    assert test_set.X.index.equals(test_set.y.index)
+
+
+def test_knn_retriever_uses_configured_distance_metric():
+    train_X = pd.DataFrame(
+        {
+            "feature_a": [2.0, 1.1, -2.0, 0.0, 0.0, -1.1],
+            "feature_b": [0.0, 1.1, 0.0, 2.0, -2.0, -1.1],
+        }
+    )
+    train_data = XYDataset(X=train_X, y=pd.Series([0, 1, 0, 1, 0, 1]))
+    test_X = pd.DataFrame({"feature_a": [0.0, 0.0], "feature_b": [0.0, 0.0]}, index=[10, 11])
+    test_y = pd.Series([0, 1], index=test_X.index)
+    data = {
+        "mimic": {
+            "X_train": train_X,
+            "X_test": test_X,
+            "y_train": train_data.y,
+            "y_test": test_y,
+        }
+    }
+
+    def selected_features(distance_metric: str) -> tuple[float, float]:
+        retriever_config = CustomRetrieverConfig(
+            train_size=1,
+            test_on=(DataSplitConfig(dataset="mimic", fraction=2),),
+            selection_strategy="knn",
+            distance_metric=distance_metric,
+        )
+        train_set, _ = retriever_resample(retriever_config, data, train_data, random_state=7)
+        return tuple(train_set.X.iloc[0])
+
+    euclidean_features = selected_features("euclidean")
+    manhattan_features = selected_features("manhattan")
+
+    assert tuple(abs(value) for value in euclidean_features) == pytest.approx((1.1, 1.1))
+    assert sorted(abs(value) for value in manhattan_features) == pytest.approx([0.0, 2.0])
+
+
+def test_custom_retriever_rejects_unknown_distance_metric():
+    with pytest.raises(ValidationError, match="distance_metric"):
+        CustomRetrieverConfig(
+            train_size=1,
+            test_on=(DataSplitConfig(dataset="mimic", fraction=1),),
+            selection_strategy="knn",
+            distance_metric="cosine",
+        )
+
+
+def test_knn_retriever_rejects_budget_larger_than_training_pool():
+    train_data = XYDataset(X=pd.DataFrame({"feature": [0.0, 1.0]}), y=pd.Series([0, 1]))
+    test_X = pd.DataFrame({"feature": [0.5, 0.6]}, index=[10, 11])
+    test_y = pd.Series([0, 1], index=test_X.index)
+    data = {
+        "mimic": {
+            "X_train": train_data.X,
+            "X_test": test_X,
+            "y_train": train_data.y,
+            "y_test": test_y,
+        }
+    }
+    retriever_config = CustomRetrieverConfig(
+        train_size=3,
+        test_on=(DataSplitConfig(dataset="mimic", fraction=2),),
+        selection_strategy="knn",
+    )
+
+    with pytest.raises(ValueError, match="exceeds the 2 available training rows"):
+        retriever_resample(retriever_config, data, train_data, random_state=7)
 
 
 def test_readmission_dataset_uses_readmission_task_policy_without_normal_files(tmp_path, monkeypatch):
