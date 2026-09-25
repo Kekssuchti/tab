@@ -43,7 +43,7 @@ def _final_test_predictions() -> FinalTestPredictions:
     )
 
 
-def _tuned_training_result(model_name: str) -> ModelTrainingResult:
+def _tuned_training_result(model_name: str, *, include_retriever: bool = False) -> ModelTrainingResult:
     return ModelTrainingResult(
         model_name=model_name,
         task_type="classification",
@@ -57,6 +57,8 @@ def _tuned_training_result(model_name: str) -> ModelTrainingResult:
                 mimic_prediction_time=0.1,
                 tudd_test=classification_metrics(0.0),
                 tudd_prediction_time=0.2,
+                retriever_test=classification_metrics(0.75) if include_retriever else None,
+                retriever_prediction_time=0.3 if include_retriever else None,
             ),
             fold_results=[FoldRecord(0, 0, classification_metrics(1.0), 0.0, {})],
         ),
@@ -127,6 +129,16 @@ def test_pipeline_exposes_tuned_test_metrics_as_model_result():
     assert result.final_test_metrics.tudd_test.accuracy == 0.0
     assert result.final_test_metrics.mimic_minus_tudd.accuracy == 1.0
     assert result.final_test_metrics.mimic_minus_tudd.roc_auc == 1.0
+
+
+def test_pipeline_exposes_optional_retriever_metrics_as_model_result():
+    result = Pipeline._model_result_from_training_result(
+        _tuned_training_result("fake-classifier", include_retriever=True)
+    )
+
+    assert set(result.metrics_by_test_set) == {"retriever"}
+    assert result.metrics_by_test_set["retriever"].accuracy == 0.75
+    assert np.isclose(result.total_time, 0.5)
 
 
 def test_pipeline_records_do_not_own_live_models(monkeypatch):

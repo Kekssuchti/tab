@@ -237,8 +237,8 @@ class MLflowPipelineLogger:
         with TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir) / ARTIFACT_TEST_PREDICTIONS
             prediction_tables.write(directory)
-            for dataset in ("mimic", "tudd"):
-                mlflow.log_artifact(str(directory / f"{dataset}.csv"), artifact_path=ARTIFACT_TEST_PREDICTIONS)
+            for path in sorted(directory.glob("*.csv")):
+                mlflow.log_artifact(str(path), artifact_path=ARTIFACT_TEST_PREDICTIONS)
             mlflow.log_artifact(
                 str(directory / PREDICTION_MANIFEST_FILENAME),
                 artifact_path=ARTIFACT_TEST_PREDICTIONS,
@@ -300,6 +300,7 @@ def _plotting_metrics_frame(
                 "fit_time": model_run.evaluation.fit_time,
                 "predict_time_mimic": predict_times.get("mimic"),
                 "predict_time_tudd": predict_times.get("tudd"),
+                "predict_time_retriever": predict_times.get("retriever"),
                 "training_time": cv_time + model_run.evaluation.fit_time,
                 "total_time": cv_time + model_run.evaluation.total_time,
             }

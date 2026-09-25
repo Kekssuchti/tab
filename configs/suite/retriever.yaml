@@ -1,0 +1,16 @@
+# Repeat the random retriever baseline with five training/model seeds.
+# The source split and bootstrap plan stay fixed; training_sample_seed redraws
+# both the random training subset and the sampled retriever cohort.
+
+name: retriever-repeat
+base_config: ../pipeline/retriever.yaml
+matrix:
+  - path: dataset.custom_retriever.selection_strategy
+    values: ["random"]
+  - path: random_states
+    values:
+      - { model_training_seed: 1337, training_sample_seed: 1337, cv_split_seed: 1337 }
+      - { model_training_seed: 1338, training_sample_seed: 1338, cv_split_seed: 1338 }
+      - { model_training_seed: 1339, training_sample_seed: 1339, cv_split_seed: 1339 }
+      - { model_training_seed: 1340, training_sample_seed: 1340, cv_split_seed: 1340 }
+      - { model_training_seed: 1341, training_sample_seed: 1341, cv_split_seed: 1341 }

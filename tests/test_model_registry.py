@@ -22,9 +22,7 @@ ADAPTER_MODULES = {
     "src.adapter.tabpfn_adapter",
     "src.adapter.tabicl_adapter",
     "src.adapter.limix_adapter",
-    "src.adapter.mitra_adapter",
     "src.adapter.orion_msp_adapter",
-    "src.adapter.orion_bix_adapter",
     "src.adapter.tabfm_adapter",
     "src.adapter.tabswift_adapter",
 }

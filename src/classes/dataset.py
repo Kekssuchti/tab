@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import TypedDict
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -16,23 +15,16 @@ from src.schemas.dataset_schemas import (
     DatasetFileSummary,
     DatasetOrigin,
     DatasetSummary,
+    SplitResult,
     XYDataset,
 )
 from src.utils.dataset_utils import (
     hash_file_sha256,
     remove_impossible_values,
+    retriever_resample,
     summarize_data_part,
 )
 from src.utils.logger import logger
-
-
-class _SplitResult(TypedDict):
-    """Train-test split for one source dataset."""
-
-    X_train: pd.DataFrame
-    X_test: pd.DataFrame
-    y_train: pd.Series
-    y_test: pd.Series
 
 
 class Dataset:
@@ -59,6 +51,7 @@ class Dataset:
         self.sample_seed = sample_seed
         self.data_cleaner = DataCleaner(self.config.data_cleaner)
         self._task = dataset_task_for_target(self.config.target)
+        self.retriever_config = self.config.custom_retriever
 
     def get_dataset(self) -> DatasetBundle:
         """
@@ -134,7 +127,7 @@ class Dataset:
             DataBundle
         """
 
-        splits_dict: dict[DatasetOrigin, _SplitResult] = {}
+        splits_dict: dict[DatasetOrigin, SplitResult] = {}
 
         for key, df in dfs.items():
             X_train, X_test, y_train, y_test = self._split_single_df(df)
@@ -150,6 +143,9 @@ class Dataset:
 
         X_train_parts: list[pd.DataFrame] = []
         y_train_parts: list[pd.Series] = []
+
+        test_mimic = XYDataset(X=splits_dict["mimic"]["X_test"], y=splits_dict["mimic"]["y_test"])
+        test_tudd = XYDataset(X=splits_dict["tudd"]["X_test"], y=splits_dict["tudd"]["y_test"])
 
         for training_data_split in self.config.train_on:
             # each datasplit we train on
@@ -190,19 +186,25 @@ class Dataset:
             y=y_train_combined.loc[shuffled_indices],
         )
 
-        test_mimic = XYDataset(X=splits_dict["mimic"]["X_test"], y=splits_dict["mimic"]["y_test"])
+        data_bundle = DatasetBundle(train_data=train_data, test_mimic=test_mimic, test_tudd=test_tudd)
 
-        test_tudd = XYDataset(X=splits_dict["tudd"]["X_test"], y=splits_dict["tudd"]["y_test"])
-
-        data_bundle = DatasetBundle(
-            train_data=train_data,
-            test_mimic=test_mimic,
-            test_tudd=test_tudd,
-        )
+        if self.retriever_config:
+            train_set, test_set = retriever_resample(
+                retriever_config=self.retriever_config,
+                data=splits_dict,
+                train_data=train_data,
+                random_state=self.sample_seed,
+            )
+            data_bundle = DatasetBundle(
+                train_data=train_set,
+                test_mimic=test_mimic,
+                test_tudd=test_tudd,
+                test_retriever=test_set,
+            )
 
         return data_bundle
 
-    def _align_split_feature_columns(self, splits_dict: dict[DatasetOrigin, _SplitResult]) -> None:
+    def _align_split_feature_columns(self, splits_dict: dict[DatasetOrigin, SplitResult]) -> None:
         common_columns = set.intersection(*(set(split["X_train"].columns) for split in splits_dict.values()))
         ordered_columns = [
             column for column in next(iter(splits_dict.values()))["X_train"].columns if column in common_columns

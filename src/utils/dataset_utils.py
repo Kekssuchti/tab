@@ -4,14 +4,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.utils import resample
 
 from src.config import config
 from src.schemas.base_schemas import TaskType
 from src.schemas.dataset_schemas import (
     ClassificationTargetSummary,
+    CustomRetrieverConfig,
     DatasetOrigin,
     DatasetPartSummary,
     RegressionTargetSummary,
+    SplitResult,
     XYDataset,
 )
 from src.utils.logger import logger
@@ -231,3 +234,65 @@ def hash_file_sha256(path: Path) -> str | None:
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def retriever_resample(
+    retriever_config: CustomRetrieverConfig,
+    data: dict[DatasetOrigin, SplitResult],
+    train_data: XYDataset,
+    random_state: int,
+) -> tuple[XYDataset, XYDataset]:
+    # create custom test set and sample indecies according to strategy
+    # returns train_data and test_data as XYDatasets
+
+    # loop through to create test set
+    X_test_parts: list[pd.DataFrame] = []
+    y_test_parts: list[pd.Series] = []
+
+    for origin, split in data.items():
+        for test_data_split in retriever_config.test_on:
+            if origin != test_data_split.dataset:
+                continue
+
+            new_test_sample_idx = resample(
+                split["X_test"].index,
+                n_samples=test_data_split.fraction,
+                random_state=random_state,
+                replace=False,
+                stratify=split["y_test"],
+            )
+            X_test_sampled = split["X_test"].loc[new_test_sample_idx].copy()
+            y_test_sampled = split["y_test"].loc[new_test_sample_idx].copy()
+
+            # Preserve stable source-row identity while preventing collisions when
+            # the retriever cohort combines MIMIC and TUDD rows.
+            origin_code = 0 if origin == "mimic" else 1
+            retriever_index = pd.Index(2 * np.asarray(new_test_sample_idx, dtype=int) + origin_code)
+            X_test_sampled.index = retriever_index
+            y_test_sampled.index = retriever_index
+
+            X_test_parts.append(X_test_sampled)
+            y_test_parts.append(y_test_sampled)
+
+    X_test = pd.concat(X_test_parts)
+    y_test = pd.concat(y_test_parts)
+
+    test_set = XYDataset(X=X_test, y=y_test)
+
+    # now we have a test set that is fully working we can sample the train data
+    # sampling is now dependend on the strategy
+    if retriever_config.selection_strategy == "random":
+        train_indices = resample(
+            train_data.X.index,
+            replace=False,
+            n_samples=retriever_config.train_size,
+            random_state=random_state,
+            stratify=train_data.y,
+        )
+    elif retriever_config.selection_strategy == "knn":
+        # here actual "smart / similarity" based sampling would come
+        pass
+
+    train_set = XYDataset(X=train_data.X.loc[train_indices], y=train_data.y.loc[train_indices])
+
+    return train_set, test_set

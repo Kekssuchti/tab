@@ -1,0 +1,82 @@
+random_states:
+  model_training_seed: 1337
+  model_inference_seed: 1337
+  cv_split_seed: 1337
+  tuning_sampler_seed: 1337
+  training_sample_seed: 1337
+  evaluation_bootstrap_seed: 1337
+
+dataset:
+  target: mortality
+  random_state: 1337
+  train_size: 0.8
+  train_on:
+    - dataset: tudd
+      fraction: 1.0
+  custom_retriever:
+    train_size: 6400
+    test_on:
+      - dataset: tudd
+        fraction: 1000
+    selection_strategy: random
+  data_cleaner:
+    outlier_limits_path: configs/data_limits.json
+    missing_threshold_row: 0.5
+  scaler_encoder:
+    type: none
+  imputer:
+    imputation_method: none
+    flag_missing: false
+    knn_neighbors: 5
+
+training:
+  - name: tabpfn-3.5
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+
+  - name: tabpfn-3.5-fast
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+
+  - name: tabicl-2
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+
+  - name: tabfm
+    preprocessing:
+      imputer:
+        imputation_method: mean
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+
+  - name: exaone
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+
+  - name: causilo
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+
+  - name: tabdpt
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+
+mlflow:
+  enabled: true
+  tracking_uri: sqlite:///mlflow.db
+  artifact_location: mlartifacts
+  experiment_name: retriever_tudd_mortality

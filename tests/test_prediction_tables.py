@@ -1,8 +1,10 @@
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from src.utils.prediction_metrics import recompute_classification_metrics
+from src.utils.prediction_metrics import evaluate_classification_models, recompute_classification_metrics
 from src.utils.prediction_tables import (
     PREDICTION_MANIFEST_FILENAME,
     BinaryTestPredictions,
@@ -14,6 +16,7 @@ from src.utils.prediction_tables import (
 _COHORT_FINGERPRINTS = {
     "mimic": "sha256:" + "a" * 64,
     "tudd": "sha256:" + "b" * 64,
+    "retriever": "sha256:" + "c" * 64,
 }
 
 
@@ -24,7 +27,15 @@ def _accumulator() -> PredictionTableAccumulator:
 def _predictions(
     mimic_probability=(0.1, 0.2, 0.8, 0.9),
     tudd_probability=(0.1, 0.6, 0.4, 0.9),
+    retriever_probability=None,
 ) -> FinalTestPredictions:
+    retriever = None
+    if retriever_probability is not None:
+        retriever = BinaryTestPredictions(
+            test_set_id=np.array([301, 302, 303, 304]),
+            y_true=np.array([0, 0, 1, 1]),
+            positive_class_probability=np.array(retriever_probability),
+        )
     return FinalTestPredictions(
         mimic=BinaryTestPredictions(
             test_set_id=np.array([101, 102, 103, 104]),
@@ -36,6 +47,15 @@ def _predictions(
             y_true=np.array([0, 0, 1, 1]),
             positive_class_probability=np.array(tudd_probability),
         ),
+        retriever=retriever,
+    )
+
+
+def _empty_binary_predictions() -> BinaryTestPredictions:
+    return BinaryTestPredictions(
+        test_set_id=np.array([], dtype=int),
+        y_true=np.array([], dtype=int),
+        positive_class_probability=np.array([], dtype=float),
     )
 
 
@@ -65,6 +85,53 @@ def test_prediction_snapshot_accumulates_wider_generations_and_validates_hashes(
     assert mimic["test_set_id"].str.fullmatch(r"ts_[0-9a-f]{64}").all()
     assert not set(mimic["test_set_id"]).intersection({"101", "102", "103", "104"})
     np.testing.assert_allclose(mimic["y_pred_model"], [0.1, 0.2, 0.8, 0.9])
+
+
+def test_prediction_snapshot_loader_remains_compatible_with_v1(tmp_path):
+    accumulator = _accumulator()
+    accumulator.add("model", _predictions())
+    accumulator.write(tmp_path)
+
+    manifest_path = tmp_path / PREDICTION_MANIFEST_FILENAME
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["version"] = "1"
+    manifest.pop("datasets")
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+
+    snapshot = load_prediction_snapshot(tmp_path)
+
+    assert tuple(snapshot.tables) == ("mimic", "tudd")
+
+
+def test_prediction_snapshot_and_metrics_include_optional_retriever(tmp_path):
+    accumulator = _accumulator()
+    retriever_predictions = _predictions(retriever_probability=(0.2, 0.3, 0.7, 0.8))
+    accumulator.add(
+        "model",
+        FinalTestPredictions(
+            mimic=_empty_binary_predictions(),
+            tudd=_empty_binary_predictions(),
+            retriever=retriever_predictions.retriever,
+        ),
+    )
+    accumulator.write(tmp_path)
+
+    snapshot = load_prediction_snapshot(tmp_path)
+    evaluation = evaluate_classification_models(snapshot.tables, n_bootstrap=50, random_state=7)
+    metrics = evaluation.metrics
+
+    assert tuple(snapshot.tables) == ("retriever",)
+    assert (tmp_path / "retriever.csv").exists()
+    assert not (tmp_path / "mimic.csv").exists()
+    assert not (tmp_path / "tudd.csv").exists()
+    assert metrics[["scope", "dataset"]].to_records(index=False).tolist() == [
+        ("test", "retriever"),
+    ]
+    assert set(evaluation.bootstrap_scores["dataset"]) == {"retriever"}
+    assert set(evaluation.pairwise_wins) == {"retriever_roc_auc", "retriever_prc_auc"}
+    retriever = metrics.loc[metrics["dataset"].eq("retriever")].iloc[0]
+    assert retriever["roc_auc"] == pytest.approx(1.0)
+    assert retriever["accuracy"] == pytest.approx(1.0)
 
 
 def test_stable_test_ids_depend_on_source_file_fingerprint():

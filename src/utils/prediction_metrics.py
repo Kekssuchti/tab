@@ -11,7 +11,6 @@ from src.schemas.metrics import calculate_metric_diff
 from src.utils.evaluation_utils import evaluate_bootstrap_classification
 from src.utils.prediction_tables import (
     PREDICTION_COLUMN_PREFIX,
-    PREDICTION_DATASETS,
     Y_TRUE_COLUMN,
     is_prediction_column,
 )
@@ -48,15 +47,17 @@ def evaluate_classification_models(
     """Evaluate every model and compare paired bootstrap AUROC/AUPRC scores."""
     logger.info("Evaluating classification models")
 
-    model_columns = [column for column in tables["mimic"] if is_prediction_column(column)]
-    bootstrap_seeds = _dataset_bootstrap_seeds(random_state)
-    bootstrap_by_dataset = {dataset: {metric: {} for metric in PAIRWISE_METRICS} for dataset in PREDICTION_DATASETS}
+    datasets = tuple(tables)
+    first_table = next(iter(tables.values()))
+    model_columns = [column for column in first_table if is_prediction_column(column)]
+    bootstrap_seeds = _dataset_bootstrap_seeds(datasets, random_state)
+    bootstrap_by_dataset = {dataset: {metric: {} for metric in PAIRWISE_METRICS} for dataset in datasets}
     rows = []
 
     for column in model_columns:
         model_instance = column.removeprefix(PREDICTION_COLUMN_PREFIX)
         point_metrics = {}
-        for dataset in PREDICTION_DATASETS:
+        for dataset in datasets:
             table = tables[dataset]
             probability = table[column].to_numpy(dtype=float)
             metrics, lower, upper, bootstrap = evaluate_bootstrap_classification(
@@ -77,19 +78,20 @@ def evaluate_classification_models(
                 row[f"{metric}_ci_upper"] = float(upper_bound)
             rows.append(row)
 
-        difference = calculate_metric_diff(point_metrics["mimic"], point_metrics["tudd"])
-        row = _result_row(
-            column,
-            "test_delta",
-            "mimic_minus_tudd",
-            "difference",
-            None,
-            None,
-        )
-        row.update(difference.scores)
-        rows.append(row)
+        if "mimic" in point_metrics and "tudd" in point_metrics:
+            difference = calculate_metric_diff(point_metrics["mimic"], point_metrics["tudd"])
+            row = _result_row(
+                column,
+                "test_delta",
+                "mimic_minus_tudd",
+                "difference",
+                None,
+                None,
+            )
+            row.update(difference.scores)
+            rows.append(row)
 
-    bootstrap_scores = _bootstrap_scores_frame(bootstrap_by_dataset, n_bootstrap)
+    bootstrap_scores = _bootstrap_scores_frame(bootstrap_by_dataset, datasets, n_bootstrap)
 
     return ClassificationModelEvaluation(
         metrics=pd.DataFrame(rows, columns=RESULT_COLUMNS),
@@ -135,17 +137,18 @@ def recompute_classification_metrics(
     ).metrics
 
 
-def _dataset_bootstrap_seeds(random_state: int | None) -> dict[str, int]:
+def _dataset_bootstrap_seeds(datasets: tuple[str, ...], random_state: int | None) -> dict[str, int]:
     rng = np.random.default_rng(random_state)
-    return {dataset: int(rng.integers(np.iinfo(np.uint64).max, dtype=np.uint64)) for dataset in PREDICTION_DATASETS}
+    return {dataset: int(rng.integers(np.iinfo(np.uint64).max, dtype=np.uint64)) for dataset in datasets}
 
 
 def _bootstrap_scores_frame(
     bootstrap_by_dataset: dict[str, dict[str, dict[str, np.ndarray]]],
+    datasets: tuple[str, ...],
     n_bootstrap: int,
 ) -> pd.DataFrame:
     frames = []
-    for dataset in PREDICTION_DATASETS:
+    for dataset in datasets:
         for metric in PAIRWISE_METRICS:
             frame = pd.DataFrame(bootstrap_by_dataset[dataset][metric])
             frame.insert(0, "bootstrap_id", np.arange(n_bootstrap))

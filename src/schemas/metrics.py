@@ -55,12 +55,14 @@ class RegressionMetrics:
 
 @dataclass(frozen=True)
 class FinalTestMetrics[MetricT: (ClassificationMetrics, RegressionMetrics)]:
-    """Point metrics and prediction times for the two held-out datasets."""
+    """Point metrics and prediction times for the evaluated datasets."""
 
     mimic_test: MetricT
     mimic_prediction_time: float
     tudd_test: MetricT
     tudd_prediction_time: float
+    retriever_test: MetricT | None = None
+    retriever_prediction_time: float | None = None
 
     @property
     def mimic_minus_tudd(self) -> MetricT:

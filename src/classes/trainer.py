@@ -409,14 +409,23 @@ class Trainer:
             method=method,
         )
 
-        mimic_metrics = tuning_result.final_test_metrics.mimic_test
-        tudd_metrics = tuning_result.final_test_metrics.tudd_test
+        final_test_metrics = tuning_result.final_test_metrics
+        mimic_metrics = final_test_metrics.mimic_test
+        tudd_metrics = final_test_metrics.tudd_test
         if self.task_type == "classification":
-            logger.info(
-                f"Model tuning complete in {tuning_result.total_time:.3f}s. "
-                f"AUROC MIMIC: {mimic_metrics.roc_auc:.4f}, "
-                f"AUROC TUDD: {tudd_metrics.roc_auc:.4f}"
-            )
+            if final_test_metrics.retriever_test is not None:
+                retriever_auroc = final_test_metrics.retriever_test.roc_auc
+                auroc_text = "undefined" if retriever_auroc is None else f"{retriever_auroc:.4f}"
+                logger.info(
+                    f"Model tuning complete in {tuning_result.total_time:.3f}s. "
+                    f"AUROC retriever: {auroc_text}"
+                )
+            else:
+                logger.info(
+                    f"Model tuning complete in {tuning_result.total_time:.3f}s. "
+                    f"AUROC MIMIC: {mimic_metrics.roc_auc:.4f}, "
+                    f"AUROC TUDD: {tudd_metrics.roc_auc:.4f}"
+                )
         else:
             logger.info(
                 f"Model tuning complete in {tuning_result.total_time:.3f}s. "

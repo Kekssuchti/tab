@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypedDict
 
 import pandas as pd
 from pydantic import Field, field_validator, model_validator
@@ -16,6 +16,16 @@ DatasetName = Literal["mimic", "tudd", "mimic_readmission", "tudd_readmission"]
 DatasetOrigin = Literal["mimic", "tudd"]
 DatasetKind = Literal["normal", "readmission"]
 Target = Literal["mortality", "LOS7", "hours_to_readmit", "LOS", "hours_to_readmit_72"]
+SelectionStrategy = Literal["random", "knn", "knn-diverse"]
+
+
+class SplitResult(TypedDict):
+    """Train-test split for one source dataset."""
+
+    X_train: pd.DataFrame
+    X_test: pd.DataFrame
+    y_train: pd.Series
+    y_test: pd.Series
 
 
 @dataclass(frozen=True)
@@ -148,6 +158,26 @@ class DataSplitConfig(StrictConfig):
         return v
 
 
+class CustomRetrieverConfig(StrictConfig):
+    """
+    Retriever config to adjust training sample selection.
+
+    test_on DataSplitConfigs MUST use absolute numbers and not fractions
+    """
+
+    train_size: int
+    test_on: tuple[DataSplitConfig, ...]
+    selection_strategy: SelectionStrategy = Field(default="random")
+
+    @field_validator("test_on")
+    @classmethod
+    def test_on_absolute(cls, v: tuple[DataSplitConfig, ...]) -> tuple[DataSplitConfig, ...]:
+        for split in v:
+            if not isinstance(split.fraction, int):
+                raise TypeError("test_on DataSplitConfigs MUST use absolute numbers and not fractions")
+        return v
+
+
 class DatasetConfig(StrictConfig):
     """
     Configuration for dataset construction.
@@ -200,6 +230,7 @@ class DatasetConfig(StrictConfig):
     )
     scaler_encoder: ScalerEncoderConfig = Field(default_factory=ScalerEncoderConfig)
     imputer: ImputerConfig = Field(default_factory=ImputerConfig)
+    custom_retriever: CustomRetrieverConfig | None = Field(default=None)
 
     @field_validator("train_on")
     @classmethod
@@ -254,3 +285,4 @@ class DatasetBundle:
     train_data: XYDataset
     test_mimic: XYDataset
     test_tudd: XYDataset
+    test_retriever: XYDataset | None = None

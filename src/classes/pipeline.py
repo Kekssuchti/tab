@@ -147,23 +147,30 @@ class Pipeline:
             return None
 
         test_metrics = tuning_result.final_test_metrics
-        mimic_metrics = test_metrics.mimic_test
-        tudd_metrics = test_metrics.tudd_test
-        test_results = (
-            TestSetEvaluationRecord(
-                "mimic",
-                mimic_metrics,
-                test_metrics.mimic_prediction_time,
-            ),
-            TestSetEvaluationRecord(
-                "tudd",
-                tudd_metrics,
-                test_metrics.tudd_prediction_time,
-            ),
-        )
+        if test_metrics.retriever_test is not None and test_metrics.retriever_prediction_time is not None:
+            test_results = [
+                TestSetEvaluationRecord(
+                    "retriever",
+                    test_metrics.retriever_test,
+                    test_metrics.retriever_prediction_time,
+                )
+            ]
+        else:
+            test_results = [
+                TestSetEvaluationRecord(
+                    "mimic",
+                    test_metrics.mimic_test,
+                    test_metrics.mimic_prediction_time,
+                ),
+                TestSetEvaluationRecord(
+                    "tudd",
+                    test_metrics.tudd_test,
+                    test_metrics.tudd_prediction_time,
+                ),
+            ]
         return ModelEvaluationRecord(
             model_name=training_result.model_name,
-            test_results=test_results,
+            test_results=tuple(test_results),
             final_test_metrics=test_metrics,
             fit_time=training_result.fit_time,
         )

@@ -12,7 +12,9 @@ import pandas as pd
 from src.schemas.dataset_schemas import DatasetOrigin, DatasetSummary
 
 PREDICTION_DATASETS: tuple[DatasetOrigin, ...] = ("mimic", "tudd")
-PREDICTION_SCHEMA_VERSION = "1"
+RETRIEVER_DATASET = "retriever"
+PREDICTION_SCHEMA_VERSION = "2"
+_SUPPORTED_PREDICTION_SCHEMA_VERSIONS = {"1", PREDICTION_SCHEMA_VERSION}
 PREDICTION_MANIFEST_FILENAME = "manifest.json"
 TEST_SET_ID_COLUMN = "test_set_id"
 Y_TRUE_COLUMN = "y_true"
@@ -52,6 +54,7 @@ class BinaryTestPredictions:
 class FinalTestPredictions:
     mimic: BinaryTestPredictions
     tudd: BinaryTestPredictions
+    retriever: BinaryTestPredictions | None = None
 
 
 @dataclass(frozen=True)
@@ -61,42 +64,52 @@ class PredictionSnapshot:
 
     @property
     def model_instance_ids(self) -> tuple[str, ...]:
-        return _model_instance_ids(self.tables["mimic"])
+        return _model_instance_ids(next(iter(self.tables.values())))
 
 
 class PredictionTableAccumulator:
-    """Build the two cumulative held-out prediction tables."""
+    """Build cumulative prediction tables for all evaluated cohorts."""
 
     def __init__(self, cohort_fingerprints: Mapping[str, str] | None = None) -> None:
         self._cohort_fingerprints = dict(cohort_fingerprints or {})
-        self._tables: dict[DatasetOrigin, pd.DataFrame] = {}
+        self._tables: dict[str, pd.DataFrame] = {}
 
     def __bool__(self) -> bool:
         return bool(self._tables)
 
     @property
     def model_instance_ids(self) -> tuple[str, ...]:
-        return _model_instance_ids(self._tables["mimic"]) if self._tables else ()
+        return _model_instance_ids(next(iter(self._tables.values()))) if self._tables else ()
 
     def add(self, model_instance_id: str, predictions: FinalTestPredictions) -> None:
         column = f"{PREDICTION_COLUMN_PREFIX}{model_instance_id}"
+        prediction_sets = {dataset: getattr(predictions, dataset) for dataset in PREDICTION_DATASETS}
+        if predictions.retriever is not None:
+            prediction_sets[RETRIEVER_DATASET] = predictions.retriever
+        # Retriever-only runs retain required MIMIC/TUDD fields as empty
+        # structural placeholders; only populated cohorts become artifacts.
+        prediction_sets = {
+            dataset: values for dataset, values in prediction_sets.items() if len(values.test_set_id) > 0
+        }
         incoming = {
             dataset: _prediction_frame(
-                getattr(predictions, dataset),
+                values,
                 column,
                 self._cohort_fingerprints[dataset],
             )
-            for dataset in PREDICTION_DATASETS
+            for dataset, values in prediction_sets.items()
         }
 
         if not self._tables:
             self._tables = incoming
             return
 
+        if incoming.keys() != self._tables.keys():
+            raise ValueError("The evaluated test sets changed between models")
+
         # add the new col to existing table
         updated = {}
-        for dataset in PREDICTION_DATASETS:
-            current = self._tables[dataset]
+        for dataset, current in self._tables.items():
             if not current[_BASE_COLUMNS].equals(incoming[dataset][_BASE_COLUMNS]):
                 raise ValueError(f"The {dataset} test set changed between models")
             updated[dataset] = current.assign(**{column: incoming[dataset][column]})
@@ -117,12 +130,16 @@ class PredictionTableAccumulator:
             table.to_csv(path, index=False)
             file_hashes[dataset] = _file_sha256(path)
 
-        generation_id = _sha256("|".join(file_hashes[dataset] for dataset in PREDICTION_DATASETS))
+        datasets = tuple(self._tables)
+        generation_id = _sha256("|".join(file_hashes[dataset] for dataset in datasets))
         manifest = {
             "version": PREDICTION_SCHEMA_VERSION,
             "generation_id": generation_id,
-            "cohort_fingerprints": self._cohort_fingerprints,
-            "files": {dataset: {"sha256": file_hashes[dataset]} for dataset in PREDICTION_DATASETS},
+            "datasets": list(datasets),
+            "cohort_fingerprints": {
+                dataset: self._cohort_fingerprints[dataset] for dataset in datasets
+            },
+            "files": {dataset: {"sha256": file_hashes[dataset]} for dataset in datasets},
         }
         (output_dir / PREDICTION_MANIFEST_FILENAME).write_text(
             json.dumps(manifest, indent=2, sort_keys=True),
@@ -131,10 +148,16 @@ class PredictionTableAccumulator:
 
 
 def cohort_fingerprints_from_summary(summary: DatasetSummary) -> dict[str, str]:
-    """Fingerprint each target/source pair without exposing clinical identifiers."""
+    """Fingerprint each evaluation cohort without exposing clinical identifiers."""
 
     source_hashes = {data_file.data_origin: data_file.sha256 for data_file in summary.data_files}
-    return {dataset: _sha256(f"{summary.target}:{dataset}:{source_hashes[dataset]}") for dataset in PREDICTION_DATASETS}
+    fingerprints = {
+        dataset: _sha256(f"{summary.target}:{dataset}:{source_hashes[dataset]}")
+        for dataset in PREDICTION_DATASETS
+    }
+    retriever_sources = ":".join(f"{dataset}:{source_hashes[dataset]}" for dataset in PREDICTION_DATASETS)
+    fingerprints[RETRIEVER_DATASET] = _sha256(f"{summary.target}:{RETRIEVER_DATASET}:{retriever_sources}")
+    return fingerprints
 
 
 def load_prediction_snapshot(snapshot_dir: str | Path) -> PredictionSnapshot:
@@ -142,23 +165,26 @@ def load_prediction_snapshot(snapshot_dir: str | Path) -> PredictionSnapshot:
 
     snapshot_dir = Path(snapshot_dir)
     manifest = json.loads((snapshot_dir / PREDICTION_MANIFEST_FILENAME).read_text(encoding="utf-8"))
-    if manifest["version"] != PREDICTION_SCHEMA_VERSION:
-        raise ValueError(f"Unsupported prediction snapshot version: {manifest['version']}")
+    version = manifest["version"]
+    if version not in _SUPPORTED_PREDICTION_SCHEMA_VERSIONS:
+        raise ValueError(f"Unsupported prediction snapshot version: {version}")
 
+    datasets = PREDICTION_DATASETS if version == "1" else tuple(manifest["datasets"])
     tables = {}
     hashes = {}
-    for dataset in PREDICTION_DATASETS:
+    for dataset in datasets:
         path = snapshot_dir / f"{dataset}.csv"
         hashes[dataset] = _file_sha256(path)
         if hashes[dataset] != manifest["files"][dataset]["sha256"]:
             raise ValueError(f"Prediction CSV hash mismatch for {dataset}")
         tables[dataset] = pd.read_csv(path)
 
-    generation_id = _sha256("|".join(hashes[dataset] for dataset in PREDICTION_DATASETS))
+    generation_id = _sha256("|".join(hashes[dataset] for dataset in datasets))
     if generation_id != manifest["generation_id"]:
         raise ValueError("Prediction snapshot generation does not match its files")
 
-    model_columns = [column for column in tables["mimic"] if is_prediction_column(column)]
+    first_table = next(iter(tables.values()))
+    model_columns = [column for column in first_table if is_prediction_column(column)]
     for dataset, table in tables.items():
         if list(table.columns) != [*_BASE_COLUMNS, *model_columns]:
             raise ValueError(f"Prediction columns differ for {dataset}")
