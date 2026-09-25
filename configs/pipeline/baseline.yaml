@@ -13,8 +13,6 @@ dataset:
   train_on:
     - dataset: tudd
       fraction: 1.0
-    - dataset: mimic
-      fraction: 0.0
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5

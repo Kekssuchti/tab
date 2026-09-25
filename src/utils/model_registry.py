@@ -161,6 +161,7 @@ TABSWIFT_ADAPTER = "src.adapter.tabswift_adapter:TabSwiftAdapter"
 EXAONE_ADAPTER = "src.adapter.exaone_adapter:EXAONEAdapter"
 CAUSILO_ADAPTER = "src.adapter.causilo_adapter:CausiloAdapter"
 LIMIX_V2_ADAPTER = "src.adapter.limix_2_adapter:LimixV2Adapter"
+TABDPT_ADAPTER = "src.adapter.tabdpt_adapter:TabDPTAdapter"
 
 
 SEARCH_SPACES = {
@@ -315,6 +316,9 @@ SEARCH_SPACES = {
             "n_estimators": [8],
         },
     },
+    "tabdpt": {
+        "default": {"n_ensembles": [8]},
+    },
 }
 
 # Note that search spaces with parameters that have only 1 value are still worth it
@@ -378,6 +382,7 @@ _COMMON_REGISTRY = {
     "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=SEARCH_SPACES["tabswift"]),
     "exaone": ModelSpec(EXAONE_ADAPTER, search_spaces=SEARCH_SPACES["exaone"]),
     "causilo": ModelSpec(CAUSILO_ADAPTER, search_spaces=SEARCH_SPACES["causilo"]),
+    "tabdpt": ModelSpec(TABDPT_ADAPTER, search_spaces=SEARCH_SPACES["tabdpt"]),
 }
 
 MODEL_REGISTRY_CLS = {
