@@ -26,7 +26,7 @@ import pandas as pd
 import scikit_posthocs as sp
 from scipy import stats
 
-from src.schemas.training_schemas import LOWER_IS_BETTER_SCORING
+from src.schemas.training_schemas import scoring_is_lower_better
 
 
 @dataclass(frozen=True)
@@ -138,7 +138,7 @@ def prepare_rank_summary(
     # The score matrix is oriented so that rank 1 is the best model, which is what
     # both the per-block ranks and the post-hoc test assume.
     block_matrix = points.pivot(index="block", columns="model_instance", values="score")
-    if metric not in LOWER_IS_BETTER_SCORING:
+    if not scoring_is_lower_better(metric):
         block_matrix = -block_matrix
 
     # Ranks are attached to the artifact rows and then sorted, so that equal ranks

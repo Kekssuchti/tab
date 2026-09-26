@@ -26,7 +26,7 @@ from src.plotting.utils.aggregation import AggregatedEvaluation, aggregate_evalu
 from src.plotting.utils.artifacts import load_plot_artifacts
 from src.plotting.utils.ranking import RankSummary, prepare_rank_summary
 from src.plotting.utils.settings import assign_settings
-from src.schemas.training_schemas import LOWER_IS_BETTER_SCORING
+from src.schemas.training_schemas import scoring_is_lower_better
 from src.utils.prediction_metrics import pairwise_win_matrices
 
 # Table-cell color names are declared once here and defined in the table preamble.
@@ -206,7 +206,7 @@ def load_pairwise_inputs(
 
 def metric_direction(metric: str) -> float:
     """Return +1 when a larger metric value is better and -1 when it is not."""
-    return -1.0 if metric in LOWER_IS_BETTER_SCORING else 1.0
+    return -1.0 if scoring_is_lower_better(metric) else 1.0
 
 
 def win_matrix(
@@ -225,7 +225,7 @@ def win_matrix(
     scores.insert(0, "metric", metric)
     scores.insert(0, "dataset", dataset)
     matrix = pairwise_win_matrices(scores)[f"{dataset}_{metric}"]
-    if metric in LOWER_IS_BETTER_SCORING:
+    if scoring_is_lower_better(metric):
         matrix = float(aggregated.bootstrap_count) - matrix
     return matrix
 
@@ -239,7 +239,7 @@ def _model_ordering(aggregated: AggregatedEvaluation) -> pd.DataFrame:
             subset = performance.loc[performance["dataset"].eq(dataset) & performance["metric"].eq(metric)]
             indexed = subset.set_index("model_instance")
             estimates = indexed["estimate"].astype(float)
-            ranks = estimates.rank(method="average", ascending=metric in LOWER_IS_BETTER_SCORING)
+            ranks = estimates.rank(method="average", ascending=scoring_is_lower_better(metric))
             for instance in aggregated.model_instances:
                 rows.append(
                     {

@@ -10,6 +10,7 @@ from src.schemas.dataset_schemas import DatasetBundle, XYDataset
 from src.schemas.metrics import FinalTestMetrics
 from src.schemas.pipeline_schemas import RandomStates
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
+from src.schemas.training_schemas import ClassificationScoring
 from src.utils.prediction_tables import BinaryTestPredictions, FinalTestPredictions
 from tests.factories import classification_metrics
 
@@ -51,7 +52,7 @@ def _tuned_training_result(model_name: str, *, include_retriever: bool = False) 
         fit_time=0.2,
         tuning_result=TuningRecord(
             best_params={},
-            scoring="accuracy",
+            scoring=ClassificationScoring.ACCURACY,
             final_test_metrics=FinalTestMetrics(
                 mimic_test=classification_metrics(1.0),
                 mimic_prediction_time=0.1,

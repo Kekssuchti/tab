@@ -225,6 +225,19 @@ def test_tuning_rejects_more_cv_splits_than_minority_samples(monkeypatch, method
         )
 
 
+def test_trainer_rejects_scoring_for_other_task():
+    X, y = _classification_data()
+    trainer = Trainer(task_type="classification", **_preprocess_pipeline())
+    model_config = _model_config(grid={"C": [1.0]}, scoring="rmse")
+
+    with pytest.raises(ValueError, match="Scoring metric 'rmse' is for regression, not classification"):
+        trainer._tune_model(
+            model_config,
+            model_registry.get_model_spec(model_config, "classification"),
+            _bundle(X, y),
+        )
+
+
 def test_trainer_uses_tuning_grid_and_returns_best_params():
     X, y = _classification_data()
     trainer = Trainer(task_type="classification", **_preprocess_pipeline())

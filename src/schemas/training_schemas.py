@@ -1,18 +1,73 @@
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import Field
 
-from src.schemas.base_schemas import StrictConfig
+from src.schemas.base_schemas import StrictConfig, TaskType
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 
-ClassificationScoring = Literal["roc_auc", "f1", "accuracy"]
-RegressionScoring = Literal["r2", "mae", "mse", "rmse"]
+
+class _Scoring(StrEnum):
+    """Scoring metric with the metadata required for candidate selection."""
+
+    def __new__(cls, value: str, lower_is_better: bool):
+        member = str.__new__(cls, value)
+        member._value_ = value
+        member._lower_is_better = lower_is_better
+        return member
+
+    @property
+    def lower_is_better(self) -> bool:
+        return self._lower_is_better
+
+    @property
+    def optimization_direction(self) -> Literal["minimize", "maximize"]:
+        return "minimize" if self.lower_is_better else "maximize"
+
+    @property
+    def task_type(self) -> TaskType:
+        raise NotImplementedError
+
+
+class ClassificationScoring(_Scoring):
+    ROC_AUC = ("roc_auc", False)
+    F1 = ("f1", False)
+    ACCURACY = ("accuracy", False)
+
+    @property
+    def task_type(self) -> TaskType:
+        return "classification"
+
+
+class RegressionScoring(_Scoring):
+    R2 = ("r2", False)
+    MAE = ("mae", True)
+    MSE = ("mse", True)
+    RMSE = ("rmse", True)
+
+    @property
+    def task_type(self) -> TaskType:
+        return "regression"
+
+
 ScoringMethod = ClassificationScoring | RegressionScoring
 TuningMethod = Literal["grid", "optuna"]
 
-# Metrics where a lower value is better; everything else is maximized.
-LOWER_IS_BETTER_SCORING = frozenset({"mae", "mse", "rmse"})
-HIGHER_IS_BETTER_SCORING = frozenset({"roc_auc", "f1", "accuracy", "r2"})
+
+def scoring_is_lower_better(scoring: str | ScoringMethod) -> bool:
+    """Return whether a known tuning score is minimized.
+
+    Unknown reporting metrics retain the existing larger-is-better default.
+    """
+    if isinstance(scoring, _Scoring):
+        return scoring.lower_is_better
+
+    for scoring_type in (ClassificationScoring, RegressionScoring):
+        try:
+            return scoring_type(scoring).lower_is_better
+        except ValueError:
+            continue
+    return False
 
 
 class CrossValidationConfig(StrictConfig):
@@ -76,7 +131,7 @@ class TuningConfig(StrictConfig):
         grid: dict or None, default=None
             Explicit parameter grid overriding the registry search space.
 
-        scoring: str, default="roc_auc"
+        scoring: ScoringMethod, default="roc_auc"
             Metric used to choose the best candidate.
 
         cv: CrossValidationConfig, default=CrossValidationConfig()
@@ -89,7 +144,7 @@ class TuningConfig(StrictConfig):
     method: TuningMethod = "optuna"
     search_space: str | None = "default"
     grid: dict[str, list[Any]] | None = None
-    scoring: ScoringMethod = "roc_auc"
+    scoring: ScoringMethod = ClassificationScoring.ROC_AUC
     cv: CrossValidationConfig = Field(default_factory=CrossValidationConfig)
     optuna: OptunaConfig = Field(default_factory=OptunaConfig)
 

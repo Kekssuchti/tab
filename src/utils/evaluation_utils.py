@@ -61,14 +61,14 @@ def classification_prediction_batch(
 
 
 def classification_score(metrics: ClassificationMetrics, scoring: ClassificationScoring) -> float:
-    score = metrics.scores.get(scoring)
+    score = metrics.scores.get(scoring.value)
     if score is None:
         raise ValueError(f"Scoring method '{scoring}' is unavailable for these predictions")
     return score
 
 
 def regression_score(metrics: RegressionMetrics, scoring: RegressionScoring) -> float:
-    return metrics.scores[scoring]
+    return metrics.scores[scoring.value]
 
 
 def mean_classification_metrics(metrics: list[ClassificationMetrics]) -> ClassificationMetrics:

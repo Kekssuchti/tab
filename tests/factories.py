@@ -26,7 +26,7 @@ from src.schemas.run_records import (
     TestSetEvaluationRecord,
     TuningRecord,
 )
-from src.schemas.training_schemas import ModelConfig
+from src.schemas.training_schemas import ClassificationScoring, ModelConfig, RegressionScoring
 
 
 def classification_metrics(value: float = 1.0) -> ClassificationMetrics:
@@ -45,7 +45,7 @@ def classification_metrics(value: float = 1.0) -> ClassificationMetrics:
 def tuning_result() -> TuningRecord:
     return TuningRecord(
         best_params={"C": 1.0},
-        scoring="accuracy",
+        scoring=ClassificationScoring.ACCURACY,
         final_test_metrics=FinalTestMetrics(
             mimic_test=classification_metrics(0.95),
             mimic_prediction_time=0.03,
@@ -204,7 +204,7 @@ def regression_result(*, tuned: bool = True) -> PipelineRunRecord:
     if tuned:
         tuning = TuningRecord(
             best_params={"alpha": 0.5},
-            scoring="rmse",
+            scoring=RegressionScoring.RMSE,
             final_test_metrics=FinalTestMetrics(
                 mimic_test=mimic_metrics,
                 mimic_prediction_time=0.03,
