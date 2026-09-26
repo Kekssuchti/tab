@@ -364,7 +364,8 @@ def retriever_resample(
     retriever_config: CustomRetrieverConfig,
     data: dict[DatasetOrigin, SplitResult],
     train_data: XYDataset,
-    random_state: int,
+    train_sample_seed: int,
+    test_sample_seed: int,
 ) -> tuple[XYDataset, XYDataset]:
     # create custom test set and sample indecies according to strategy
     # returns train_data and test_data as XYDatasets
@@ -381,7 +382,7 @@ def retriever_resample(
             new_test_sample_idx = resample(
                 split["X_test"].index,
                 n_samples=test_data_split.fraction,
-                random_state=random_state,
+                random_state=test_sample_seed,
                 replace=False,
                 stratify=split["y_test"],
             )
@@ -409,7 +410,7 @@ def retriever_resample(
             train_data.X.index,
             replace=False,
             n_samples=retriever_config.train_size,
-            random_state=random_state,
+            random_state=train_sample_seed,
             stratify=train_data.y,
         )
         train_set = XYDataset(X=train_data.X.loc[train_indices], y=train_data.y.loc[train_indices])
@@ -429,7 +430,7 @@ def retriever_resample(
             retriever_config.distance_metric,
             retriever_config.diversity_pool_multiplier,
             retriever_config.diversity_clusters,
-            random_state,
+            train_sample_seed,
         )
         train_set = XYDataset(X=train_data.X.iloc[train_positions], y=train_data.y.iloc[train_positions])
     else:

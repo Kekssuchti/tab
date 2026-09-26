@@ -180,6 +180,7 @@ class CustomRetrieverConfig(StrictConfig):
         ge=2,
         description="Maximum MiniBatchKMeans clusters used by knn-diverse",
     )
+    test_sample_seed: int = Field(default=1337)
 
     @field_validator("test_on")
     @classmethod

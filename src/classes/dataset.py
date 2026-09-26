@@ -33,7 +33,6 @@ class Dataset:
     def __init__(
         self,
         dataset_config: DatasetConfig,
-        *,
         sample_seed: int,
     ) -> None:
         """
@@ -193,7 +192,8 @@ class Dataset:
                 retriever_config=self.retriever_config,
                 data=splits_dict,
                 train_data=train_data,
-                random_state=self.sample_seed,
+                train_sample_seed=self.sample_seed,
+                test_sample_seed=self.retriever_config.test_sample_seed,
             )
             data_bundle = DatasetBundle(
                 train_data=train_set,

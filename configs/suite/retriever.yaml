@@ -5,28 +5,27 @@
 name: retriever-repeat
 base_config: ../pipeline/retriever.yaml
 matrix:
-  # Keep strategy-specific settings coupled so the diverse-KNN grid does not
-  # multiply the random and standard-KNN baselines.
+  - path: dataset.custom_retriever.train_size
+    values: [1600]
+  - path: dataset.custom_retriever.test_on.0.fraction
+    values: [100]
   - path: dataset.custom_retriever
     values:
       - { selection_strategy: random }
-      - { selection_strategy: knn }
+      - { selection_strategy: knn, distance_metric: euclidean }
+      - { selection_strategy: knn, distance_metric: manhattan }
       - { selection_strategy: knn-diverse, diversity_clusters: 16, diversity_pool_multiplier: 2 }
       - { selection_strategy: knn-diverse, diversity_clusters: 16, diversity_pool_multiplier: 3 }
       - { selection_strategy: knn-diverse, diversity_clusters: 32, diversity_pool_multiplier: 2 }
       - { selection_strategy: knn-diverse, diversity_clusters: 32, diversity_pool_multiplier: 3 }
       - { selection_strategy: knn-diverse, diversity_clusters: 64, diversity_pool_multiplier: 2 }
       - { selection_strategy: knn-diverse, diversity_clusters: 64, diversity_pool_multiplier: 3 }
-  - path: dataset.custom_retriever.distance_metric
-    values: ["euclidean"]
-  - path: dataset.custom_retriever.train_size
-    values: [6400]
-  - path: dataset.custom_retriever.test_on.0.fraction
-    values: [1000]
+  - path: dataset.custom_retriever.test_sample_seed
+    values: [123, 124, 125]
   - path: random_states
     values:
-      - { model_training_seed: 1337, training_sample_seed: 1337, cv_split_seed: 1337 }
-      - { model_training_seed: 1338, training_sample_seed: 1338, cv_split_seed: 1338 }
-      - { model_training_seed: 1339, training_sample_seed: 1339, cv_split_seed: 1339 }
-      - { model_training_seed: 1340, training_sample_seed: 1340, cv_split_seed: 1340 }
-      - { model_training_seed: 1341, training_sample_seed: 1341, cv_split_seed: 1341 }
+      - { model_training_seed: 1337, training_sample_seed: 1337 }
+      - { model_training_seed: 1338, training_sample_seed: 1338 }
+      - { model_training_seed: 1339, training_sample_seed: 1339 }
+      # - { model_training_seed: 1340, training_sample_seed: 1340 }
+      # - { model_training_seed: 1341, training_sample_seed: 1341 }
