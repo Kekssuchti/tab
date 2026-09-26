@@ -1,9 +1,11 @@
 import hashlib
 import json
+from math import ceil
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.cluster import MiniBatchKMeans
 from sklearn.impute import SimpleImputer
 from sklearn.neighbors import NearestNeighbors
 from sklearn.pipeline import make_pipeline
@@ -241,21 +243,15 @@ def hash_file_sha256(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _knn_train_positions(
+def _prepare_retrieval_features(
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
     train_size: int,
-    distance_metric: RetrieverDistanceMetric,
-) -> np.ndarray:
-    """Retrieve a fixed budget of training rows nearest to the test cohort.
-
-    Features are median-imputed and standardized using training data only. Each
-    test row then ranks the training pool by the configured distance. Neighbors are
-    consumed rank-by-rank across test rows so that the selected set represents
-    the complete test cohort rather than only its densest region.
-    """
+) -> tuple[np.ndarray, np.ndarray]:
     if train_size > len(X_train):
         raise ValueError(f"Retriever train_size={train_size} exceeds the {len(X_train)} available training rows")
+    if X_test.empty:
+        raise ValueError("KNN retrieval requires at least one test row")
 
     try:
         train_values = X_train.to_numpy(dtype=float)
@@ -264,15 +260,21 @@ def _knn_train_positions(
         raise TypeError("KNN retrieval only supports numeric feature columns") from error
 
     preprocessing = make_pipeline(SimpleImputer(strategy="median"), StandardScaler())
-    train_values = preprocessing.fit_transform(train_values)
-    test_values = preprocessing.transform(test_values)
+    return preprocessing.fit_transform(train_values), preprocessing.transform(test_values)
 
+
+def _ranked_knn_positions(
+    train_values: np.ndarray,
+    test_values: np.ndarray,
+    selection_size: int,
+    distance_metric: RetrieverDistanceMetric,
+) -> np.ndarray:
+    """Return unique neighbors rank-by-rank across all test queries."""
     retriever = NearestNeighbors(metric=distance_metric, n_jobs=6).fit(train_values)
-    # we start with 2x budget for search since its expected that some test samples will have
-    # the same nearest train samples
+    # Start with 2x the no-overlap estimate because queries usually share neighbors.
     n_neighbors = min(
-        train_size,
-        max(1, (train_size + len(test_values) - 1) // len(test_values)) * 2,
+        selection_size,
+        max(1, ceil(selection_size / len(test_values))) * 2,
     )
 
     while True:
@@ -281,15 +283,81 @@ def _knn_train_positions(
             n_neighbors=n_neighbors,
             return_distance=False,
         )
-        # returns in order of rank
-        # this means its first-rank neighbor of sample 1, first-rank neighbor of sample 2 ...
-        # therefore having more neighbors than needed is not a problem
         rank_ordered_positions = neighbor_positions.T.reshape(-1)
         unique_positions = pd.unique(rank_ordered_positions)
-        if len(unique_positions) >= train_size:
-            return np.asarray(unique_positions[:train_size], dtype=int)
+        if len(unique_positions) >= selection_size:
+            return np.asarray(unique_positions[:selection_size], dtype=int)
 
-        n_neighbors = min(train_size, n_neighbors * 2)
+        n_neighbors = min(selection_size, n_neighbors * 2)
+
+
+def _knn_train_positions(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    train_size: int,
+    distance_metric: RetrieverDistanceMetric,
+) -> np.ndarray:
+    """Retrieve a fixed budget of training rows nearest to the test cohort."""
+    train_values, test_values = _prepare_retrieval_features(X_train, X_test, train_size)
+    return _ranked_knn_positions(train_values, test_values, train_size, distance_metric)
+
+
+def _square_root_cluster_selection(
+    candidate_positions: np.ndarray,
+    cluster_labels: np.ndarray,
+    train_size: int,
+) -> np.ndarray:
+    """Select candidates by square-root cluster-size quotas in KNN rank order."""
+    cluster_ids, cluster_sizes = np.unique(cluster_labels, return_counts=True)
+    quotas = np.ones(len(cluster_ids), dtype=int)
+    target_quotas = train_size * np.sqrt(cluster_sizes) / np.sqrt(cluster_sizes).sum()
+
+    while quotas.sum() < train_size:
+        eligible = quotas < cluster_sizes
+        deficits = np.where(eligible, target_quotas - quotas, -np.inf)
+        quotas[int(np.argmax(deficits))] += 1
+
+    cluster_index = {cluster_id: index for index, cluster_id in enumerate(cluster_ids)}
+    selected_counts = np.zeros(len(cluster_ids), dtype=int)
+    selected_positions: list[int] = []
+    for position, cluster_label in zip(candidate_positions, cluster_labels, strict=True):
+        index = cluster_index[cluster_label]
+        if selected_counts[index] >= quotas[index]:
+            continue
+        selected_positions.append(int(position))
+        selected_counts[index] += 1
+
+    return np.asarray(selected_positions, dtype=int)
+
+
+def _knn_diverse_train_positions(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    train_size: int,
+    distance_metric: RetrieverDistanceMetric,
+    pool_multiplier: float,
+    n_clusters: int,
+    random_state: int,
+) -> np.ndarray:
+    """Retrieve candidates with the configured metric, then diversify with Euclidean clusters."""
+    train_values, test_values = _prepare_retrieval_features(X_train, X_test, train_size)
+    candidate_pool_size = min(len(train_values), ceil(train_size * pool_multiplier))
+    candidate_positions = _ranked_knn_positions(
+        train_values,
+        test_values,
+        candidate_pool_size,
+        distance_metric,
+    )
+
+    effective_clusters = min(n_clusters, train_size, candidate_pool_size)
+    cluster_labels = MiniBatchKMeans(
+        n_clusters=effective_clusters,
+        random_state=random_state,
+        batch_size=min(1024, candidate_pool_size),
+        n_init="auto",
+    ).fit_predict(train_values[candidate_positions])
+
+    return _square_root_cluster_selection(candidate_positions, cluster_labels, train_size)
 
 
 def retriever_resample(
@@ -351,6 +419,17 @@ def retriever_resample(
             test_set.X,
             retriever_config.train_size,
             retriever_config.distance_metric,
+        )
+        train_set = XYDataset(X=train_data.X.iloc[train_positions], y=train_data.y.iloc[train_positions])
+    elif retriever_config.selection_strategy == "knn-diverse":
+        train_positions = _knn_diverse_train_positions(
+            train_data.X,
+            test_set.X,
+            retriever_config.train_size,
+            retriever_config.distance_metric,
+            retriever_config.diversity_pool_multiplier,
+            retriever_config.diversity_clusters,
+            random_state,
         )
         train_set = XYDataset(X=train_data.X.iloc[train_positions], y=train_data.y.iloc[train_positions])
     else:

@@ -2,6 +2,7 @@ import math
 from dataclasses import asdict, fields
 from types import SimpleNamespace
 
+import numpy as np
 import pandas as pd
 import pytest
 from pydantic import ValidationError
@@ -18,7 +19,7 @@ from src.schemas.dataset_schemas import (
     RegressionTargetSummary,
     XYDataset,
 )
-from src.utils.dataset_utils import retriever_resample, summarize_data_part
+from src.utils.dataset_utils import _square_root_cluster_selection, retriever_resample, summarize_data_part
 
 
 def _make_rows(source: str, start_id: int, n_rows: int) -> pd.DataFrame:
@@ -492,6 +493,69 @@ def test_custom_retriever_rejects_unknown_distance_metric():
             selection_strategy="knn",
             distance_metric="cosine",
         )
+
+
+def test_custom_retriever_validates_diversity_settings():
+    config = CustomRetrieverConfig(
+        train_size=4,
+        test_on=(DataSplitConfig(dataset="mimic", fraction=2),),
+        selection_strategy="knn-diverse",
+    )
+
+    assert config.diversity_pool_multiplier == 2.0
+    assert config.diversity_clusters == 64
+
+    with pytest.raises(ValidationError, match="diversity_pool_multiplier"):
+        CustomRetrieverConfig.model_validate({**config.model_dump(), "diversity_pool_multiplier": 1.0})
+    with pytest.raises(ValidationError, match="diversity_clusters"):
+        CustomRetrieverConfig.model_validate({**config.model_dump(), "diversity_clusters": 1})
+
+
+def test_square_root_cluster_selection_balances_coverage_and_density():
+    candidate_positions = np.arange(12)
+    cluster_labels = np.array([0, 1, 2, 1, 2, 1, 2, 1, 2, 2, 2, 2])
+
+    selected = _square_root_cluster_selection(candidate_positions, cluster_labels, train_size=6)
+
+    assert selected.tolist() == [0, 1, 2, 3, 4, 6]
+    assert np.bincount(cluster_labels[selected], minlength=3).tolist() == [1, 2, 3]
+
+
+def test_knn_diverse_retriever_adds_cluster_coverage_reproducibly():
+    train_X = pd.DataFrame({"feature": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 3.0, 3.1, 3.2, 10.0]})
+    train_data = XYDataset(X=train_X, y=pd.Series([0, 1] * 5))
+    test_X = pd.DataFrame({"feature": [0.0, 0.1]}, index=[10, 11])
+    test_y = pd.Series([0, 1], index=test_X.index)
+    data = {
+        "mimic": {
+            "X_train": train_X,
+            "X_test": test_X,
+            "y_train": train_data.y,
+            "y_test": test_y,
+        }
+    }
+    shared_config = {
+        "train_size": 4,
+        "test_on": (DataSplitConfig(dataset="mimic", fraction=2),),
+        "distance_metric": "euclidean",
+    }
+    knn_config = CustomRetrieverConfig(**shared_config, selection_strategy="knn")
+    diverse_config = CustomRetrieverConfig(
+        **shared_config,
+        selection_strategy="knn-diverse",
+        diversity_pool_multiplier=2.0,
+        diversity_clusters=2,
+    )
+
+    knn_train, _ = retriever_resample(knn_config, data, train_data, random_state=7)
+    diverse_train, _ = retriever_resample(diverse_config, data, train_data, random_state=7)
+    repeated_train, _ = retriever_resample(diverse_config, data, train_data, random_state=7)
+
+    assert len(diverse_train.X) == 4
+    assert diverse_train.X.index.is_unique
+    assert diverse_train.X.index.tolist() == repeated_train.X.index.tolist()
+    assert knn_train.X["feature"].max() < 1.0
+    assert diverse_train.X["feature"].max() >= 3.0
 
 
 def test_knn_retriever_rejects_budget_larger_than_training_pool():

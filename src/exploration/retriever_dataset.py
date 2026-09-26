@@ -41,21 +41,31 @@ def _(mo):
     Build and inspect a retriever dataset without training or evaluating a model.
     Edit the sizes and seed below; use the two selectors to compare retrieval strategies and distances.
     """)
+    return
 
 
 @app.cell
 def _():
     CONFIG_PATH = "configs/pipeline/retriever.yaml"
-    RETRIEVER_TRAIN_SIZE = 6400
-    TEST_ON = (("tudd", 1000),)
+    RETRIEVER_TRAIN_SIZE = 800
+    TEST_ON = (("tudd", 100),)
     SAMPLE_SEED = 1337
-    return CONFIG_PATH, RETRIEVER_TRAIN_SIZE, SAMPLE_SEED, TEST_ON
+    DIVERSITY_POOL_MULTIPLIER = 2.0
+    DIVERSITY_CLUSTERS = 32
+    return (
+        CONFIG_PATH,
+        DIVERSITY_CLUSTERS,
+        DIVERSITY_POOL_MULTIPLIER,
+        RETRIEVER_TRAIN_SIZE,
+        SAMPLE_SEED,
+        TEST_ON,
+    )
 
 
 @app.cell
 def _(mo):
     selection_strategy = mo.ui.dropdown(
-        options=["random", "knn"],
+        options=["random", "knn", "knn-diverse"],
         value="knn",
         label="Selection strategy",
     )
@@ -71,10 +81,12 @@ def _(mo):
 @app.cell
 def _(
     CONFIG_PATH,
+    CustomRetrieverConfig,
+    DIVERSITY_CLUSTERS,
+    DIVERSITY_POOL_MULTIPLIER,
+    DataSplitConfig,
     RETRIEVER_TRAIN_SIZE,
     TEST_ON,
-    CustomRetrieverConfig,
-    DataSplitConfig,
     distance_metric,
     load_pipeline_config,
     project_root,
@@ -86,6 +98,8 @@ def _(
         test_on=tuple(DataSplitConfig(dataset=origin, fraction=size) for origin, size in TEST_ON),
         selection_strategy=selection_strategy.value,
         distance_metric=distance_metric.value,
+        diversity_pool_multiplier=DIVERSITY_POOL_MULTIPLIER,
+        diversity_clusters=DIVERSITY_CLUSTERS,
     )
     original_dataset_config = _pipeline_config.dataset.model_copy(update={"custom_retriever": None})
     dataset_config = _pipeline_config.dataset.model_copy(update={"custom_retriever": retriever_config})
@@ -93,7 +107,13 @@ def _(
 
 
 @app.cell
-def _(Dataset, SAMPLE_SEED, dataset_config, original_dataset_config, perf_counter):
+def _(
+    Dataset,
+    SAMPLE_SEED,
+    dataset_config,
+    original_dataset_config,
+    perf_counter,
+):
     _original_started_at = perf_counter()
     _original_dataset = Dataset(original_dataset_config, sample_seed=SAMPLE_SEED)
     original_data = _original_dataset.get_dataset()
@@ -148,6 +168,8 @@ def _(
                 "distance": retriever_config.distance_metric,
                 "train_size": retriever_config.train_size,
                 "test_on": [(split.dataset, split.fraction) for split in retriever_config.test_on],
+                "diversity_pool_multiplier": retriever_config.diversity_pool_multiplier,
+                "diversity_clusters": retriever_config.diversity_clusters,
                 "original_build_seconds": original_build_seconds,
                 "retriever_build_seconds": retriever_build_seconds,
             }
@@ -181,6 +203,7 @@ def _(feature_comparison, mo, parts_table, settings_table):
             feature_comparison,
         ]
     )
+    return
 
 
 if __name__ == "__main__":

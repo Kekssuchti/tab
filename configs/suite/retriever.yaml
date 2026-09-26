@@ -1,12 +1,22 @@
-# Compare random and KNN retrievers across five training/model seeds.
+# Compare random, KNN, and diverse KNN retrievers across five training/model seeds.
 # The source split and bootstrap plan stay fixed; training_sample_seed redraws
 # the sampled retriever cohort and the random baseline's training subset.
 
 name: retriever-repeat
 base_config: ../pipeline/retriever.yaml
 matrix:
-  - path: dataset.custom_retriever.selection_strategy
-    values: ["random", "knn"]
+  # Keep strategy-specific settings coupled so the diverse-KNN grid does not
+  # multiply the random and standard-KNN baselines.
+  - path: dataset.custom_retriever
+    values:
+      - { selection_strategy: random }
+      - { selection_strategy: knn }
+      - { selection_strategy: knn-diverse, diversity_clusters: 16, diversity_pool_multiplier: 2 }
+      - { selection_strategy: knn-diverse, diversity_clusters: 16, diversity_pool_multiplier: 3 }
+      - { selection_strategy: knn-diverse, diversity_clusters: 32, diversity_pool_multiplier: 2 }
+      - { selection_strategy: knn-diverse, diversity_clusters: 32, diversity_pool_multiplier: 3 }
+      - { selection_strategy: knn-diverse, diversity_clusters: 64, diversity_pool_multiplier: 2 }
+      - { selection_strategy: knn-diverse, diversity_clusters: 64, diversity_pool_multiplier: 3 }
   - path: dataset.custom_retriever.distance_metric
     values: ["euclidean"]
   - path: dataset.custom_retriever.train_size

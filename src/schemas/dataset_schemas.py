@@ -170,6 +170,16 @@ class CustomRetrieverConfig(StrictConfig):
     test_on: tuple[DataSplitConfig, ...]
     selection_strategy: SelectionStrategy = Field(default="random")
     distance_metric: RetrieverDistanceMetric = Field(default="euclidean")
+    diversity_pool_multiplier: float = Field(
+        default=2.0,
+        gt=1,
+        description="KNN candidate-pool size as a multiple of train_size for knn-diverse",
+    )
+    diversity_clusters: int = Field(
+        default=64,
+        ge=2,
+        description="Maximum MiniBatchKMeans clusters used by knn-diverse",
+    )
 
     @field_validator("test_on")
     @classmethod

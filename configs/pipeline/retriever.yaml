@@ -20,6 +20,8 @@ dataset:
         fraction: 1000
     selection_strategy: random
     distance_metric: euclidean
+    diversity_pool_multiplier: 2.0
+    diversity_clusters: 64
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
