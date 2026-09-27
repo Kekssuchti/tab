@@ -52,15 +52,17 @@ DATASET_ORDER = ["tudd", "mimic"]
 
 TASK_COLORS = {
     "mortality": PALETTE["orange"],
+    "LOS": PALETTE["cyan"],
     "LOS7": PALETTE["blue"],
     "hours_to_readmit_72": PALETTE["green"],
 }
 TASK_NAMES = {
     "mortality": "Mortality",
+    "LOS": "Length of stay",
     "LOS7": "LOS > 7 d",
     "hours_to_readmit_72": "Readmission within 72h",
 }
-TASK_ORDER = ["mortality", "LOS7", "hours_to_readmit_72"]
+TASK_ORDER = ["mortality", "LOS", "LOS7", "hours_to_readmit_72"]
 
 
 def dataset_label(dataset: str) -> str:

@@ -4,7 +4,9 @@ Regenerate with:
 
     uv run python -m src.plotting.pairwise_wins
 
-Edit ``DATA`` to select the experiment and ``VISUAL`` to change presentation.
+Every prediction task declared for this family in ``src.plotting.experiments``
+is rebuilt in turn, each into its own ``plots/pairwise/<target>/`` directory.
+Edit ``VISUAL`` to change presentation and ``--target`` to narrow the run.
 The LaTeX tables for the same data live in ``src.plotting.pairwise_tables``.
 
 Three questions, three figures:
@@ -19,7 +21,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -38,8 +40,14 @@ from src.plotting.defaults import (
     model_label,
     set_plot_style,
 )
+from src.plotting.experiments import tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure, figure_grid, label_ends, panel_labels, save
-from src.plotting.utils import PairwiseSummary, RankSummary, load_pairwise_inputs
+from src.plotting.utils import (
+    MissingExperimentError,
+    PairwiseSummary,
+    RankSummary,
+    load_pairwise_inputs,
+)
 from src.plotting.utils.ranking import nemenyi_p_values
 from src.plotting.utils.rendering import draw_model_forest, instance_plot_styles
 from src.plotting.utils.settings import setting_display
@@ -47,9 +55,8 @@ from src.plotting.utils.settings import setting_display
 
 @dataclass(frozen=True)
 class DataSettings:
-    """Experiment selection, setting definition, and output location."""
+    """Run selection, setting definition, and output location."""
 
-    experiment_name: str = "sample_size_mimic_mortality"
     pipeline_runs: tuple[str, ...] | None = None
     full_training_only: bool = True
     rank_pipeline_runs: tuple[str, ...] | None = None
@@ -566,7 +573,15 @@ def setting_rank_caption(ranks: RankSummary) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--experiment-name", default=DATA.experiment_name)
+    parser.add_argument(
+        "--target",
+        action="append",
+        dest="targets",
+        help=(
+            "Prediction task to rebuild, for example mortality; repeat for several. "
+            "Defaults to every task this family declares."
+        ),
+    )
     parser.add_argument(
         "--run-id",
         action="append",
@@ -579,80 +594,103 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    summary, ranks = load_pairwise_inputs(
-        args.experiment_name,
-        metrics=VISUAL.comparison_metrics,
-        rank_metrics=VISUAL.rank_metrics,
-        exclude_models=VISUAL.exclude_models,
-        ci_level=VISUAL.ci_level,
-        alpha=VISUAL.alpha,
-        reference_model=VISUAL.reference_model,
-        pipeline_runs=tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs,
-        rank_pipeline_runs=DATA.rank_pipeline_runs,
-        full_training_only=DATA.full_training_only,
-        setting_source=DATA.setting_source,
-        setting_pattern=DATA.setting_pattern,
-    )
+    tasks = tasks_for("pairwise_wins", args.targets)
+    if len(tasks) > 1 and args.run_ids:
+        raise SystemExit("--run-id pins one pipeline run, so it needs exactly one --target")
+    run_ids = tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs
 
-    print("Selected pipeline runs (pairwise view): " + ", ".join(summary.run_ids))
-    for metric, metric_ranks in ranks.items():
-        print(f"\nRank summary for {metric}: {metric_ranks.block_count} blocks, {metric_ranks.model_count} models")
-        if metric_ranks.excluded_models:
-            print("  Models dropped (missing from some blocks): " + ", ".join(metric_ranks.excluded_models))
-        for test in metric_ranks.tests.itertuples():
-            scope = "experiment" if test.scope == "experiment" else f"setting {test.setting}"
-            print(
-                f"  {scope}: N = {int(test.n_blocks)}, k = {int(test.n_models)}, "
-                f"Friedman p = {_p_value(test.friedman_p)}, Iman-Davenport p = {_p_value(test.iman_davenport_p)}, "
-                f"CD = {test.critical_difference:.2f}"
+    for task in tasks:
+        print(f"\n=== {task.label} ({task.experiment})")
+        visual = replace(
+            VISUAL,
+            comparison_metrics=task.metrics,
+            cross_metrics=(task.cross_metric,),
+            rank_metrics=(task.cross_metric,),
+            score_scale=task.score_scale,
+        )
+        try:
+            summary, ranks = load_pairwise_inputs(
+                task.experiment,
+                metrics=visual.comparison_metrics,
+                rank_metrics=visual.rank_metrics,
+                exclude_models=visual.exclude_models,
+                ci_level=visual.ci_level,
+                alpha=visual.alpha,
+                reference_model=visual.reference_model,
+                pipeline_runs=run_ids,
+                rank_pipeline_runs=DATA.rank_pipeline_runs,
+                full_training_only=DATA.full_training_only,
+                setting_source=DATA.setting_source,
+                setting_pattern=DATA.setting_pattern,
+                expected_target=task.target,
             )
+        except MissingExperimentError as missing:
+            warn_skipped(task, missing)
+            continue
 
-    output_dir = args.output_dir / summary.target
-    output_dir.mkdir(parents=True, exist_ok=True)
-    prefix = f"pairwise_{summary.trained_on}_{summary.target}"
-    stems: list[Path] = []
-
-    for metric in VISUAL.cross_metrics:
-        stem = output_dir / f"{prefix}_{metric}_cross_cohort"
-        save(make_cross_cohort_figure(summary, metric), str(stem), formats=VISUAL.output_formats)
-        stems.append(stem)
-        print(f"\nCross-cohort caption ({metric}):")
-        print(f"\\caption{{{cross_caption(summary, metric)}}}")
-
-    forest = output_dir / f"{prefix}_paired_forest"
-    save(make_paired_forest_figure(summary), str(forest), formats=VISUAL.output_formats)
-    stems.append(forest)
-    print("\nPaired difference forest caption:")
-    print(f"\\caption{{{forest_caption(summary)}}}")
-
-    for metric, metric_ranks in ranks.items():
-        rank_figure = output_dir / f"{prefix}_{metric}_ranks"
-        save(make_rank_figure(metric_ranks, DATA.setting_label), str(rank_figure), formats=VISUAL.output_formats)
-        stems.append(rank_figure)
-        print(f"\nRank figure caption ({metric}):")
-        print(f"\\caption{{{rank_caption(metric_ranks, DATA.setting_label)}}}")
-
-        if VISUAL.setting_panels and len(metric_ranks.settings) > 1:
-            smallest = int(metric_ranks.tests.loc[metric_ranks.tests["scope"].eq("setting"), "n_blocks"].min())
-            if smallest < _MINIMUM_SETTING_BLOCKS:
+        print("Selected pipeline runs (pairwise view): " + ", ".join(summary.run_ids))
+        for metric, metric_ranks in ranks.items():
+            print(f"\nRank summary for {metric}: {metric_ranks.block_count} blocks, {metric_ranks.model_count} models")
+            if metric_ranks.excluded_models:
+                print("  Models dropped (missing from some blocks): " + ", ".join(metric_ranks.excluded_models))
+            for test in metric_ranks.tests.itertuples():
+                scope = "experiment" if test.scope == "experiment" else f"setting {test.setting}"
                 print(
-                    f"  Note: a setting contributes only {smallest} blocks, so no per-setting diagram can separate a "
-                    f"pair; set VISUAL.setting_panels = False to skip that figure."
+                    f"  {scope}: N = {int(test.n_blocks)}, k = {int(test.n_models)}, "
+                    f"Friedman p = {_p_value(test.friedman_p)}, Iman-Davenport p = {_p_value(test.iman_davenport_p)}, "
+                    f"CD = {test.critical_difference:.2f}"
                 )
-            setting_figure = output_dir / f"{prefix}_{metric}_ranks_by_setting"
-            save(
-                make_setting_rank_figure(metric_ranks, DATA.setting_source),
-                str(setting_figure),
-                formats=VISUAL.output_formats,
-            )
-            stems.append(setting_figure)
-            print(f"Per-setting rank figure caption ({metric}):")
-            print(f"\\caption{{{setting_rank_caption(metric_ranks)}}}")
 
-    print("\nFigures:")
-    for stem in stems:
-        for extension in VISUAL.output_formats:
-            print(str(stem.with_suffix(f".{extension}")).removeprefix(f"{config.dir_root}/"))
+        output_dir = args.output_dir / summary.target
+        output_dir.mkdir(parents=True, exist_ok=True)
+        prefix = f"pairwise_{summary.trained_on}_{summary.target}"
+        stems: list[Path] = []
+
+        for metric in visual.cross_metrics:
+            stem = output_dir / f"{prefix}_{metric}_cross_cohort"
+            save(make_cross_cohort_figure(summary, metric, visual), str(stem), formats=visual.output_formats)
+            stems.append(stem)
+            print(f"\nCross-cohort caption ({metric}):")
+            print(f"\\caption{{{cross_caption(summary, metric)}}}")
+
+        forest = output_dir / f"{prefix}_paired_forest"
+        save(make_paired_forest_figure(summary, visual), str(forest), formats=visual.output_formats)
+        stems.append(forest)
+        print("\nPaired difference forest caption:")
+        print(f"\\caption{{{forest_caption(summary, visual)}}}")
+
+        for metric, metric_ranks in ranks.items():
+            rank_figure = output_dir / f"{prefix}_{metric}_ranks"
+            save(
+                make_rank_figure(metric_ranks, DATA.setting_label, visual),
+                str(rank_figure),
+                formats=visual.output_formats,
+            )
+            stems.append(rank_figure)
+            print(f"\nRank figure caption ({metric}):")
+            print(f"\\caption{{{rank_caption(metric_ranks, DATA.setting_label, visual)}}}")
+
+            if visual.setting_panels and len(metric_ranks.settings) > 1:
+                smallest = int(metric_ranks.tests.loc[metric_ranks.tests["scope"].eq("setting"), "n_blocks"].min())
+                if smallest < _MINIMUM_SETTING_BLOCKS:
+                    print(
+                        f"  Note: a setting contributes only {smallest} blocks, so no per-setting diagram can "
+                        f"separate a pair; set VISUAL.setting_panels = False to skip that figure."
+                    )
+                setting_figure = output_dir / f"{prefix}_{metric}_ranks_by_setting"
+                save(
+                    make_setting_rank_figure(metric_ranks, DATA.setting_source, visual),
+                    str(setting_figure),
+                    formats=visual.output_formats,
+                )
+                stems.append(setting_figure)
+                print(f"Per-setting rank figure caption ({metric}):")
+                print(f"\\caption{{{setting_rank_caption(metric_ranks)}}}")
+
+        print("\nFigures:")
+        for stem in stems:
+            for extension in visual.output_formats:
+                print(str(stem.with_suffix(f".{extension}")).removeprefix(f"{config.dir_root}/"))
 
 
 def _p_value(value: float) -> str:

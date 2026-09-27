@@ -10,6 +10,14 @@ import pandas as pd
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI, load_bootstrap_data, load_evaluation_data
 
 
+class MissingExperimentError(ValueError):
+    """Raised when a declared figure task has no evaluation artifacts yet."""
+
+
+class TargetMismatchError(ValueError):
+    """Raised when an experiment does not contain the prediction task it is declared under."""
+
+
 @dataclass(frozen=True)
 class PlotArtifacts:
     """Metric and bootstrap artifacts selected for one figure."""
@@ -28,6 +36,7 @@ def load_plot_artifacts(
     exclude_models: str | Sequence[str] | None = None,
     full_training_only: bool = False,
     include_bootstrap: bool = True,
+    expected_target: str | None = None,
     tracking_uri: str = DEFAULT_TRACKING_URI,
 ) -> PlotArtifacts:
     """Load plotting artifacts and resolve their concrete pipeline run IDs.
@@ -40,6 +49,10 @@ def load_plot_artifacts(
     metrics and bootstrap columns alike, so a figure can leave out a model
     without touching the run artifacts. It is the way to answer "the same figure
     without LimiX" for any script that loads artifacts through here.
+
+    ``expected_target`` names the prediction task the caller intends to plot and
+    is checked against the loaded artifacts, so a stale experiment fails loudly
+    instead of quietly producing the same figure for another task.
     """
     if pipeline_runs is not None and full_training_only:
         raise ValueError("pipeline_runs and full_training_only cannot be combined")
@@ -51,7 +64,9 @@ def load_plot_artifacts(
         tracking_uri=tracking_uri,
     )
     if metrics.empty:
-        raise ValueError(f"No evaluation data found for experiment {experiment_name!r}")
+        raise MissingExperimentError(f"No evaluation data found for experiment {experiment_name!r}")
+    if expected_target is not None:
+        _require_target(metrics, experiment_name, expected_target)
 
     dropped_instances: tuple[str, ...] = ()
     if exclude_models is not None:
@@ -94,6 +109,21 @@ def load_plot_artifacts(
         experiment_name=experiment_name,
         run_ids=run_ids,
     )
+
+
+def _require_target(metrics: pd.DataFrame, experiment_name: str, expected_target: str) -> None:
+    """Fail loudly when an experiment holds a different prediction task than declared."""
+    if "target" not in metrics.columns:
+        raise TargetMismatchError(
+            f"Experiment {experiment_name!r} has no target column, so it cannot be checked "
+            f"against the declared target {expected_target!r}"
+        )
+    found = sorted(set(metrics["target"].astype(str)))
+    if found != [expected_target]:
+        raise TargetMismatchError(
+            f"Experiment {experiment_name!r} contains target {found}, but the figure declares "
+            f"{expected_target!r}; point that figure task at its own experiment instead"
+        )
 
 
 def _drop_instances(frame: pd.DataFrame, instances: Sequence[str]) -> pd.DataFrame:

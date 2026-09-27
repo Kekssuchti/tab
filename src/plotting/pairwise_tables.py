@@ -4,6 +4,9 @@ Regenerate with:
 
     uv run python -m src.plotting.pairwise_tables
 
+Every prediction task declared for this family in ``src.plotting.experiments``
+is printed in turn; ``--target`` narrows the run.
+
 The tables are printed to the console rather than written to disk, matching how
 the other table generators in this repository are used. The figures for the same
 data, including their captions, live in ``src.plotting.pairwise_wins``.
@@ -19,19 +22,19 @@ Two tables per metric:
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from src.plotting.defaults import dataset_label, metric_label
-from src.plotting.utils import PairwiseSummary, RankSummary, load_pairwise_inputs
+from src.plotting.experiments import tasks_for, warn_skipped
+from src.plotting.utils import MissingExperimentError, PairwiseSummary, RankSummary, load_pairwise_inputs
 from src.plotting.utils.pairwise import pairwise_matrix_to_latex, rank_table_to_latex
 from src.plotting.utils.settings import setting_display
 
 
 @dataclass(frozen=True)
 class DataSettings:
-    """Experiment selection, setting definition, and output location."""
+    """Run selection, setting definition, and output location."""
 
-    experiment_name: str = "sample_size_mimic_mortality"
     pipeline_runs: tuple[str, ...] | None = None
     full_training_only: bool = True
     rank_pipeline_runs: tuple[str, ...] | None = None
@@ -97,7 +100,15 @@ def rank_table(ranks: RankSummary, setting_label: str, setting_source: str, tabl
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--experiment-name", default=DATA.experiment_name)
+    parser.add_argument(
+        "--target",
+        action="append",
+        dest="targets",
+        help=(
+            "Prediction task to rebuild, for example mortality; repeat for several. "
+            "Defaults to every task this family declares."
+        ),
+    )
     parser.add_argument(
         "--run-id",
         action="append",
@@ -109,31 +120,44 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    summary, ranks = load_pairwise_inputs(
-        args.experiment_name,
-        metrics=TABLES.metrics,
-        exclude_models=TABLES.exclude_models,
-        ci_level=TABLES.ci_level,
-        alpha=TABLES.alpha,
-        reference_model=TABLES.reference_model,
-        pipeline_runs=tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs,
-        rank_pipeline_runs=DATA.rank_pipeline_runs,
-        full_training_only=DATA.full_training_only,
-        setting_source=DATA.setting_source,
-        setting_pattern=DATA.setting_pattern,
-    )
+    tasks = tasks_for("pairwise_tables", args.targets)
+    if len(tasks) > 1 and args.run_ids:
+        raise SystemExit("--run-id pins one pipeline run, so it needs exactly one --target")
+    run_ids = tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs
 
-    print("% Tables need \\usepackage{booktabs, graphicx, colortbl} and the \\definecolor lines printed below.")
-    print("Selected pipeline runs: " + ", ".join(summary.run_ids))
+    for task in tasks:
+        print(f"\n=== {task.label} ({task.experiment})")
+        tables = replace(TABLES, metrics=task.metrics, score_scale=task.score_scale)
+        try:
+            summary, ranks = load_pairwise_inputs(
+                task.experiment,
+                metrics=tables.metrics,
+                exclude_models=tables.exclude_models,
+                ci_level=tables.ci_level,
+                alpha=tables.alpha,
+                reference_model=tables.reference_model,
+                pipeline_runs=run_ids,
+                rank_pipeline_runs=DATA.rank_pipeline_runs,
+                full_training_only=DATA.full_training_only,
+                setting_source=DATA.setting_source,
+                setting_pattern=DATA.setting_pattern,
+                expected_target=task.target,
+            )
+        except MissingExperimentError as missing:
+            warn_skipped(task, missing)
+            continue
 
-    for metric in TABLES.metrics:
-        for dataset in TABLES.matrix_datasets or summary.datasets:
-            print(f"\n%% Split-encoded pairwise matrix: {dataset} / {metric}")
-            print(matrix_table(summary, dataset, metric))
+        print("% Tables need \\usepackage{booktabs, graphicx, colortbl} and the \\definecolor lines printed below.")
+        print("Selected pipeline runs: " + ", ".join(summary.run_ids))
 
-    for metric, metric_ranks in ranks.items():
-        print(f"\n%% Average rank table: {metric} ({metric_ranks.block_count} blocks)")
-        print(rank_table(metric_ranks, DATA.setting_label, DATA.setting_source))
+        for metric in tables.metrics:
+            for dataset in tables.matrix_datasets or summary.datasets:
+                print(f"\n%% Split-encoded pairwise matrix: {dataset} / {metric}")
+                print(matrix_table(summary, dataset, metric, tables))
+
+        for metric, metric_ranks in ranks.items():
+            print(f"\n%% Average rank table: {metric} ({metric_ranks.block_count} blocks)")
+            print(rank_table(metric_ranks, DATA.setting_label, DATA.setting_source, tables))
 
 
 if __name__ == "__main__":

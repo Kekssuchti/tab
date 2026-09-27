@@ -4,14 +4,16 @@ Regenerate with:
 
     uv run python -m src.plotting.baseline_transfer
 
-Edit ``DATA`` to select the source experiment and ``VISUAL`` to change figure
-presentation. CLI arguments only provide convenient run/output overrides.
+Every prediction task declared for this family in ``src.plotting.experiments``
+is rebuilt in turn, each into its own ``plots/baseline/<target>/`` directory.
+Edit ``VISUAL`` to change figure presentation; ``--target`` narrows the run to
+selected tasks and ``--run-id`` pins explicit pipeline runs.
 """
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pandas as pd
@@ -19,17 +21,22 @@ from matplotlib.figure import Figure
 
 from src.config import config
 from src.plotting.defaults import dataset_label, metric_label, set_plot_style
+from src.plotting.experiments import tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure_grid, panel_labels, save
-from src.plotting.utils import aggregate_evaluation_runs, load_plot_artifacts, prepare_transfer_summary
+from src.plotting.utils import (
+    MissingExperimentError,
+    aggregate_evaluation_runs,
+    load_plot_artifacts,
+    prepare_transfer_summary,
+)
 from src.plotting.utils.rendering import draw_model_forest, instance_plot_styles, interval_axis_limits
 from src.plotting.utils.transfer import TransferSummary
 
 
 @dataclass(frozen=True)
 class DataSettings:
-    """Experiment selection and output location."""
+    """Run selection and output location."""
 
-    experiment_name: str = "sample_size_mimic_mortality"
     pipeline_runs: tuple[str, ...] | None = None
     full_training_only: bool = True
     # Model names to leave out of every figure, for example a model that a
@@ -248,7 +255,15 @@ def _uncertainty_caption(data: TransferSummary, visual: VisualSettings) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--experiment-name", default=DATA.experiment_name)
+    parser.add_argument(
+        "--target",
+        action="append",
+        dest="targets",
+        help=(
+            "Prediction task to rebuild, for example mortality; repeat for several. "
+            "Defaults to every task this family declares."
+        ),
+    )
     parser.add_argument(
         "--run-id",
         action="append",
@@ -261,37 +276,46 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    tasks = tasks_for("baseline", args.targets)
+    if len(tasks) > 1 and args.run_ids:
+        raise SystemExit("--run-id pins one pipeline run, so it needs exactly one --target")
     run_ids = tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs
-    artifacts = load_plot_artifacts(
-        args.experiment_name,
-        pipeline_runs=run_ids,
-        exclude_models=DATA.exclude_models,
-        full_training_only=run_ids is None and DATA.full_training_only,
-    )
-    aggregated = aggregate_evaluation_runs(
-        artifacts,
-        metrics=VISUAL.metrics,
-        ci_level=VISUAL.ci_level,
-    )
-    prepared = prepare_transfer_summary(aggregated)
-    print("Selected pipeline runs: " + ", ".join(prepared.run_ids))
 
-    output_dir = args.output_dir / prepared.target
-    output_dir.mkdir(parents=True, exist_ok=True)
-    prefix = f"baseline_{prepared.trained_on}_{prepared.target}"
-    performance_path = output_dir / f"{prefix}_performance"
-    generalizability_path = output_dir / f"{prefix}_generalizability"
-    save(make_performance_figure(prepared), str(performance_path), formats=VISUAL.output_formats)
-    save(make_generalizability_figure(prepared), str(generalizability_path), formats=VISUAL.output_formats)
+    for task in tasks:
+        print(f"\n=== {task.label} ({task.experiment})")
+        try:
+            artifacts = load_plot_artifacts(
+                task.experiment,
+                pipeline_runs=run_ids,
+                exclude_models=DATA.exclude_models,
+                full_training_only=run_ids is None and DATA.full_training_only,
+                expected_target=task.target,
+            )
+        except MissingExperimentError as missing:
+            warn_skipped(task, missing)
+            continue
 
-    print("Performance figure caption:")
-    print(f"\\caption{{{performance_caption(prepared)}}}")
-    print("Generalizability figure caption:")
-    print(f"\\caption{{{generalizability_caption(prepared)}}}")
-    print("Figures:")
-    for stem in (performance_path, generalizability_path):
-        for extension in VISUAL.output_formats:
-            print(stem.with_suffix(f".{extension}").relative_to(config.dir_root))
+        visual = replace(VISUAL, metrics=task.metrics, score_scale=task.score_scale)
+        aggregated = aggregate_evaluation_runs(artifacts, metrics=visual.metrics, ci_level=visual.ci_level)
+        prepared = prepare_transfer_summary(aggregated)
+        print("Selected pipeline runs: " + ", ".join(prepared.run_ids))
+
+        output_dir = args.output_dir / prepared.target
+        output_dir.mkdir(parents=True, exist_ok=True)
+        prefix = f"baseline_{prepared.trained_on}_{prepared.target}"
+        performance_path = output_dir / f"{prefix}_performance"
+        generalizability_path = output_dir / f"{prefix}_generalizability"
+        save(make_performance_figure(prepared, visual), str(performance_path), formats=visual.output_formats)
+        save(make_generalizability_figure(prepared, visual), str(generalizability_path), formats=visual.output_formats)
+
+        print("Performance figure caption:")
+        print(f"\\caption{{{performance_caption(prepared)}}}")
+        print("Generalizability figure caption:")
+        print(f"\\caption{{{generalizability_caption(prepared)}}}")
+        print("Figures:")
+        for stem in (performance_path, generalizability_path):
+            for extension in visual.output_formats:
+                print(stem.with_suffix(f".{extension}").relative_to(config.dir_root))
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ steps=(
     src.plotting.feature_distributions
     src.plotting.pairwise_wins
     src.plotting.pairwise_tables
+    src.plotting.retriever_comparison
 )
 
 filter="${1:-}"

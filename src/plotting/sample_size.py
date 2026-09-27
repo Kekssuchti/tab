@@ -4,13 +4,15 @@ Regenerate with:
 
     uv run python -m src.plotting.sample_size
 
-Edit ``DATA`` for experiment/model selection and ``VISUAL`` for presentation.
+Every prediction task declared for this family in ``src.plotting.experiments``
+is rebuilt in turn, each into its own ``plots/sample_size/<target>/`` directory.
+Edit ``VISUAL`` for presentation; ``--target`` narrows the run to selected tasks.
 """
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -19,17 +21,17 @@ from matplotlib.figure import Figure
 
 from src.config import config
 from src.plotting.defaults import dataset_label, metric_label, set_plot_style
+from src.plotting.experiments import tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import WIDE, figure_grid, panel_labels, save
-from src.plotting.utils import load_plot_artifacts, prepare_sample_size_evaluation
+from src.plotting.utils import MissingExperimentError, load_plot_artifacts, prepare_sample_size_evaluation
 from src.plotting.utils.rendering import instance_plot_styles, interval_axis_limits
 from src.plotting.utils.sample_size import SampleSizeEvaluation
 
 
 @dataclass(frozen=True)
 class DataSettings:
-    """Experiment/model selection and output location."""
+    """Run/model selection and output location."""
 
-    experiment_name: str = "sample_size_mimic_mortality"
     pipeline_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
     # Model names to leave out of every figure.
@@ -203,7 +205,15 @@ def caption(data: SampleSizeEvaluation, visual: VisualSettings = VISUAL) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--experiment-name", default=DATA.experiment_name)
+    parser.add_argument(
+        "--target",
+        action="append",
+        dest="targets",
+        help=(
+            "Prediction task to rebuild, for example mortality; repeat for several. "
+            "Defaults to every task this family declares."
+        ),
+    )
     parser.add_argument("--run-id", action="append", dest="run_ids")
     parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
@@ -211,27 +221,40 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    tasks = tasks_for("sample_size", args.targets)
+    if len(tasks) > 1 and args.run_ids:
+        raise SystemExit("--run-id pins one pipeline run, so it needs exactly one --target")
     run_ids = tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs
-    artifacts = load_plot_artifacts(
-        args.experiment_name,
-        pipeline_runs=run_ids,
-        models=DATA.models,
-        exclude_models=DATA.exclude_models,
-    )
-    prepared = prepare_sample_size_evaluation(
-        artifacts,
-        metrics=VISUAL.metrics,
-        ci_level=VISUAL.ci_level,
-    )
 
-    output_dir = args.output_dir / prepared.target
-    output_dir.mkdir(parents=True, exist_ok=True)
-    stem = output_dir / f"sample_size_{prepared.trained_on}_{prepared.target}_performance"
-    outputs = save(make_figure(prepared), str(stem), formats=VISUAL.output_formats)
-    print("LaTeX caption:")
-    print(f"\\caption{{{caption(prepared)}}}")
-    for output in outputs:
-        print("figure: " + str(Path(output).relative_to(config.dir_root)))
+    for task in tasks:
+        print(f"\n=== {task.label} ({task.experiment})")
+        try:
+            artifacts = load_plot_artifacts(
+                task.experiment,
+                pipeline_runs=run_ids,
+                models=DATA.models,
+                exclude_models=DATA.exclude_models,
+                expected_target=task.target,
+            )
+        except MissingExperimentError as missing:
+            warn_skipped(task, missing)
+            continue
+
+        visual = replace(VISUAL, metrics=task.metrics, score_scale=task.score_scale)
+        prepared = prepare_sample_size_evaluation(
+            artifacts,
+            metrics=visual.metrics,
+            ci_level=visual.ci_level,
+        )
+
+        output_dir = args.output_dir / prepared.target
+        output_dir.mkdir(parents=True, exist_ok=True)
+        stem = output_dir / f"sample_size_{prepared.trained_on}_{prepared.target}_performance"
+        outputs = save(make_figure(prepared, visual), str(stem), formats=visual.output_formats)
+        print("LaTeX caption:")
+        print(f"\\caption{{{caption(prepared)}}}")
+        for output in outputs:
+            print("figure: " + str(Path(output).relative_to(config.dir_root)))
 
 
 if __name__ == "__main__":

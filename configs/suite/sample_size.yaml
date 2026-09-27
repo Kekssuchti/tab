@@ -8,22 +8,22 @@ matrix:
   # mimic has 25600, tudd not
   - path: dataset.train_on.0.fraction
     values: [100, 200, 400, 800, 1600, 3200, 6400, 12800, 1.0]
+  - path: dataset.train_on.0.dataset
+    values: ["tudd"]
 
   # common metadata to change
   # task
   - path: dataset.target
-    values: ["mortality"]
+    values: ["hours_to_readmit_72"]
   # mlflow name + source, KEEP IN SYNC!
   - path: mlflow.experiment_name
-    values: ["sample_size_tudd_mortality"]
-  - path: dataset.train_on.0.dataset
-    values: ["tudd"]
+    values: ["sample_size_tudd_hours_to_readmit_72"]
 
   # repeat runs with other seeds (pretty much dont need to touch)
   - path: random_states
     values:
       - { model_training_seed: 1337, training_sample_seed: 1337, cv_split_seed: 1337 }
-      # - { model_training_seed: 1338, training_sample_seed: 1338, cv_split_seed: 1338 }
-      # - { model_training_seed: 1339, training_sample_seed: 1339, cv_split_seed: 1339 }
-    #  - { model_training_seed: 1340, training_sample_seed: 1340, cv_split_seed: 1340 }
+      - { model_training_seed: 1338, training_sample_seed: 1338, cv_split_seed: 1338 }
+      - { model_training_seed: 1339, training_sample_seed: 1339, cv_split_seed: 1339 }
+    # - { model_training_seed: 1340, training_sample_seed: 1340, cv_split_seed: 1340 }
     #  - { model_training_seed: 1341, training_sample_seed: 1341, cv_split_seed: 1341 }
