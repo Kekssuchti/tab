@@ -1,9 +1,32 @@
 from timeit import default_timer as timer
 
+from sklearn.base import BaseEstimator
+from sklearn.utils.validation import validate_data
+
 from external.TabSwift.TALENT.model.lib.tabswift.classifier import TabSwiftClassifier
 from external.TabSwift.TALENT.model.lib.tabswift.regressor import TabSwiftRegressor
 from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
 from src.schemas.base_schemas import TaskType
+
+
+def _restore_validate_data() -> None:
+    """Give scikit-learn >= 1.7 back the ``BaseEstimator._validate_data`` method.
+
+    The vendored TabSwift estimators and their preprocessing transformers call
+    ``self._validate_data(...)``. Scikit-learn deprecated that method in 1.6 and
+    removed it in 1.7, where the module-level ``validate_data(estimator, ...)``
+    helper took over. Drop this shim once vendored TabSwift requires 1.7 itself.
+    """
+    if hasattr(BaseEstimator, "_validate_data"):
+        return
+
+    def _validate_data(self, X="no_validation", y="no_validation", reset=True, **check_params):
+        return validate_data(self, X, y, reset=reset, **check_params)
+
+    BaseEstimator._validate_data = _validate_data
+
+
+_restore_validate_data()
 
 
 class TabSwiftAdapter(ModelAdapter):

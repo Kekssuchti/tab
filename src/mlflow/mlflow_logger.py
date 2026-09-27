@@ -205,7 +205,7 @@ class MLflowPipelineLogger:
                     "model_instance": model_run.model_instance_id,
                     "model_name": model_run.model_name,
                     "method": tuning.method,
-                    "scoring": tuning.scoring,
+                    "scoring": tuning.scoring.value,
                     "best_params": tuning.best_params,
                     "folds": [
                         {

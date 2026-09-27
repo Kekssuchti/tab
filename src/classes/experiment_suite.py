@@ -48,7 +48,7 @@ class ExperimentSuite:
             suite_name=self.experiment_suite_config.name,
             config_count=len(variants),
             models_per_config=models_per_config,
-            total_model_runs=len(variants) * models_per_config,
+            total_model_runs=sum(len(variant.pipeline_config.training) for variant in variants),
             changed_parameters=tuple(override.path for override in self.experiment_suite_config.matrix),
             config_variants=variants,
         )

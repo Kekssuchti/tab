@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from src.plotting.utils.aggregation import AggregatedEvaluation
-from src.schemas.training_schemas import LOWER_IS_BETTER_SCORING
+from src.schemas.training_schemas import scoring_is_lower_better
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ def prepare_transfer_summary(aggregated: AggregatedEvaluation) -> TransferSummar
         external_points = performance.loc[
             performance["dataset"].eq(external_dataset) & performance["metric"].eq(metric)
         ].set_index("model_instance")["estimate"]
-        lower_is_better = metric in LOWER_IS_BETTER_SCORING
+        lower_is_better = scoring_is_lower_better(metric)
         best_value = external_points.min() if lower_is_better else external_points.max()
         best_instance = next(
             instance for instance in aggregated.model_instances if external_points.loc[instance] == best_value

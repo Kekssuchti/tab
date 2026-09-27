@@ -3,7 +3,7 @@ from timeit import default_timer as timer
 from exaonetabular.classifier import EXAONETabularClassifier
 from exaonetabular.regressor import EXAONETabularRegressor
 
-from src.interfaces.model_interface import ModelAdapter, TimedPrediction, seed_kwargs
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction, as_feature_array, seed_kwargs
 from src.schemas.base_schemas import TaskType
 
 
@@ -32,7 +32,7 @@ class EXAONEAdapter(ModelAdapter):
 
     def fit(self, X_train, y_train):
         start_time = timer()
-        self.model.fit(X_train, y_train)
+        self.model.fit(as_feature_array(X_train), y_train)
         return timer() - start_time
 
     def predict(self, X_test) -> TimedPrediction:
@@ -41,6 +41,7 @@ class EXAONEAdapter(ModelAdapter):
         return self.timed_prediction(result, start_time)
 
     def _predict_single_batch(self, X_test):
+        features = as_feature_array(X_test)
         if self.task_type == "classification":
-            return self.model.predict_proba(X_test)
-        return self.model.predict(X_test, output_type="mean", alphas=None)
+            return self.model.predict_proba(features)
+        return self.model.predict(features, output_type="mean", alphas=None)

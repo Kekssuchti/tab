@@ -68,6 +68,12 @@ training:
       grid: { "n_estimators": [1] }
       scoring: roc_auc
 
+  - name: tabdpt
+    tuning:
+      method: grid
+      search_space: default
+      scoring: roc_auc
+
 mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db

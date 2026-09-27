@@ -15,8 +15,6 @@ from src.schemas.pipeline_schemas import RandomStates
 from src.schemas.preprocessing_schemas import ImputerConfig, ScalerEncoderConfig
 from src.schemas.run_records import FoldRecord, ModelTrainingResult, TuningRecord
 from src.schemas.training_schemas import (
-    HIGHER_IS_BETTER_SCORING,
-    LOWER_IS_BETTER_SCORING,
     ClassificationScoring,
     ModelConfig,
     RegressionScoring,
@@ -148,6 +146,11 @@ class Trainer:
         data: DatasetBundle,
     ) -> TrainingOutcome:
         tuning = model_config.tuning
+        if tuning.scoring.task_type != self.task_type:
+            raise ValueError(
+                f"Scoring metric '{tuning.scoring}' is for {tuning.scoring.task_type}, "
+                f"not {self.task_type}"
+            )
 
         if tuning.method == "grid":
             return self._tune_model_grid(model_config, model_spec, data)
@@ -236,15 +239,8 @@ class Trainer:
 
         evaluations: list[_CandidateEvaluation] = []
 
-        if tuning.scoring in LOWER_IS_BETTER_SCORING:
-            direction = "minimize"
-        elif tuning.scoring in HIGHER_IS_BETTER_SCORING:
-            direction = "maximize"
-        else:
-            raise ValueError(f"Unsupported scoring metric: {tuning.scoring}")
-
         study = optuna.create_study(
-            direction=direction,
+            direction=tuning.scoring.optimization_direction,
             sampler=self._build_optuna_sampler(tuning),
         )
 
@@ -376,7 +372,7 @@ class Trainer:
         else:
             fold_scores_by_candidate = [evaluation.fold_scores for evaluation in evaluations]
             mean_scores = [float(np.mean(scores)) for scores in fold_scores_by_candidate]
-            if tuning_config.scoring in LOWER_IS_BETTER_SCORING:
+            if tuning_config.scoring.lower_is_better:
                 best_index = int(np.argmin(mean_scores))
             else:
                 best_index = int(np.argmax(mean_scores))

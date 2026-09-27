@@ -71,6 +71,7 @@ default = true
 [tool.pytest.ini_options]
 pythonpath = ["."]
 markers = [
+    "model: opt-in real registered-model fit/predict smoke tests; enable with --models",
     "gpu: tests that require a CUDA/HIP-capable GPU",
     "slow: tests that are slow or download model weights",
     "integration: end-to-end pipeline tests",
