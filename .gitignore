@@ -14,11 +14,13 @@ logs/
 data/mimic/
 data/erope/
 models/
+# Keep the opt-in smoke test, not model weights or other generated files.
+!/tests/models/
 cache/
 run_results/
 mlflow**.db
 mlartifacts/
-mlartifacts_fs/
+archive/
 mlruns/
 data/raw
 data/filtered

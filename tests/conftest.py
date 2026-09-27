@@ -1,21 +1,37 @@
-"""Pytest configuration: shared markers and skip hooks."""
+"""Standalone real-model runs are opt-in; collection never probes a GPU."""
 
 import pytest
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--models",
+        action="store_true",
+        default=False,
+        help="Run real registered-model fit/predict smokes (may download weights and require a GPU)",
+    )
+
+
 def pytest_collection_modifyitems(config, items):
-    """Skip tests marked `gpu` when no CUDA/HIP device is available."""
-    if _cuda_available():
-        return
-    skip = pytest.mark.skip(reason="GPU required but no CUDA/HIP device is available")
+    skip = pytest.mark.skip(reason="Real model smoke tests require explicit --models")
     for item in items:
-        if "gpu" in item.keywords:
-            item.add_marker(skip)
+        if item.get_closest_marker("model") is not None:
+            if not config.getoption("--models"):
+                item.add_marker(skip)
+            elif getattr(config.option, "numprocesses", None):
+                raise pytest.UsageError("Real model smokes must run sequentially; remove pytest-xdist -n")
 
 
-def _cuda_available() -> bool:
+@pytest.fixture
+def model_gpu(request):
+    """Probe hardware only inside a selected GPU smoke; broken dependencies fail."""
+    import torch
+
+    if not torch.cuda.is_available():
+        pytest.skip(f"{request.node.callspec.id}: GPU smoke profile requires a CUDA/HIP device")
+    old_threads = torch.get_num_threads()
+    torch.set_num_threads(1)
     try:
-        import torch
-    except ImportError:
-        return False
-    return torch.cuda.is_available()
+        yield
+    finally:
+        torch.set_num_threads(old_threads)

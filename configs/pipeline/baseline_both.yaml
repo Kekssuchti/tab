@@ -13,6 +13,8 @@ dataset:
   train_on:
     - dataset: tudd
       fraction: 1.0
+    - dataset: mimic
+      fraction: 100
   data_cleaner:
     outlier_limits_path: configs/data_limits.json
     missing_threshold_row: 0.5
@@ -120,4 +122,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: tudd_baseline
+  experiment_name: mixed_tudd_baseline

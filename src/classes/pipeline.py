@@ -69,8 +69,10 @@ class Pipeline:
             try:
                 outcome = trainer.train_evaluate_model(model_config, data)
                 tr = outcome.result
-                mr = self._model_result_from_training_result(tr)
                 self.prediction_tables.add(model_instance_id, outcome.test_predictions)
+                # Only expose successful evaluation records after prediction
+                # identity/alignment checks pass; tracking consumes this record.
+                mr = self._model_result_from_training_result(tr)
 
                 logger.info(f"Model {model_instance_id} trained and evaluated successfully")
             except Exception as exc:  # noqa: BLE001 - one model's failure must not abort the run

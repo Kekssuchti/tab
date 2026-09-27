@@ -1,4 +1,5 @@
 import gc
+import sys
 from typing import Any
 
 
@@ -38,9 +39,13 @@ def _release_model_attr(owner: Any) -> None:
 
 
 def _empty_cuda_cache() -> None:
+    # No Torch allocations exist if no model has imported it. Importing during
+    # exception cleanup can also retain the failed model's traceback in cached
+    # optional-dependency errors (for example Torch's ROCm AMDSMI import error).
+    torch = sys.modules.get("torch")
+    if torch is None:
+        return
     try:
-        import torch
-
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()

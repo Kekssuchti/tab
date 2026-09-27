@@ -236,12 +236,6 @@ SEARCH_SPACES = {
         "best": {
             "n_estimators": [32],
         },
-        "default_2_6": {
-            "n_estimators": [4],
-        },
-        "default_2_5": {
-            "n_estimators": [2],
-        },
         "tune_default": {
             "n_estimators": [4, 8, 16],
             "softmax_temperature": [0.75, 0.8, 0.9, 0.95, 1],
@@ -337,20 +331,6 @@ _COMMON_REGISTRY = {
         TABPFN_ADAPTER,
         search_spaces=SEARCH_SPACES["tabpfn"],
     ),
-    "tabpfn-2.5": ModelSpec(
-        TABPFN_ADAPTER,
-        default_params={"version": "v2.5"},
-        search_spaces=SEARCH_SPACES["tabpfn"],
-    ),
-    "tabpfn-2.6": ModelSpec(
-        TABPFN_ADAPTER,
-        default_params={
-            "version": "v2.6",
-            "predict_batch_size": 8192,
-            "fit_mode": "fit_preprocessors",
-        },
-        search_spaces=SEARCH_SPACES["tabpfn"],
-    ),
     "tabpfn-3.5-fast": ModelSpec(
         TABPFN_ADAPTER,
         default_params={"version": "v3.5-fast"},
@@ -364,20 +344,6 @@ _COMMON_REGISTRY = {
     "tabicl-2": ModelSpec(
         TABICL_ADAPTER,
         search_spaces=SEARCH_SPACES["tabicl"],
-    ),
-    "limix-2m": ModelSpec(
-        LIMIX_ADAPTER,
-        default_params={"size": "2M"},
-        search_spaces=SEARCH_SPACES["limix"],
-    ),
-    "limix-16m": ModelSpec(
-        LIMIX_ADAPTER,
-        default_params={"size": "16M"},
-        search_spaces=SEARCH_SPACES["limix"],
-    ),
-    "limix-2": ModelSpec(
-        LIMIX_V2_ADAPTER,
-        search_spaces=SEARCH_SPACES["limix"],
     ),
     "tabswift": ModelSpec(TABSWIFT_ADAPTER, search_spaces=SEARCH_SPACES["tabswift"]),
     "exaone": ModelSpec(EXAONE_ADAPTER, search_spaces=SEARCH_SPACES["exaone"]),

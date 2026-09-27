@@ -3,7 +3,7 @@ from timeit import default_timer as timer
 from tabdpt.classifier import TabDPTClassifier
 from tabdpt.regressor import TabDPTRegressor
 
-from src.interfaces.model_interface import ModelAdapter, TimedPrediction
+from src.interfaces.model_interface import ModelAdapter, TimedPrediction, as_feature_array
 from src.schemas.base_schemas import TaskType
 
 
@@ -33,7 +33,7 @@ class TabDPTAdapter(ModelAdapter):
 
     def fit(self, X_train, y_train):
         start_time = timer()
-        self.model.fit(X_train, y_train)
+        self.model.fit(as_feature_array(X_train), y_train)
         return timer() - start_time
 
     def predict(self, X_test) -> TimedPrediction:
@@ -42,6 +42,7 @@ class TabDPTAdapter(ModelAdapter):
         return self.timed_prediction(result, start_time)
 
     def _predict_single_batch(self, X_test):
+        features = as_feature_array(X_test)
         if self.task_type == "classification":
-            return self.model.ensemble_predict_proba(X_test, n_ensembles=self.n_ensembles, seed=self.random_state)
-        return self.model.predict(X_test, n_ensembles=self.n_ensembles, seed=self.random_state)
+            return self.model.ensemble_predict_proba(features, n_ensembles=self.n_ensembles, seed=self.random_state)
+        return self.model.predict(features, n_ensembles=self.n_ensembles, seed=self.random_state)

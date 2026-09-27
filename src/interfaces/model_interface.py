@@ -30,6 +30,21 @@ def _prediction_array(values: Any) -> np.ndarray:
     return np.asarray(values)
 
 
+def as_feature_array(values: Any) -> np.ndarray:
+    """Return features as the plain NumPy array the wrapped libraries require.
+
+    The trainer hands adapters the numeric matrix produced by the sklearn
+    preprocessing pipeline, but several wrapped libraries only accept NumPy
+    input, so a frame handed to an adapter directly is normalized here.
+    """
+    to_numpy = getattr(values, "to_numpy", None)
+    if callable(to_numpy):
+        values = to_numpy()
+    if isinstance(values, np.ndarray):
+        return values
+    return np.asarray(values)
+
+
 def seed_kwargs(seed_param: str | None, random_state: int | None) -> dict[str, Any]:
     """Return the wrapped estimator's seed keyword, or nothing when unseeded.
 
