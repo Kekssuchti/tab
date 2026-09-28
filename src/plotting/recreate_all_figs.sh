@@ -12,7 +12,7 @@ steps=(
     src.plotting.baseline_transfer
     src.plotting.sample_size
     src.plotting.ablation_estimators
-    src.plotting.feature_distributions
+#    src.plotting.feature_distributions
     src.plotting.pairwise_wins
     src.plotting.pairwise_tables
     src.plotting.retriever_comparison

@@ -131,6 +131,7 @@ def make_figure(data: SampleSizeEvaluation, visual: VisualSettings = VISUAL) -> 
                     dataset=dataset_label(dataset),
                 )
             )
+            ax.set_xlim(left=85)
             if metric_index == len(data.metrics) - 1:
                 ax.set_xlabel(visual.sample_axis_label)
             _format_sample_axis(ax, data.sample_sizes, visual)

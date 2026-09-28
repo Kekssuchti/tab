@@ -31,9 +31,7 @@ class FigureTask:
     def __post_init__(self) -> None:
         scales = {metric_scale(metric) for metric in self.metrics}
         if len(scales) != 1:
-            raise ValueError(
-                f"Task {self.target!r} mixes metrics on different display scales: {self.metrics}"
-            )
+            raise ValueError(f"Task {self.target!r} mixes metrics on different display scales: {self.metrics}")
 
     @property
     def label(self) -> str:
@@ -54,9 +52,21 @@ class FigureTask:
 # point-scale, so the percent scale of a task is derived from its metrics
 # instead of being typed into every script.
 FIGURE_TASKS: dict[str, tuple[FigureTask, ...]] = {
-    "baseline": (FigureTask("mortality", "sample_size_mimic_mortality", ("roc_auc", "prc_auc")),),
-    "sample_size": (FigureTask("mortality", "sample_size_mimic_mortality", ("roc_auc", "prc_auc")),),
-    "pairwise_wins": (FigureTask("mortality", "sample_size_mimic_mortality", ("roc_auc", "prc_auc")),),
+    "baseline": (
+        FigureTask("mortality", "sample_size_mimic_mortality", ("roc_auc", "prc_auc")),
+        FigureTask("mortality", "sample_size_tudd_mortality", ("roc_auc", "prc_auc")),
+        FigureTask("hours_to_readmit_72", "sample_size_tudd_hours_to_readmit_72", ("roc_auc", "prc_auc")),
+    ),
+    "sample_size": (
+        FigureTask("mortality", "sample_size_mimic_mortality", ("roc_auc", "prc_auc")),
+        FigureTask("mortality", "sample_size_tudd_mortality", ("roc_auc", "prc_auc")),
+        FigureTask("hours_to_readmit_72", "sample_size_tudd_hours_to_readmit_72", ("roc_auc", "prc_auc")),
+    ),
+    "pairwise_wins": (
+        FigureTask("mortality", "sample_size_mimic_mortality", ("roc_auc", "prc_auc")),
+        FigureTask("mortality", "sample_size_tudd_mortality", ("roc_auc", "prc_auc")),
+        FigureTask("hours_to_readmit_72", "sample_size_tudd_hours_to_readmit_72", ("roc_auc", "prc_auc")),
+    ),
     "pairwise_tables": (FigureTask("mortality", "sample_size_mimic_mortality", ("roc_auc", "prc_auc")),),
 }
 
