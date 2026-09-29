@@ -21,7 +21,7 @@ from matplotlib.figure import Figure
 
 from src.config import config
 from src.plotting.defaults import dataset_label, metric_label, set_plot_style
-from src.plotting.experiments import tasks_for, warn_skipped
+from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
     MissingExperimentError,
@@ -268,7 +268,17 @@ def _parse_args() -> argparse.Namespace:
         "--run-id",
         action="append",
         dest="run_ids",
-        help="Explicit pipeline MLflow run ID; repeat to average runs. Defaults to full-training-size runs.",
+        help=(
+            "Explicit pipeline MLflow run ID; repeat to average runs. Every explicit run must record one "
+            "dataset.train_on entry with fraction 1.0."
+        ),
+    )
+    parser.add_argument(
+        "--training-source",
+        action="append",
+        dest="training_sources",
+        choices=DATA_SOURCES,
+        help="Training source to rebuild; repeat for several. Defaults to both sources.",
     )
     parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
@@ -276,20 +286,25 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    tasks = tasks_for("baseline", args.targets)
-    if len(tasks) > 1 and args.run_ids:
-        raise SystemExit("--run-id pins one pipeline run, so it needs exactly one --target")
+    tasks = tasks_for("baseline", args.targets, training_sources=args.training_sources)
     run_ids = tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs
+    if len(tasks) > 1 and run_ids:
+        raise SystemExit("--run-id pins one experiment input; select exactly one --target and --training-source")
 
     for task in tasks:
-        print(f"\n=== {task.label} ({task.experiment})")
+        experiment_name = task.experiment_name
+        print(f"\n=== {task.label} [{task.direction}] ({experiment_name or 'not registered'})")
+        if experiment_name is None:
+            warn_skipped(task, "the intended experiment has not been registered yet")
+            continue
         try:
             artifacts = load_plot_artifacts(
-                task.experiment,
+                experiment_name,
                 pipeline_runs=run_ids,
                 exclude_models=DATA.exclude_models,
-                full_training_only=run_ids is None and DATA.full_training_only,
+                full_training_only=DATA.full_training_only,
                 expected_target=task.target,
+                expected_training_source=task.training_source,
             )
         except MissingExperimentError as missing:
             warn_skipped(task, missing)

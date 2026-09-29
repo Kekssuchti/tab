@@ -164,6 +164,7 @@ def load_pairwise_inputs(
     setting_source: str = "training_size",
     setting_pattern: str | None = None,
     expected_target: str | None = None,
+    expected_training_source: str | None = None,
 ) -> tuple[PairwiseSummary, dict[str, RankSummary]]:
     """Load the pairwise contrasts and the per-metric rank summaries of an experiment.
 
@@ -175,8 +176,9 @@ def load_pairwise_inputs(
         experiment_name,
         pipeline_runs=pipeline_runs,
         exclude_models=exclude_models,
-        full_training_only=full_training_only and pipeline_runs is None,
+        full_training_only=full_training_only,
         expected_target=expected_target,
+        expected_training_source=expected_training_source,
     )
     aggregated = aggregate_evaluation_runs(artifacts, metrics=metrics, ci_level=ci_level)
     summary = prepare_pairwise_summary(aggregated, reference_model=reference_model, alpha=alpha)
@@ -186,6 +188,8 @@ def load_pairwise_inputs(
         pipeline_runs=rank_pipeline_runs,
         exclude_models=exclude_models,
         include_bootstrap=False,
+        expected_target=expected_target,
+        expected_training_source=expected_training_source,
     )
     setting_by_run, setting_order = assign_settings(
         rank_artifacts.metrics,

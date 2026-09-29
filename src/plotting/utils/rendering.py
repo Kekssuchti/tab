@@ -114,3 +114,21 @@ def interval_axis_limits(
     span = upper - lower
     padding = padding_fraction * span if span > 1e-9 else minimum_padding
     return lower - padding, upper + padding
+
+
+def short_count(value: int) -> str:
+    """Format a sample count compactly for an axis tick."""
+    if value < 1_000:
+        return f"{value}"
+    thousands = f"{value / 1_000:.1f}".rstrip("0").rstrip(".")
+    return f"{thousands}k"
+
+
+def sample_ticks(sample_sizes: Sequence[int], maximum: int) -> tuple[int, ...]:
+    """Choose at most `maximum` evenly spaced ticks from measured counts."""
+    if maximum < 2:
+        raise ValueError("maximum must be at least two")
+    if len(sample_sizes) <= maximum:
+        return tuple(sample_sizes)
+    indices = np.linspace(0, len(sample_sizes) - 1, maximum).round().astype(int)
+    return tuple(sample_sizes[index] for index in np.unique(indices))

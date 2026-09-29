@@ -40,7 +40,7 @@ from src.plotting.defaults import (
     model_label,
     set_plot_style,
 )
-from src.plotting.experiments import tasks_for, warn_skipped
+from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure, figure_grid, label_ends, panel_labels, save
 from src.plotting.utils import (
     MissingExperimentError,
@@ -588,19 +588,30 @@ def _parse_args() -> argparse.Namespace:
         dest="run_ids",
         help="Explicit pipeline MLflow run ID for the pairwise views; repeat to average runs.",
     )
+    parser.add_argument(
+        "--training-source",
+        action="append",
+        dest="training_sources",
+        choices=DATA_SOURCES,
+        help="Training source to rebuild; repeat for several. Defaults to both sources.",
+    )
     parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    tasks = tasks_for("pairwise_wins", args.targets)
-    if len(tasks) > 1 and args.run_ids:
-        raise SystemExit("--run-id pins one pipeline run, so it needs exactly one --target")
+    tasks = tasks_for("pairwise_wins", args.targets, training_sources=args.training_sources)
     run_ids = tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs
+    if len(tasks) > 1 and run_ids:
+        raise SystemExit("--run-id pins one experiment input; select exactly one --target and --training-source")
 
     for task in tasks:
-        print(f"\n=== {task.label} ({task.experiment})")
+        experiment_name = task.experiment_name
+        print(f"\n=== {task.label} [{task.direction}] ({experiment_name or 'not registered'})")
+        if experiment_name is None:
+            warn_skipped(task, "the intended experiment has not been registered yet")
+            continue
         visual = replace(
             VISUAL,
             comparison_metrics=task.metrics,
@@ -610,7 +621,7 @@ def main() -> None:
         )
         try:
             summary, ranks = load_pairwise_inputs(
-                task.experiment,
+                experiment_name,
                 metrics=visual.comparison_metrics,
                 rank_metrics=visual.rank_metrics,
                 exclude_models=visual.exclude_models,
@@ -623,6 +634,7 @@ def main() -> None:
                 setting_source=DATA.setting_source,
                 setting_pattern=DATA.setting_pattern,
                 expected_target=task.target,
+                expected_training_source=task.training_source,
             )
         except MissingExperimentError as missing:
             warn_skipped(task, missing)

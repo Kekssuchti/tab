@@ -25,7 +25,7 @@ import argparse
 from dataclasses import dataclass, replace
 
 from src.plotting.defaults import dataset_label, metric_label
-from src.plotting.experiments import tasks_for, warn_skipped
+from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
 from src.plotting.utils import MissingExperimentError, PairwiseSummary, RankSummary, load_pairwise_inputs
 from src.plotting.utils.pairwise import pairwise_matrix_to_latex, rank_table_to_latex
 from src.plotting.utils.settings import setting_display
@@ -78,20 +78,28 @@ def matrix_table(
             rf"\textbf{{Pairwise {metric_label(metric)} comparison of every model pair on "
             rf"{dataset_label(dataset)}.}}"
         ),
-        label=f"tab:pairwise-{summary.target}-{dataset}-{metric}",
+        label=f"tab:pairwise-{summary.target}-trained-{summary.trained_on}-{dataset}-{metric}",
         scale=tables.score_scale,
         win_digits=tables.win_digits,
         delta_digits=tables.delta_digits,
     )
 
 
-def rank_table(ranks: RankSummary, setting_label: str, setting_source: str, tables: TableSettings = TABLES) -> str:
+def rank_table(
+    ranks: RankSummary,
+    setting_label: str,
+    setting_source: str,
+    *,
+    target: str,
+    trained_on: str,
+    tables: TableSettings = TABLES,
+) -> str:
     """Return the average-rank table of one metric."""
     return rank_table_to_latex(
         ranks,
         headline=rf"\textbf{{Average model rank per configuration and across the experiment "
         rf"({metric_label(ranks.metric)}).}}",
-        label=f"tab:pairwise-ranks-{ranks.metric}",
+        label=f"tab:pairwise-ranks-{target}-trained-{trained_on}-{ranks.metric}",
         setting_label=setting_label,
         setting_display={setting: setting_display(setting, setting_source) for setting in ranks.settings},
         digits=tables.rank_digits,
@@ -115,22 +123,33 @@ def _parse_args() -> argparse.Namespace:
         dest="run_ids",
         help="Explicit pipeline MLflow run ID for the matrix tables; repeat to average runs.",
     )
+    parser.add_argument(
+        "--training-source",
+        action="append",
+        dest="training_sources",
+        choices=DATA_SOURCES,
+        help="Training source to print; repeat for several. Defaults to both sources.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    tasks = tasks_for("pairwise_tables", args.targets)
-    if len(tasks) > 1 and args.run_ids:
-        raise SystemExit("--run-id pins one pipeline run, so it needs exactly one --target")
+    tasks = tasks_for("pairwise_tables", args.targets, training_sources=args.training_sources)
     run_ids = tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs
+    if len(tasks) > 1 and run_ids:
+        raise SystemExit("--run-id pins one experiment input; select exactly one --target and --training-source")
 
     for task in tasks:
-        print(f"\n=== {task.label} ({task.experiment})")
+        experiment_name = task.experiment_name
+        print(f"\n=== {task.label} [{task.direction}] ({experiment_name or 'not registered'})")
+        if experiment_name is None:
+            warn_skipped(task, "the intended experiment has not been registered yet")
+            continue
         tables = replace(TABLES, metrics=task.metrics, score_scale=task.score_scale)
         try:
             summary, ranks = load_pairwise_inputs(
-                task.experiment,
+                experiment_name,
                 metrics=tables.metrics,
                 exclude_models=tables.exclude_models,
                 ci_level=tables.ci_level,
@@ -142,6 +161,7 @@ def main() -> None:
                 setting_source=DATA.setting_source,
                 setting_pattern=DATA.setting_pattern,
                 expected_target=task.target,
+                expected_training_source=task.training_source,
             )
         except MissingExperimentError as missing:
             warn_skipped(task, missing)
@@ -157,7 +177,16 @@ def main() -> None:
 
         for metric, metric_ranks in ranks.items():
             print(f"\n%% Average rank table: {metric} ({metric_ranks.block_count} blocks)")
-            print(rank_table(metric_ranks, DATA.setting_label, DATA.setting_source, tables))
+            print(
+                rank_table(
+                    metric_ranks,
+                    DATA.setting_label,
+                    DATA.setting_source,
+                    target=summary.target,
+                    trained_on=summary.trained_on,
+                    tables=tables,
+                )
+            )
 
 
 if __name__ == "__main__":

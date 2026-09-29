@@ -3,12 +3,18 @@
 Current figure scripts:
 
 - `baseline_transfer.py` — full-data performance and generalizability
-- `sample_size.py` — AUROC/AUPRC progression over training sample size
+- `training_source_contrast.py` — same-target local-versus-external full-data cost
+- `sample_size.py` — AUROC/AUPRC progression over training sample size, plus
+  same-size XGBoost differences
+- `training_composition.py` — fixed-budget MIMIC/TUDD composition curves
+- `augmentation.py` — local-only versus external-augmented training curves
 - `ablation_estimators.py` — estimator-count performance and runtime
 - `pairwise_wins.py` — cross-cohort win shares, paired differences, and rank summaries
 - `pairwise_tables.py` — the pairwise and average-rank LaTeX tables
 - `feature_distributions.py` — filtered-cohort feature distributions
-- `retriever_comparison.py` — retriever strategy effects
+- `retriever_comparison.py` — paired retrieval-strategy effects per budget/batch
+- `retrieval_budget.py` — retrieval performance over the selected budget with the
+  matched unrestricted candidate-pool reference
 
 `experiments.py` is the single place that says which MLflow experiment backs
 which figure; `defaults.py` is the source of truth for colors and styles.
@@ -25,6 +31,11 @@ Shared mechanics live in `utils/`:
 - `ranking.py` — average ranks per block, Friedman tests, and Nemenyi post-hoc results
 - `settings.py` — assignment of pipeline runs to experimental settings
 - `rendering.py` — model styles, forest panels, and interval-aware axis limits
+- `runs.py` — authoritative training-source design, realized count, and
+  bootstrap alignment of selected runs
+- `composition.py` / `augmentation.py` — fixed-budget composition and
+  augmentation preparation
+- `retrieval.py` — retriever design, target-batch identity, and budget curves
 - `distributions.py` — low-level feature-distribution drawing
 
 `defaults.py` SOURCE OF TRUTH, colors styles etc.
@@ -41,12 +52,16 @@ family covers are declared in Python, not in the shell.
 src/plotting/recreate_all_figs.sh
 
 uv run python -m src.plotting.baseline_transfer
+uv run python -m src.plotting.training_source_contrast
 uv run python -m src.plotting.sample_size
+uv run python -m src.plotting.training_composition
+uv run python -m src.plotting.augmentation
 uv run python -m src.plotting.ablation_estimators
 uv run python -m src.plotting.pairwise_wins
 uv run python -m src.plotting.pairwise_tables
 uv run python -m src.plotting.feature_distributions
 uv run python -m src.plotting.retriever_comparison
+uv run python -m src.plotting.retrieval_budget
 ```
 
 ### Adding a prediction task

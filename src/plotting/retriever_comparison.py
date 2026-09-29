@@ -5,18 +5,17 @@ Regenerate with:
     uv run python -m src.plotting.retriever_comparison
 
 The figure compares every targeted retriever with the random-subset reference
-under the same test-sample and training/model seeds. Edit ``DATA`` for
-experiment selection and ``VISUAL`` for presentation.
+under the same test-sample and training/model seeds. Intended target and
+source/target directions come from ``src.plotting.experiments``; unavailable
+registered inputs are reported and skipped.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import unquote, urlparse
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,20 +27,25 @@ from matplotlib.lines import Line2D
 from mlflow import MlflowClient
 from src.config import config
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI, load_evaluation_data
-from src.mlflow.tracking_contract import ARTIFACT_CONFIG
 from src.plotting.defaults import metric_label, ordered_models, set_plot_style
+from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import BASELINE, DIVERGING, PALETTE, WIDE, figure_grid, panel_labels, save
+from src.plotting.utils import MissingExperimentError
 from src.plotting.utils.rendering import instance_plot_styles
+from src.plotting.utils.retrieval import RetrieverDesign, read_retriever_design
+from src.utils.prediction_tables import RETRIEVER_DATASET
 
 
 @dataclass(frozen=True)
 class DataSettings:
     """Experiment selection and expected fixed design dimensions."""
 
-    experiment_name: str = "retriever_tudd_mortality"
+    experiment_name: str | None = None
     pipeline_runs: tuple[str, ...] | None = None
-    train_size: int | None = 1600
-    test_size: int | None = 100
+    # None compares every measured budget/batch size; each combination becomes its
+    # own figure so different retrieval problems are never pooled into one mean.
+    train_sizes: tuple[int, ...] | None = None
+    test_sizes: tuple[int, ...] | None = None
     reference_strategy: str = "random"
     output_dir: Path = config.dir_plots / "retriever"
 
@@ -79,6 +83,8 @@ class RetrieverComparison:
     repeat_count: int
     run_count: int
     model_count: int
+    train_size: int
+    test_size: int
 
 
 DATA = DataSettings()
@@ -90,27 +96,35 @@ VISUAL = VisualSettings()
 # ---------------------------------------------------------------------------
 
 
-def load_retriever_comparison(
+def load_retriever_comparisons(
     experiment_name: str,
     *,
     pipeline_runs: tuple[str, ...] | None = None,
     tracking_uri: str = DEFAULT_TRACKING_URI,
     data_settings: DataSettings = DATA,
     visual: VisualSettings = VISUAL,
-) -> RetrieverComparison:
-    """Load point metrics and form seed-paired changes from random retrieval."""
+    expected_target: str | None = None,
+    expected_training_source: str | None = None,
+    expected_evaluation_center: str | None = None,
+) -> tuple[RetrieverComparison, ...]:
+    """Load point metrics and form seed-paired changes from random retrieval.
+
+    Every measured selected budget and target-batch size becomes its own
+    comparison: pooling them would mix different retrieval problems, and pooling
+    several target batches into one mean would treat them as independent scores.
+    """
     metrics = load_evaluation_data(
         experiment_name,
         pipeline_runs=pipeline_runs,
         tracking_uri=tracking_uri,
     )
     if metrics.empty:
-        raise ValueError(f"No evaluation data found for experiment {experiment_name!r}")
+        raise MissingExperimentError(f"No evaluation data found for experiment {experiment_name!r}")
 
     points = metrics.loc[
         metrics["scope"].eq("test")
         & metrics["statistic"].eq("point")
-        & metrics["dataset"].eq("retriever")
+        & metrics["dataset"].eq(RETRIEVER_DATASET)
     ].copy()
     if points.empty:
         raise ValueError("No retriever point metrics are available")
@@ -120,24 +134,44 @@ def load_retriever_comparison(
         raise ValueError("Missing requested metrics: " + ", ".join(missing_metrics))
 
     client = MlflowClient(tracking_uri=tracking_uri)
-    run_ids = tuple(points["pipeline_mlflow_run_id"].astype(str).drop_duplicates())
-    run_metadata = pd.DataFrame([_read_run_design(client, run_id) for run_id in run_ids])
-    run_metadata = _select_design(run_metadata, data_settings)
-    selected_run_ids = set(run_metadata["pipeline_mlflow_run_id"])
-    points = points.loc[points["pipeline_mlflow_run_id"].astype(str).isin(selected_run_ids)].copy()
-    if points.empty:
-        raise ValueError("No runs match the configured retriever train/test sizes")
-
     points["pipeline_mlflow_run_id"] = points["pipeline_mlflow_run_id"].astype(str)
-    points = points.merge(
-        run_metadata,
-        on="pipeline_mlflow_run_id",
-        how="inner",
-        validate="many_to_one",
-    )
-    _validate_design(points, visual.metrics, data_settings.reference_strategy)
+    run_ids = tuple(points["pipeline_mlflow_run_id"].drop_duplicates())
+    designs = tuple(read_retriever_design(client, run_id) for run_id in run_ids)
+    selected = _select_designs(designs, data_settings)
+    if not selected:
+        raise ValueError(
+            "No retrieval runs match train_sizes="
+            f"{data_settings.train_sizes} and test_sizes={data_settings.test_sizes}"
+        )
 
-    model_metadata = points[["model_name", "model_instance"]].drop_duplicates()
+    selected_run_ids = {design.run_id for design in selected}
+    points = points.loc[points["pipeline_mlflow_run_id"].isin(selected_run_ids)].copy()
+    metadata = pd.DataFrame([_design_row(design) for design in selected])
+    points = points.merge(metadata, on="pipeline_mlflow_run_id", how="inner", validate="many_to_one")
+    _require_design_value(points, "target", expected_target, experiment_name)
+    _require_design_value(points, "training_source", expected_training_source, experiment_name)
+    _require_design_value(points, "evaluation_center", expected_evaluation_center, experiment_name)
+
+    combinations = sorted({(design.selected_count, design.batch_size) for design in selected})
+    return tuple(_prepare_comparison(points, combination, visual, data_settings) for combination in combinations)
+
+
+def _prepare_comparison(
+    points: pd.DataFrame,
+    combination: tuple[int, int],
+    visual: VisualSettings,
+    data_settings: DataSettings,
+) -> RetrieverComparison:
+    """Pair every targeted retriever with the random reference at one fixed design."""
+    train_size, test_size = combination
+    rows = points.loc[
+        points["retriever_train_size"].eq(train_size) & points["retriever_test_size"].eq(test_size)
+    ].copy()
+    if rows.empty:
+        raise ValueError(f"No retrieval runs are available for train_size={train_size}, test_size={test_size}")
+    _validate_design(rows, visual.metrics, data_settings.reference_strategy)
+
+    model_metadata = rows[["model_name", "model_instance"]].drop_duplicates()
     styles = instance_plot_styles(model_metadata)
     model_names = ordered_models(model_metadata["model_name"].astype(str).tolist())
     model_instances = tuple(
@@ -155,7 +189,7 @@ def load_retriever_comparison(
         "training_sample_seed",
         "model_training_seed",
     ]
-    reference = points.loc[points["selection_strategy"].eq(data_settings.reference_strategy)].copy()
+    reference = rows.loc[rows["selection_strategy"].eq(data_settings.reference_strategy)].copy()
     reference_columns = [*pair_keys, *visual.metrics]
     reference = reference[reference_columns].rename(
         columns={metric: f"{metric}_reference" for metric in visual.metrics}
@@ -163,7 +197,7 @@ def load_retriever_comparison(
     if reference.duplicated(pair_keys).any():
         raise ValueError("Random reference contains duplicate model/seed cells")
 
-    targeted = points.loc[~points["selection_strategy"].eq(data_settings.reference_strategy)].copy()
+    targeted = rows.loc[~rows["selection_strategy"].eq(data_settings.reference_strategy)].copy()
     paired = targeted.merge(reference, on=pair_keys, how="left", validate="many_to_one")
     reference_metric_columns = [f"{metric}_reference" for metric in visual.metrics]
     if paired[reference_metric_columns].isna().any().any():
@@ -209,89 +243,68 @@ def load_retriever_comparison(
         model_labels=model_labels,
         test_seeds=test_seeds,
         repeat_count=int(repeats_per_test.iloc[0]),
-        run_count=len(selected_run_ids),
+        run_count=len(set(rows["pipeline_mlflow_run_id"].astype(str))),
         model_count=len(model_instances),
+        train_size=train_size,
+        test_size=test_size,
     )
 
 
-def _read_run_design(client: MlflowClient, run_id: str) -> dict[str, object]:
-    artifact_uri = client.get_run(run_id).info.artifact_uri
-    config_path = _local_artifact_path(artifact_uri, ARTIFACT_CONFIG)
-    if config_path is None:
-        config_path = Path(client.download_artifacts(run_id, ARTIFACT_CONFIG))
-    payload = json.loads(config_path.read_text(encoding="utf-8"))
-    retriever = payload["dataset"]["custom_retriever"]
-    random_states = payload["random_states"]
-    test_on = retriever["test_on"]
-    if len(test_on) != 1:
-        raise ValueError(f"Run {run_id} must define exactly one retriever test cohort")
-
-    strategy = str(retriever["selection_strategy"])
-    metric = str(retriever.get("distance_metric", "euclidean"))
-    clusters = int(retriever.get("diversity_clusters", 0))
-    pool = float(retriever.get("diversity_pool_multiplier", 0.0))
-    setting, setting_label, setting_order = _setting_identity(strategy, metric, clusters, pool)
+def _design_row(design: RetrieverDesign) -> dict[str, object]:
+    """Return the design metadata one comparison needs, keyed by run."""
     return {
-        "pipeline_mlflow_run_id": run_id,
-        "selection_strategy": strategy,
-        "distance_metric": metric,
-        "diversity_clusters": clusters,
-        "diversity_pool_multiplier": pool,
-        "retriever_train_size": int(retriever["train_size"]),
-        "retriever_test_size": int(test_on[0]["fraction"]),
-        "test_sample_seed": int(retriever["test_sample_seed"]),
-        "training_sample_seed": int(random_states["training_sample_seed"]),
-        "model_training_seed": int(random_states["model_training_seed"]),
-        "setting": setting,
-        "setting_label": setting_label,
-        "setting_order": setting_order,
+        "pipeline_mlflow_run_id": design.run_id,
+        "training_source": design.candidate_source,
+        "evaluation_center": design.batch_center,
+        "selection_strategy": design.strategy,
+        "distance_metric": design.distance_metric,
+        "diversity_clusters": design.diversity_clusters,
+        "diversity_pool_multiplier": design.diversity_pool_multiplier,
+        "retriever_train_size": design.selected_count,
+        "retriever_test_size": design.batch_size,
+        "test_sample_seed": design.test_sample_seed,
+        "training_sample_seed": design.training_sample_seed,
+        "model_training_seed": design.model_training_seed,
+        "setting": design.setting,
+        "setting_label": design.setting_label,
+        "setting_order": design.setting_order,
     }
 
 
-def _local_artifact_path(artifact_uri: str, artifact_name: str) -> Path | None:
-    parsed = urlparse(artifact_uri)
-    if parsed.scheme == "file":
-        path = Path(unquote(parsed.path)) / artifact_name
-    elif parsed.scheme == "":
-        path = Path(artifact_uri) / artifact_name
-    else:
-        return None
-    return path if path.is_file() else None
+def _select_designs(designs: tuple[RetrieverDesign, ...], data_settings: DataSettings) -> tuple[RetrieverDesign, ...]:
+    """Keep the runs whose selected budget and target-batch size were requested."""
+    selected = designs
+    if data_settings.train_sizes is not None:
+        wanted = set(data_settings.train_sizes)
+        available = {design.selected_count for design in designs}
+        missing = sorted(wanted - available)
+        if missing:
+            raise ValueError(f"Requested selected budgets {missing} were not measured; available: {sorted(available)}")
+        selected = tuple(design for design in selected if design.selected_count in wanted)
+    if data_settings.test_sizes is not None:
+        wanted = set(data_settings.test_sizes)
+        available = {design.batch_size for design in designs}
+        missing = sorted(wanted - available)
+        if missing:
+            raise ValueError(f"Requested target-batch sizes {missing} were not measured; available: {sorted(available)}")
+        selected = tuple(design for design in selected if design.batch_size in wanted)
+    return selected
 
 
-def _select_design(metadata: pd.DataFrame, data_settings: DataSettings) -> pd.DataFrame:
-    selected = metadata
-    if data_settings.train_size is not None:
-        selected = selected.loc[selected["retriever_train_size"].eq(data_settings.train_size)]
-    if data_settings.test_size is not None:
-        selected = selected.loc[selected["retriever_test_size"].eq(data_settings.test_size)]
-    if selected.empty:
+def _require_design_value(
+    rows: pd.DataFrame,
+    column: str,
+    expected: str | None,
+    experiment_name: str,
+) -> None:
+    if expected is None:
+        return
+    found = sorted(set(rows[column].dropna().astype(str)))
+    if found != [expected]:
         raise ValueError(
-            "No run configs match "
-            f"train_size={data_settings.train_size}, test_size={data_settings.test_size}"
+            f"Experiment {experiment_name!r} contains {column} {found}, but the central plotting "
+            f"registry declares {expected!r}"
         )
-    return selected.copy()
-
-
-def _setting_identity(
-    strategy: str,
-    distance_metric: str,
-    clusters: int,
-    pool_multiplier: float,
-) -> tuple[str, str, tuple[object, ...]]:
-    if strategy == "random":
-        return "random", "Random", (-1,)
-    if strategy == "knn":
-        setting = f"knn:{distance_metric}"
-        label = f"KNN: {distance_metric.title()}"
-        metric_order = {"euclidean": 0, "manhattan": 1}.get(distance_metric, 99)
-        return setting, label, (0, metric_order, distance_metric)
-    if strategy == "knn-diverse":
-        pool_label = f"{pool_multiplier:g}"
-        setting = f"knn-diverse:{clusters}:{pool_label}"
-        label = f"Diverse: k={clusters}, pool={pool_label}×"
-        return setting, label, (1, clusters, pool_multiplier)
-    raise ValueError(f"Unsupported retriever selection_strategy {strategy!r}")
 
 
 def _validate_design(points: pd.DataFrame, metrics: tuple[str, ...], reference_strategy: str) -> None:
@@ -603,7 +616,31 @@ def figure_caption(data: RetrieverComparison, visual: VisualSettings = VISUAL) -
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--experiment-name", default=DATA.experiment_name)
+    parser.add_argument(
+        "--experiment-name",
+        default=DATA.experiment_name,
+        help="Explicit override for one centrally selected retrieval input.",
+    )
+    parser.add_argument(
+        "--target",
+        action="append",
+        dest="targets",
+        help="Prediction target to rebuild; repeat for several. Defaults to all intended targets.",
+    )
+    parser.add_argument(
+        "--training-source",
+        action="append",
+        dest="training_sources",
+        choices=DATA_SOURCES,
+        help="Candidate-pool source; repeat for several. Defaults to both sources.",
+    )
+    parser.add_argument(
+        "--evaluation-center",
+        action="append",
+        dest="evaluation_centers",
+        choices=DATA_SOURCES,
+        help="Target-batch center; repeat for several. Defaults to both centers.",
+    )
     parser.add_argument(
         "--run-id",
         action="append",
@@ -617,26 +654,55 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    tasks = tasks_for(
+        "retriever_comparison",
+        args.targets,
+        training_sources=args.training_sources,
+        evaluation_centers=args.evaluation_centers,
+    )
     run_ids = tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs
-    prepared = load_retriever_comparison(
-        args.experiment_name,
-        pipeline_runs=run_ids,
-        tracking_uri=args.tracking_uri,
-    )
+    if len(tasks) > 1 and (args.experiment_name or run_ids):
+        raise SystemExit(
+            "--experiment-name/--run-id pins one retrieval input; select exactly one target, "
+            "training source, and evaluation center"
+        )
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    output_stem = args.output_dir / "retriever_paired_effects"
-    save(make_figure(prepared), str(output_stem), formats=VISUAL.output_formats)
+    for task in tasks:
+        experiment_name = args.experiment_name or task.experiment_name
+        print(f"\n=== {task.label} [{task.direction}] ({experiment_name or 'not registered'})")
+        if experiment_name is None:
+            warn_skipped(task, "the intended experiment has not been registered yet")
+            continue
+        try:
+            comparisons = load_retriever_comparisons(
+                experiment_name,
+                pipeline_runs=run_ids,
+                tracking_uri=args.tracking_uri,
+                expected_target=task.target,
+                expected_training_source=task.training_source,
+                expected_evaluation_center=task.evaluation_center,
+            )
+        except MissingExperimentError as missing:
+            warn_skipped(task, missing)
+            continue
 
-    print(
-        f"Selected {prepared.run_count} pipeline runs: {len(prepared.settings) + 1} retrievers × "
-        f"{len(prepared.test_seeds)} test samples × {prepared.repeat_count} repeats"
-    )
-    print("Figure caption:")
-    print(f"\\caption{{{figure_caption(prepared)}}}")
-    print("Figures:")
-    for extension in VISUAL.output_formats:
-        print(output_stem.with_suffix(f".{extension}").relative_to(config.dir_root))
+        output_dir = args.output_dir / task.target / task.direction_slug
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for prepared in comparisons:
+            output_stem = output_dir / (
+                f"retriever_train-{prepared.train_size}_test-{prepared.test_size}_paired_effects"
+            )
+            save(make_figure(prepared), str(output_stem), formats=VISUAL.output_formats)
+            print(
+                f"Selected {prepared.run_count} pipeline runs at train-{prepared.train_size} test-"
+                f"{prepared.test_size}: {len(prepared.settings) + 1} retrievers × "
+                f"{len(prepared.test_seeds)} test samples × {prepared.repeat_count} repeats"
+            )
+            print("Figure caption:")
+            print(f"\\caption{{{figure_caption(prepared)}}}")
+            print("Figures:")
+            for extension in VISUAL.output_formats:
+                print(output_stem.with_suffix(f".{extension}").relative_to(config.dir_root))
 
 
 if __name__ == "__main__":

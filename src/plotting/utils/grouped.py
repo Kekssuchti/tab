@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from src.plotting.defaults import ordered_models
@@ -214,6 +215,44 @@ def _validate_repeat_model_sets(points: pd.DataFrame, settings: Sequence[str]) -
         sets = run_sets.xs(setting, level="setting").tolist()
         if any(model_set != sets[0] for model_set in sets[1:]):
             raise ValueError(f"Model sets differ between repeated runs for setting {setting!r}")
+
+
+def require_grouped_coverage(
+    grouped: GroupedEvaluation,
+    *,
+    datasets: Sequence[str],
+    description: str,
+) -> None:
+    """Require complete model, evaluation, and metric cells with finite values.
+
+    A comparison figure connects settings only when every model was evaluated on
+    every declared cohort for every metric, so an incomplete cell is reported
+    instead of being silently skipped or filled from another setting.
+    """
+    keys = ["setting", "model_instance", "dataset", "metric"]
+    expected = pd.MultiIndex.from_product(
+        (grouped.settings, grouped.model_instances, datasets, grouped.metrics),
+        names=keys,
+    )
+    observed = pd.MultiIndex.from_frame(grouped.performance[keys])
+    missing = expected.difference(observed)
+    extra = observed.difference(expected)
+    if grouped.performance.duplicated(keys).any() or len(missing) or len(extra):
+        raise ValueError(
+            f"{description} settings do not have complete comparable model/evaluation/metric coverage; "
+            f"missing={_preview_index(missing)}, extra={_preview_index(extra)}"
+        )
+    values = grouped.performance[["estimate", "lower", "upper"]].apply(pd.to_numeric, errors="coerce")
+    if values.isna().any().any() or not np.isfinite(values).all().all():
+        raise ValueError(f"{description} point estimates and bootstrap interval bounds must be finite")
+
+
+def _preview_index(index: pd.Index, maximum: int = 3) -> str:
+    if len(index) == 0:
+        return "none"
+    values = [str(value) for value in index[:maximum]]
+    suffix = f" (+{len(index) - maximum} more)" if len(index) > maximum else ""
+    return ", ".join(values) + suffix
 
 
 def _require_columns(frame: pd.DataFrame, required: set[str], description: str) -> None:

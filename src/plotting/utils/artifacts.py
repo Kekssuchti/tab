@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
+from mlflow.exceptions import MlflowException
 
+from mlflow import MlflowClient
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI, load_bootstrap_data, load_evaluation_data
+from src.mlflow.tracking_contract import ARTIFACT_CONFIG
 
 
 class MissingExperimentError(ValueError):
     """Raised when a declared figure task has no evaluation artifacts yet."""
+
+
+class MissingFullTrainingRunError(MissingExperimentError):
+    """Raised when an experiment has no explicit single-source fraction-1.0 run."""
 
 
 class TargetMismatchError(ValueError):
@@ -37,13 +46,17 @@ def load_plot_artifacts(
     full_training_only: bool = False,
     include_bootstrap: bool = True,
     expected_target: str | None = None,
+    expected_training_source: str | None = None,
     tracking_uri: str = DEFAULT_TRACKING_URI,
 ) -> PlotArtifacts:
     """Load plotting artifacts and resolve their concrete pipeline run IDs.
 
-    When ``full_training_only`` is true and no explicit run selector is given,
-    all runs at the largest observed training size are retained. This naturally
-    keeps repeated full-data runs together for downstream averaging.
+    When ``full_training_only`` is true, every retained run must record exactly
+    one ``dataset.train_on`` entry in ``config.json``, and that entry's fraction
+    must be the JSON float ``1.0``. With no explicit selector, all such runs are
+    selected. With ``pipeline_runs``, every selected run is validated against
+    the same full-data contract; largest observed training size is never used as
+    a substitute.
 
     ``exclude_models`` drops models by name from every returned frame, point
     metrics and bootstrap columns alike, so a figure can leave out a model
@@ -54,9 +67,6 @@ def load_plot_artifacts(
     is checked against the loaded artifacts, so a stale experiment fails loudly
     instead of quietly producing the same figure for another task.
     """
-    if pipeline_runs is not None and full_training_only:
-        raise ValueError("pipeline_runs and full_training_only cannot be combined")
-
     metrics = load_evaluation_data(
         experiment_name,
         pipeline_runs=pipeline_runs,
@@ -67,13 +77,29 @@ def load_plot_artifacts(
         raise MissingExperimentError(f"No evaluation data found for experiment {experiment_name!r}")
     if expected_target is not None:
         _require_target(metrics, experiment_name, expected_target)
+    if expected_training_source is not None:
+        _require_training_source(metrics, experiment_name, expected_training_source)
 
     dropped_instances: tuple[str, ...] = ()
     if exclude_models is not None:
         metrics, dropped_instances = _exclude_models(metrics, exclude_models)
 
     if full_training_only:
-        run_ids = select_full_training_run_ids(metrics)
+        candidate_run_ids = tuple(metrics["pipeline_mlflow_run_id"].astype(str).drop_duplicates())
+        run_ids = select_single_source_full_data_run_ids(metrics, tracking_uri=tracking_uri)
+        if pipeline_runs is not None:
+            rejected = [run_id for run_id in candidate_run_ids if run_id not in set(run_ids)]
+            if rejected:
+                raise ValueError(
+                    "Explicit full-data baseline run(s) do not record exactly one dataset.train_on "
+                    "entry with fraction equal to float 1.0 in config.json: "
+                    + ", ".join(rejected)
+                )
+        elif not run_ids:
+            raise MissingFullTrainingRunError(
+                f"Experiment {experiment_name!r} has no run whose config.json records exactly one "
+                "dataset.train_on entry with fraction equal to float 1.0"
+            )
         metrics = metrics.loc[metrics["pipeline_mlflow_run_id"].astype(str).isin(run_ids)].copy()
     else:
         run_ids = tuple(metrics["pipeline_mlflow_run_id"].astype(str).drop_duplicates())
@@ -126,6 +152,21 @@ def _require_target(metrics: pd.DataFrame, experiment_name: str, expected_target
         )
 
 
+def _require_training_source(metrics: pd.DataFrame, experiment_name: str, expected_source: str) -> None:
+    """Fail loudly when an experiment is registered under the wrong training source."""
+    if "trained_on" not in metrics.columns:
+        raise ValueError(
+            f"Experiment {experiment_name!r} has no trained_on column, so it cannot be checked "
+            f"against the declared training source {expected_source!r}"
+        )
+    found = sorted(set(metrics["trained_on"].dropna().astype(str)))
+    if found != [expected_source]:
+        raise ValueError(
+            f"Experiment {experiment_name!r} contains training source {found}, but the figure declares "
+            f"{expected_source!r}; point that figure task at its own experiment instead"
+        )
+
+
 def _drop_instances(frame: pd.DataFrame, instances: Sequence[str]) -> pd.DataFrame:
     """Remove model instances from a bootstrap frame.
 
@@ -149,9 +190,18 @@ def _exclude_models(metrics: pd.DataFrame, exclude_models: str | Sequence[str]) 
     return metrics.loc[~excluded].copy(), tuple(metrics.loc[excluded, "model_instance"].astype(str).drop_duplicates())
 
 
-def select_full_training_run_ids(metrics: pd.DataFrame) -> tuple[str, ...]:
-    """Select all repeated runs at the largest observed training size."""
-    required = {"pipeline_mlflow_run_id", "scope", "statistic", "target", "trained_on", "training_size"}
+def select_single_source_full_data_run_ids(
+    metrics: pd.DataFrame,
+    *,
+    tracking_uri: str = DEFAULT_TRACKING_URI,
+) -> tuple[str, ...]:
+    """Select runs explicitly configured with one source at float fraction ``1.0``.
+
+    Every candidate run's recorded ``config.json`` is inspected. Integer ``1``,
+    absolute row counts, and a largest observed ``training_size`` do not satisfy
+    this full-data contract.
+    """
+    required = {"pipeline_mlflow_run_id", "scope", "statistic", "target", "trained_on"}
     _require_columns(metrics, required, "evaluation metrics")
     rows = metrics.loc[metrics["scope"].eq("test") & metrics["statistic"].eq("point")].copy()
     if rows.empty:
@@ -165,17 +215,48 @@ def select_full_training_run_ids(metrics: pd.DataFrame) -> tuple[str, ...]:
                 "Select pipeline runs explicitly."
             )
 
-    rows["training_size"] = pd.to_numeric(rows["training_size"], errors="coerce")
-    if rows["training_size"].isna().any():
-        raise ValueError("training_size must be numeric for automatic full-data selection")
-    sizes_per_run = rows.groupby("pipeline_mlflow_run_id", sort=False)["training_size"].nunique()
-    if sizes_per_run.ne(1).any():
-        bad = sizes_per_run[sizes_per_run.ne(1)].index.astype(str).tolist()
-        raise ValueError("Pipeline runs contain multiple training sizes: " + ", ".join(bad))
+    trained_on = str(rows["trained_on"].dropna().astype(str).iloc[0])
+    run_ids = tuple(rows["pipeline_mlflow_run_id"].astype(str).drop_duplicates())
+    client = MlflowClient(tracking_uri=tracking_uri)
+    selected = []
+    for run_id in run_ids:
+        source, fraction = _read_single_source_training_config(client, run_id)
+        if source != trained_on:
+            raise ValueError(
+                f"Run {run_id} config.json trains on {source!r}, but its evaluation artifact records "
+                f"trained_on={trained_on!r}"
+            )
+        if type(fraction) is float and fraction == 1.0:
+            selected.append(run_id)
+    return tuple(selected)
 
-    run_sizes = rows.groupby("pipeline_mlflow_run_id", sort=False)["training_size"].first()
-    largest = float(run_sizes.max())
-    return tuple(run_sizes.index[run_sizes.eq(largest)].astype(str))
+
+def _read_single_source_training_config(client: MlflowClient, run_id: str) -> tuple[str, object]:
+    """Read the source and fraction from one run's authoritative config artifact."""
+    try:
+        config_path = Path(client.download_artifacts(run_id, ARTIFACT_CONFIG))
+    except MlflowException as error:
+        raise ValueError(f"Run {run_id} has no readable {ARTIFACT_CONFIG} artifact") from error
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+        train_on = payload["dataset"]["train_on"]
+    except (json.JSONDecodeError, KeyError, TypeError) as error:
+        raise ValueError(
+            f"Run {run_id} has an invalid {ARTIFACT_CONFIG}; expected dataset.train_on"
+        ) from error
+    if not isinstance(train_on, list) or len(train_on) != 1:
+        count = len(train_on) if isinstance(train_on, list) else "non-list"
+        raise ValueError(
+            f"Run {run_id} must record exactly one dataset.train_on entry for a single-source "
+            f"full-data baseline; found {count}"
+        )
+    split = train_on[0]
+    if not isinstance(split, dict) or "dataset" not in split or "fraction" not in split:
+        raise ValueError(
+            f"Run {run_id} has an invalid {ARTIFACT_CONFIG}; the dataset.train_on entry must "
+            "contain dataset and fraction"
+        )
+    return str(split["dataset"]), split["fraction"]
 
 
 def _require_columns(frame: pd.DataFrame, required: set[str], description: str) -> None:
