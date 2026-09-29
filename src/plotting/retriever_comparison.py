@@ -47,7 +47,7 @@ class DataSettings:
     train_sizes: tuple[int, ...] | None = None
     test_sizes: tuple[int, ...] | None = None
     reference_strategy: str = "random"
-    output_dir: Path = config.dir_plots / "retriever"
+    output_dir: Path = config.dir_plots / "retrieval"
 
 
 @dataclass(frozen=True)
@@ -686,11 +686,11 @@ def main() -> None:
             warn_skipped(task, missing)
             continue
 
-        output_dir = args.output_dir / task.target / task.direction_slug
+        output_dir = args.output_dir / task.target
         output_dir.mkdir(parents=True, exist_ok=True)
         for prepared in comparisons:
             output_stem = output_dir / (
-                f"retriever_train-{prepared.train_size}_test-{prepared.test_size}_paired_effects"
+                f"{task.direction_slug}_train-{prepared.train_size}_test-{prepared.test_size}_paired_effects"
             )
             save(make_figure(prepared), str(output_stem), formats=VISUAL.output_formats)
             print(

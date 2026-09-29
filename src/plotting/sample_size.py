@@ -497,7 +497,7 @@ def main() -> None:
 
         output_dir = args.output_dir / prepared.target
         output_dir.mkdir(parents=True, exist_ok=True)
-        stem = output_dir / f"sample_size_{prepared.trained_on}_{prepared.target}_performance"
+        stem = output_dir / f"{prepared.trained_on}_performance"
         outputs = save(
             make_figure(prepared, visual, benchmark=benchmark),
             str(stem),
@@ -511,7 +511,7 @@ def main() -> None:
             print("figure: " + str(Path(output).relative_to(config.dir_root)))
 
         xgboost_differences = prepare_xgboost_difference_evaluation(prepared)
-        difference_stem = output_dir / f"sample_size_{prepared.trained_on}_{prepared.target}_xgboost_difference"
+        difference_stem = output_dir / f"{prepared.trained_on}_xgboost_difference"
         difference_outputs = save(
             make_xgboost_difference_figure(xgboost_differences, visual),
             str(difference_stem),

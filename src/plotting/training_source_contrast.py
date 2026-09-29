@@ -43,21 +43,21 @@ from src.plotting.utils.rendering import draw_model_forest, instance_plot_styles
 class DataSettings:
     """Output location for reciprocal complete-data contrasts."""
 
-    output_dir: Path = config.dir_plots / "training_source_contrast"
+    output_dir: Path = config.dir_plots / "baseline"
 
 
 @dataclass(frozen=True)
 class VisualSettings:
     """Locally editable presentation choices for F3."""
 
-    metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
+    metrics: tuple[str, ...] = ("roc_auc",)  # "prc_auc")
     show_ci: bool = True
     ci_level: float = 0.95
     score_scale: float = 100.0
     figure_width: float = WIDE
     figure_height_ratio: float = 1.08
-    axis_label: str = "Loss from external training (pp)"
-    model_axis_label: str = "Model"
+    axis_label: str = "Model Specific Generalizability Loss"
+    model_axis_label: str = ""
     shade_baselines: bool = True
     baseline_band_alpha: float = 0.13
     marker_size: float = 4.4
@@ -112,9 +112,10 @@ def make_figure(data: SourceContrastEvaluation, visual: VisualSettings = VISUAL)
             )
             ax.axvline(0, color=BASELINE, linewidth=0.8, linestyle="--", zorder=1)
             ax.set_xlim(limits)
-            ax.set_xlabel(visual.axis_label)
+            axis_label = visual.axis_label  # .format(metric=metric_label(metric))
+            ax.set_xlabel(axis_label)
             if center_index == 0:
-                ax.set_ylabel(f"{metric_label(metric)}\n{visual.model_axis_label}")
+                ax.set_ylabel(f"{visual.model_axis_label}")
             if metric_index == 0:
                 ax.annotate(
                     f"Evaluation: {dataset_label(center)}",
@@ -224,9 +225,7 @@ def main() -> None:
         _pairing_report(prepared)
 
         output_dir = args.output_dir / prepared.target
-        stem = output_dir / (
-            f"training_source_contrast_reciprocal_{DATA_SOURCES[0]}_{DATA_SOURCES[1]}_{prepared.target}"
-        )
+        stem = output_dir / f"{DATA_SOURCES[0]}_{DATA_SOURCES[1]}_source_contrast"
         outputs = save(make_figure(prepared, visual), str(stem), formats=visual.output_formats)
         print("LaTeX caption:")
         print(f"\\caption{{{caption(prepared, visual)}}}")

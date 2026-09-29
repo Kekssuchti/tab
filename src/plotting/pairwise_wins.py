@@ -65,7 +65,10 @@ class DataSettings:
     setting_source: str = "training_size"
     setting_pattern: str = r"fraction-(\d+-\d+|\d+)"
     setting_label: str = "Training rows"
-    output_dir: Path = config.dir_plots / "pairwise"
+    # The full-data views belong to the baseline family and the rank views belong
+    # to the sample-size family, because that is where their inputs come from.
+    baseline_dir: Path = config.dir_plots / "baseline"
+    rank_dir: Path = config.dir_plots / "sample_size"
 
 
 @dataclass(frozen=True)
@@ -595,7 +598,8 @@ def _parse_args() -> argparse.Namespace:
         choices=DATA_SOURCES,
         help="Training source to rebuild; repeat for several. Defaults to both sources.",
     )
-    parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
+    parser.add_argument("--baseline-dir", type=Path, default=DATA.baseline_dir)
+    parser.add_argument("--rank-dir", type=Path, default=DATA.rank_dir)
     return parser.parse_args()
 
 
@@ -653,26 +657,27 @@ def main() -> None:
                     f"CD = {test.critical_difference:.2f}"
                 )
 
-        output_dir = args.output_dir / summary.target
-        output_dir.mkdir(parents=True, exist_ok=True)
-        prefix = f"pairwise_{summary.trained_on}_{summary.target}"
+        baseline_dir = args.baseline_dir / summary.target
+        rank_dir = args.rank_dir / summary.target
+        baseline_dir.mkdir(parents=True, exist_ok=True)
+        rank_dir.mkdir(parents=True, exist_ok=True)
         stems: list[Path] = []
 
         for metric in visual.cross_metrics:
-            stem = output_dir / f"{prefix}_{metric}_cross_cohort"
+            stem = baseline_dir / f"{summary.trained_on}_{metric}_cross_cohort"
             save(make_cross_cohort_figure(summary, metric, visual), str(stem), formats=visual.output_formats)
             stems.append(stem)
             print(f"\nCross-cohort caption ({metric}):")
             print(f"\\caption{{{cross_caption(summary, metric)}}}")
 
-        forest = output_dir / f"{prefix}_paired_forest"
+        forest = baseline_dir / f"{summary.trained_on}_paired_forest"
         save(make_paired_forest_figure(summary, visual), str(forest), formats=visual.output_formats)
         stems.append(forest)
         print("\nPaired difference forest caption:")
         print(f"\\caption{{{forest_caption(summary, visual)}}}")
 
         for metric, metric_ranks in ranks.items():
-            rank_figure = output_dir / f"{prefix}_{metric}_ranks"
+            rank_figure = rank_dir / f"{summary.trained_on}_{metric}_ranks"
             save(
                 make_rank_figure(metric_ranks, DATA.setting_label, visual),
                 str(rank_figure),
@@ -689,7 +694,7 @@ def main() -> None:
                         f"  Note: a setting contributes only {smallest} blocks, so no per-setting diagram can "
                         f"separate a pair; set VISUAL.setting_panels = False to skip that figure."
                     )
-                setting_figure = output_dir / f"{prefix}_{metric}_ranks_by_setting"
+                setting_figure = rank_dir / f"{summary.trained_on}_{metric}_ranks_by_setting"
                 save(
                     make_setting_rank_figure(metric_ranks, DATA.setting_source, visual),
                     str(setting_figure),

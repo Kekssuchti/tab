@@ -64,6 +64,28 @@ uv run python -m src.plotting.retriever_comparison
 uv run python -m src.plotting.retrieval_budget
 ```
 
+### Output paths
+
+Every figure path reads `plots/<experiment>/<target>/<source>_<what>.pdf`:
+
+- `<experiment>` is the experiment family the figure reports on (`baseline`,
+  `sample_size`, `composition`, `augmentation`, `retrieval`), not the kind of
+  chart. The full-data cross-cohort win shares, the reciprocal source contrast
+  and the paired forest therefore live under `baseline/`, while the rank and
+  rank-movement diagrams belong to the `sample_size/` experiment they are
+  computed from.
+- `<target>` is the prediction task.
+- `<source>` is the training source, the `external_to_local` augmentation
+  direction, the `source_to_target` retrieval direction, or the source pair of
+  a reciprocal contrast. A design with one training pool, such as fixed-budget
+  composition, starts the file name with `<what>` instead.
+- `<what>` names the figure and the design settings it fixes, for example
+  `generalizability`, `roc_auc_ranks`, `roc_auc_budget-1600`, or
+  `fixed_local-1600_roc_auc`.
+
+Estimator-count ablations and feature distributions are investigation figures and
+keep their own flat directories.
+
 ### Adding a prediction task
 
 `experiments.py` maps each figure family to the experiments it reads:
@@ -76,9 +98,11 @@ uv run python -m src.plotting.retrieval_budget
 ```
 
 - `baseline`, `sample_size`, `pairwise_wins`, and `pairwise_tables` are
-  task-scoped: they loop over every declared task and write into
-  `plots/<family>/<target>/`, so one entry per task is all a new experiment
-  needs, and `src/plotting/recreate_all_figs.sh` needs no change at all.
+  task-scoped: they loop over every declared task and write under
+  `plots/<experiment>/<target>/` (`pairwise_wins` splits its full-data views into
+  `baseline/` and its rank views into `sample_size/`), so one entry per task is
+  all a new experiment needs, and `src/plotting/recreate_all_figs.sh` needs no
+  change at all.
   Metrics and the percent scale come from the declared task, so a regression
   task is not plotted on a 0-100 axis.
 - A task whose experiment does not exist yet is skipped with a warning instead

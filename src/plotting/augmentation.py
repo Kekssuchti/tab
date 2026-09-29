@@ -537,9 +537,9 @@ def _run_full_external(task, artifacts, local_center: str, external_source: str,
         ci_level=visual.ci_level,
     )
     print("Selected pipeline runs: " + ", ".join(artifacts.run_ids))
-    output_root = output_dir / prepared.target / f"{external_source}_to_{local_center}"
+    output_root = output_dir / prepared.target
     for metric in prepared.metrics:
-        stem = output_root / f"augmentation_full_external_{metric}"
+        stem = output_root / f"{external_source}_to_{local_center}_full_external_{metric}"
         outputs = save(make_full_external_figure(prepared, metric, visual), str(stem), formats=visual.output_formats)
         print(f"LaTeX caption ({metric_label(metric)}):")
         print(f"\\caption{{{full_external_caption(prepared, metric, visual)}}}")
@@ -556,10 +556,10 @@ def _run_fixed_local(task, artifacts, local_center: str, external_source: str, v
         ci_level=visual.ci_level,
     )
     print("Selected pipeline runs: " + ", ".join(artifacts.run_ids))
-    output_root = output_dir / prepared.target / f"{external_source}_to_{local_center}"
+    output_root = output_dir / prepared.target
     for view in prepared.budget_views:
         for metric in prepared.metrics:
-            stem = output_root / f"augmentation_fixed_local_{view.local_count}_{metric}"
+            stem = output_root / f"{external_source}_to_{local_center}_fixed_local-{view.local_count}_{metric}"
             outputs = save(
                 make_fixed_local_figure(view, metric, visual),
                 str(stem),

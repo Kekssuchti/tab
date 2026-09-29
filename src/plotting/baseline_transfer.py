@@ -56,7 +56,7 @@ class VisualSettings:
     performance_height_ratio: float = 1.08
     generalizability_height_ratio: float = 1.08
     score_scale: float = 100.0
-    model_axis_label: str = "Model"
+    model_axis_label: str = ""
     performance_axis_template: str = "{metric} on {dataset} (%)"
     degradation_axis_template: str = "{metric} degradation (pp)"
     relative_axis_template: str = "{metric} relative external loss (pp)"
@@ -317,7 +317,7 @@ def main() -> None:
 
         output_dir = args.output_dir / prepared.target
         output_dir.mkdir(parents=True, exist_ok=True)
-        prefix = f"baseline_{prepared.trained_on}_{prepared.target}"
+        prefix = f"{prepared.trained_on}"
         performance_path = output_dir / f"{prefix}_performance"
         generalizability_path = output_dir / f"{prefix}_generalizability"
         save(make_performance_figure(prepared, visual), str(performance_path), formats=visual.output_formats)

@@ -60,7 +60,7 @@ class DataSettings:
     unrestricted_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
     exclude_models: tuple[str, ...] | None = None
-    output_dir: Path = config.dir_plots / "retrieval_budget"
+    output_dir: Path = config.dir_plots / "retrieval"
 
 
 @dataclass(frozen=True)
@@ -380,11 +380,11 @@ def main() -> None:
         if prepared.unrestricted_run_ids:
             print("Selected unrestricted pipeline runs: " + ", ".join(prepared.unrestricted_run_ids))
 
-        output_root = args.output_dir / prepared.target / task.direction_slug
+        output_root = args.output_dir / prepared.target
         for view in prepared.batch_views:
             for metric in prepared.metrics:
                 stem = output_root / (
-                    f"retrieval_budget_batch-{view.batch_center}{view.batch_size}"
+                    f"{task.direction_slug}_batch-{view.batch_center}-{view.batch_size}"
                     f"_seed-{view.test_sample_seed}_{metric}"
                 )
                 outputs = save(make_figure(view, metric, visual), str(stem), formats=visual.output_formats)

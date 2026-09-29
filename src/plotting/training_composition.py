@@ -38,7 +38,7 @@ class DataSettings:
     pipeline_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
     exclude_models: tuple[str, ...] | None = None
-    output_dir: Path = config.dir_plots / "training_composition"
+    output_dir: Path = config.dir_plots / "composition"
 
 
 @dataclass(frozen=True)
@@ -294,7 +294,7 @@ def main() -> None:
         for view in prepared.budget_views:
             output_dir = args.output_dir / view.target
             for metric in view.metrics:
-                stem = output_dir / f"training_composition_{view.target}_{metric}_budget-{view.total_count}"
+                stem = output_dir / f"{metric}_budget-{view.total_count}"
                 outputs = save(
                     make_figure(view, metric, visual),
                     str(stem),

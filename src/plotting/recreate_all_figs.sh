@@ -11,15 +11,15 @@ cd "$(dirname "$0")/../.." || exit 1
 steps=(
     src.plotting.baseline_transfer
     src.plotting.training_source_contrast
-    src.plotting.sample_size
+#    src.plotting.sample_size
     src.plotting.training_composition
     src.plotting.augmentation
-    src.plotting.ablation_estimators
+#    src.plotting.ablation_estimators
 #    src.plotting.feature_distributions
-    src.plotting.pairwise_wins
-    src.plotting.pairwise_tables
-    src.plotting.retriever_comparison
-    src.plotting.retrieval_budget
+#    src.plotting.pairwise_wins
+#    src.plotting.pairwise_tables
+#    src.plotting.retriever_comparison
+#    src.plotting.retrieval_budget
 )
 
 filter="${1:-}"
