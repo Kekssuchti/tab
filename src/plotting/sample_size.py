@@ -43,6 +43,7 @@ from src.plotting.utils import (
 from src.plotting.utils.rendering import (
     instance_plot_styles,
     interval_axis_limits,
+    log_sample_ticks,
     sample_ticks,
     short_count,
 )
@@ -79,7 +80,7 @@ class VisualSettings:
     cap_size: float = 1.8
     ci_alpha: float = 0.65
     sample_axis_label: str = "Training sample count"
-    metric_axis_template: str = "{metric} on {dataset} (%)"
+    metric_axis_template: str = "{metric} on {dataset}"
     legend_columns: int = 3
     axis_padding_fraction: float = 0.08
     benchmark_line_width: float = 0.9
@@ -311,9 +312,10 @@ def _datasets(data: SampleSizeEvaluation, visual: VisualSettings) -> tuple[str, 
 
 
 def _format_sample_axis(ax, sample_sizes: tuple[int, ...], visual: VisualSettings) -> None:
+    ticks = sample_ticks(sample_sizes, visual.max_sample_ticks)
     if visual.log_sample_axis:
         ax.set_xscale("log", base=2)
-    ticks = sample_ticks(sample_sizes, visual.max_sample_ticks)
+        ticks = log_sample_ticks(sample_sizes, visual.max_sample_ticks)
     ax.set_xticks(ticks, [short_count(value) for value in ticks])
     ax.grid(which="both", axis="both")
 

@@ -124,6 +124,37 @@ def short_count(value: int) -> str:
     return f"{thousands}k"
 
 
+def log_sample_ticks(
+    sample_sizes: Sequence[int],
+    maximum: int,
+    *,
+    min_log_gap: float = 1.2,
+) -> tuple[int, ...]:
+    """Choose legible ticks for a logarithmic sample-count axis.
+
+    Measured counts are rarely evenly spaced, so evenly spaced *indices* can put
+    two labels on top of each other (25,600 next to 44,454, say). Ticks are
+    therefore chosen as measured counts that are at least min_log_gap apart in
+    log space, the smallest and largest count are always kept, and the requested
+    maximum widens the gap further when the measured range is wide.
+    """
+    if maximum < 2:
+        raise ValueError("maximum must be at least two")
+    ordered = tuple(sorted({int(value) for value in sample_sizes}))
+    if len(ordered) <= maximum:
+        return ordered
+    logs = np.log2(np.asarray(ordered, dtype=float))
+    gap = max(min_log_gap, float(logs[-1] - logs[0]) / (maximum - 1))
+    chosen = [0]
+    previous = logs[0]
+    for index in range(1, len(ordered) - 1):
+        if logs[index] - previous >= gap and logs[-1] - logs[index] >= gap:
+            chosen.append(index)
+            previous = logs[index]
+    chosen.append(len(ordered) - 1)
+    return tuple(ordered[index] for index in chosen)
+
+
 def sample_ticks(sample_sizes: Sequence[int], maximum: int) -> tuple[int, ...]:
     """Choose at most `maximum` evenly spaced ticks from measured counts."""
     if maximum < 2:

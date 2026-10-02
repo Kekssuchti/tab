@@ -62,7 +62,7 @@ TASK_NAMES = {
     "LOS7": "LOS > 7 d",
     "hours_to_readmit_72": "Readmission within 72h",
 }
-TASK_ORDER = ["mortality", "LOS", "LOS7", "hours_to_readmit_72"]
+TASK_ORDER = ["mortality", "LOS7", "hours_to_readmit_72"]
 
 
 def dataset_label(dataset: str) -> str:
@@ -112,11 +112,13 @@ MODEL_STYLES: dict[str, ModelStyle] = {
     "ebm": ModelStyle("#B3B3B3", "-", BASELINE_MARKER, "EBM"),
     "xgboost": ModelStyle("#222222", "-", BASELINE_MARKER, "XGBoost"),
     # Retained foundation models receive the strongest accessible colors.
-    "tabpfn-3.5": ModelStyle(PALETTE["blue"], "-", TFM_MARKER, "TabPFNv3.5"),
-    "tabpfn-3.5-fast": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv3.5 Fast"),
+    # ordered by realease date
     "tabicl-2": ModelStyle(PALETTE["orange"], "-", TFM_MARKER, "TabICLv2"),
     "tabfm": ModelStyle(PALETTE["green"], "-", TFM_MARKER, "TabFM"),
     "exaone": ModelStyle(PALETTE["purple"], "-", TFM_MARKER, "EXAONE"),
+    "tabdpt": ModelStyle(PALETTE["yellow"], "-", TFM_MARKER, "TabDPT"),
+    "tabpfn-3.5": ModelStyle(PALETTE["blue"], "-", TFM_MARKER, "TabPFNv3.5"),
+    "tabpfn-3.5-fast": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv3.5 Fast"),
     "causilo": ModelStyle(PALETTE["red"], "-", TFM_MARKER, "Causilo"),
     # Legacy models keep stable but less prominent secondary colors.
     "tabpfn-2.5": ModelStyle("#A6CEE3", "-", TFM_MARKER, "TabPFNv2.5"),
@@ -215,7 +217,6 @@ def pairwise_table_colors(lightness: float = 0.66) -> dict[str, str]:
         "none": _blend_toward_white(MUTED, 0.5),
         "column": _blend_toward_white(to_hex(cmap(0.0)), lightness),
     }
-
 
 
 def _blend_toward_white(color: str, amount: float) -> str:

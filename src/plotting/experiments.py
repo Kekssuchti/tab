@@ -95,10 +95,18 @@ class PlotExperiment:
 
 # This sparse mapping is the only place MLflow experiment names are registered.
 # Missing keys deliberately become ``experiment_name=None`` placeholders below.
+# (family, target, training_source, evaluation_center): "mlflow_experiment_name"
 _EXPERIMENT_NAMES: dict[tuple[str, str, str | None, str | None], str] = {
     (SINGLE_SOURCE, "mortality", "mimic", None): "sample_size_mimic_mortality",
     (SINGLE_SOURCE, "mortality", "tudd", None): "sample_size_tudd_mortality",
     (SINGLE_SOURCE, "hours_to_readmit_72", "tudd", None): "sample_size_tudd_hours_to_readmit_72",
+    (SINGLE_SOURCE, "hours_to_readmit_72", "mimic", None): "sample_size_mimic_hours_to_readmit_72",
+    # Constant total budget with a shifting MIMIC/TUDD composition, both centers.
+    (COMPOSITION, "mortality", None, None): "mixed_fixed_size_mortality",
+    # The same mixed-source sweep supports two views: full EUH plus growing local
+    # MIMIC, and full local EUH plus growing external MIMIC.
+    (AUGMENTATION_FULL_EXTERNAL, "mortality", "tudd", "mimic"): "mixed_sample_size_mimic_mortality",
+    (AUGMENTATION_FIXED_LOCAL, "mortality", "mimic", "tudd"): "mixed_sample_size_mimic_mortality",
     (RETRIEVAL, "mortality", "tudd", "tudd"): "retriever_tudd_mortality",
 }
 

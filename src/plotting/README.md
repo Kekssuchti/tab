@@ -86,6 +86,85 @@ Every figure path reads `plots/<experiment>/<target>/<source>_<what>.pdf`:
 Estimator-count ablations and feature distributions are investigation figures and
 keep their own flat directories.
 
+### Registering an experiment
+
+A figure reads one MLflow experiment name per declared input. The name is
+registered in the `_EXPERIMENT_NAMES` mapping in `experiments.py` with a
+four-part key:
+
+```python
+(family, target, training_source, evaluation_center): "mlflow_experiment_name"
+```
+
+- `training_source` trains the model. For augmentation and retrieval it is the
+  **external** source / candidate pool, not the center being predicted.
+- `evaluation_center` is the center a directional figure evaluates: the local
+  target center for augmentation, the target batch center for retrieval. Figures
+  that evaluate both centers (single-source sweeps, composition) use `None`.
+- A key that matches no declared task is simply unused, so the figure keeps
+  printing `(not registered)` and skips. That is the usual reason a finished
+  run produces no plot: compare the printed family/direction with the key.
+
+One registration example per planned figure:
+
+```python
+_EXPERIMENT_NAMES = {
+    # (family, target, training_source, evaluation_center): "mlflow_experiment_name"
+
+    # F1/F2 (absolute, generalizability) and F4/F5 (learning curves, XGBoost delta):
+    # one single-source sweep per center, evaluated on both centers.
+    (SINGLE_SOURCE, "mortality", "mimic", None): "sample_size_mimic_mortality",
+    (SINGLE_SOURCE, "mortality", "tudd", None): "sample_size_tudd_mortality",
+    # F3 additionally needs the reciprocal center of the same target: it is plotted
+    # from the two single-source names above, so it needs no registration of its own.
+    # F6 fixed-budget composition: one experiment per target, no single source.
+    (COMPOSITION, "mortality", None, None): "composition_mortality",
+    # F7 complete external pool of training_source plus a growing local sample at
+    # evaluation_center.
+    (AUGMENTATION_FULL_EXTERNAL, "mortality", "tudd", "mimic"): "mixed_sample_size_mimic_mortality",
+    (AUGMENTATION_FULL_EXTERNAL, "mortality", "mimic", "tudd"): "mixed_sample_size_tudd_mortality",
+    # F8 fixed local budget at evaluation_center plus a growing external sample.
+    (AUGMENTATION_FIXED_LOCAL, "mortality", "tudd", "mimic"): "mixed_fixed_local_mimic_mortality",
+    # F9 paired strategy effects for one candidate-source/target-batch direction.
+    (RETRIEVAL, "mortality", "tudd", "tudd"): "retriever_tudd_mortality",
+    # F10 budget curves, plus the matched unrestricted reference in its own experiment.
+    (RETRIEVAL, "mortality", "tudd", "tudd"): "retrieval_budget_tudd_mortality",
+    (RETRIEVAL_UNRESTRICTED, "mortality", "tudd", "tudd"): "retrieval_unrestricted_tudd_mortality",
+}
+```
+
+What the runs of an experiment have to record:
+
+| Figure | runs |
+| --- | --- |
+| F1/F2 | one run per center with `train_on: [{"dataset": "<center>", "fraction": 1.0}]` |
+| F3 | the same, for both centers and one target |
+| F4/F5 | that sweep, one run per absolute count `fraction: <int>`, plus the `1.0` run |
+| F6 | `train_on` as integer counts of both sources summing to one fixed total per budget |
+| F7 | `[{"dataset": "<external>", "fraction": 1.0}, {"dataset": "<local>", "fraction": <int>}]` per local size, optionally the external-only run and the both-full run |
+| F8 | `[{"dataset": "<local>", "fraction": <L>}, {"dataset": "<external>", "fraction": <int>}]` per added size, plus the local-only run at `L` |
+| F9 | `custom_retriever` runs whose strategies share one budget, batch center, batch size, and batch seed |
+| F10 | the same at several budgets, plus a separately registered unrestricted candidate-pool run per direction |
+
+The local-only and external-only reference curves of F7/F8 are taken from the
+single-source sweeps already registered for that center, matched cell by cell on
+`training_sample_seed` and realized count; unmatched repeats are reported and
+left out. All inputs of one figure must share one model roster — models missing
+from any input are reported and dropped, and a pinned `DATA.models` roster is an
+error if an input does not cover it.
+
+Then rebuild that figure:
+
+```bash
+uv run python -m src.plotting.augmentation   # F7/F8
+uv run python -m src.plotting.retrieval_budget   # F10
+```
+
+A registered experiment that does not measure the design yet is skipped with a
+warning; a registered experiment whose runs contradict each other (different
+targets, unpaired batches, mismatched counts) fails loudly instead of drawing a
+misleading figure.
+
 ### Adding a prediction task
 
 `experiments.py` maps each figure family to the experiments it reads:

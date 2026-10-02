@@ -37,7 +37,7 @@ class DataSettings:
 
     pipeline_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
-    exclude_models: tuple[str, ...] | None = None
+    exclude_models: tuple[str, ...] | None = ("tabpfn-3.5-fast",)
     output_dir: Path = config.dir_plots / "composition"
 
 
@@ -45,7 +45,7 @@ class DataSettings:
 class VisualSettings:
     """Locally editable presentation choices for F6."""
 
-    metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
+    metrics: tuple[str, ...] = ("roc_auc",)  # , "prc_auc")
     show_ci: bool = True
     ci_level: float = 0.95
     score_scale: float = 100.0
@@ -138,7 +138,7 @@ def make_figure(
                 alpha=visual.ci_alpha if visual.show_ci else 1.0,
                 label=f"Evaluation on {dataset_label(center)}",
             )
-        ax.set_xlim(0, 100)
+        ax.set_xlim(-5, 105)
         ax.set_ylim(y_limits)
         ax.set_xticks(ticks, tick_labels)
         ax.grid(axis="both")

@@ -2,7 +2,7 @@
 # external data 100%
 # increase local data and review performance
 
-name: external-sample-size
+name: mixed-sample-size
 base_config: ../pipeline/baseline_both.yaml
 matrix:
   # keep first for name
@@ -19,7 +19,7 @@ matrix:
   # mlflow name + source, KEEP IN SYNC!
   # definition: mixec_CHANGING_CILINC_TASK
   - path: mlflow.experiment_name
-    values: ["mixed_mimic_mortality"]
+    values: ["mixed_sample_size_mimic_mortality"]
 
   # common metadata to change
   # task

@@ -1,0 +1,34 @@
+# experiment:
+# fixed training budget of 1600 observations
+# shift the source composition from pure TUDD to pure MIMIC in 400-row steps
+
+name: mixed-fixed-size
+
+base_config: ../pipeline/baseline_both.yaml
+matrix:
+  - path: dataset.train_on
+    values:
+      - [{ dataset: tudd, fraction: 1600 }]
+      - [{ dataset: tudd, fraction: 1200 }, { dataset: mimic, fraction: 400 }]
+      - [{ dataset: tudd, fraction: 800 }, { dataset: mimic, fraction: 800 }]
+      - [{ dataset: tudd, fraction: 400 }, { dataset: mimic, fraction: 1200 }]
+      - [{ dataset: mimic, fraction: 1600 }]
+
+  # mlflow name + source, KEEP IN SYNC!
+  # definition: mixed_fixed_size_TASK
+  - path: mlflow.experiment_name
+    values: ["mixed_fixed_size_mortality"]
+
+  # common metadata to change
+  # task
+  - path: dataset.target
+    values: ["mortality"]
+
+  # repeat runs with other seeds (pretty much dont need to touch)
+  - path: random_states
+    values:
+      #  - { model_training_seed: 1337, training_sample_seed: 1337, cv_split_seed: 1337 }
+      - { model_training_seed: 1339, training_sample_seed: 1339, cv_split_seed: 1339 }
+      - { model_training_seed: 1341, training_sample_seed: 1341, cv_split_seed: 1341 }
+    #  - { model_training_seed: 1338, training_sample_seed: 1338, cv_split_seed: 1338 }
+    #  - { model_training_seed: 1340, training_sample_seed: 1340, cv_split_seed: 1340 }

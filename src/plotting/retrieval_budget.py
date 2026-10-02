@@ -30,7 +30,7 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
 from src.config import config
-from src.plotting.defaults import dataset_label, metric_label, task_label
+from src.plotting.defaults import dataset_label, metric_label, set_plot_style, task_label
 from src.plotting.experiments import (
     DATA_SOURCES,
     MAIN_TARGETS,
@@ -48,7 +48,12 @@ from src.plotting.utils import (
     load_plot_artifacts,
     prepare_retrieval_budget_evaluation,
 )
-from src.plotting.utils.rendering import instance_plot_styles, interval_axis_limits, sample_ticks, short_count
+from src.plotting.utils.rendering import (
+    instance_plot_styles,
+    interval_axis_limits,
+    log_sample_ticks,
+    short_count,
+)
 from src.plotting.utils.retrieval import RANDOM_STRATEGY
 
 
@@ -98,6 +103,7 @@ def make_figure(
     visual: VisualSettings = VISUAL,
 ) -> Figure:
     """Draw strategy curves over the selected budget for one target batch."""
+    set_plot_style()
     if metric not in view.metrics:
         raise ValueError(f"Metric {metric!r} is unavailable; prepared metrics: {list(view.metrics)}")
     rows = view.performance.loc[view.performance["metric"].eq(metric)].copy()
@@ -127,7 +133,7 @@ def make_figure(
     counts = view.selected_counts
     axes[0].set_xscale("log", base=2)
     axes[0].set_xlim(counts[0] / 1.6, counts[-1] * 1.6)
-    ticks = sample_ticks(counts, visual.max_x_ticks)
+    ticks = log_sample_ticks(counts, visual.max_x_ticks)
     axes[0].set_xticks(ticks, [short_count(value) for value in ticks])
     axes[0].minorticks_off()
 
