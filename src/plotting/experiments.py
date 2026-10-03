@@ -94,6 +94,7 @@ _EXPERIMENT_NAMES: dict[tuple[str, str, str | None, str | None], str] = {
     (COMPOSITION, "mortality", None, None): "mixed_fixed_size_mortality",
     # Full EUH training pool plus a growing local MIMIC contribution.
     (AUGMENTATION_FULL_EXTERNAL, "mortality", "tudd", "mimic"): "mixed_sample_size_mimic_mortality",
+    (AUGMENTATION_FULL_EXTERNAL, "mortality", "mimic", "tudd"): "mixed_sample_size_tudd_mortality",
     (RETRIEVAL, "mortality", "tudd", "tudd"): "retriever_tudd_mortality",
 }
 

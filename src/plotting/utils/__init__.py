@@ -6,6 +6,7 @@ from src.plotting.utils.artifacts import (
     MissingFullTrainingRunError,
     PlotArtifacts,
     TargetMismatchError,
+    combine_complementary_runs,
     load_plot_artifacts,
     select_single_source_full_data_run_ids,
 )
@@ -77,6 +78,7 @@ __all__ = [
     "XGBoostDifferenceEvaluation",
     "aggregate_evaluation_runs",
     "aggregate_runs_by_setting",
+    "combine_complementary_runs",
     "full_training_count",
     "load_pairwise_inputs",
     "load_plot_artifacts",
