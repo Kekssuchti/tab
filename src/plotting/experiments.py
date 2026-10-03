@@ -5,6 +5,11 @@ have not been run or named yet.  Figure scripts therefore report a missing
 registered input instead of guessing an experiment name or substituting a
 different result.
 
+The registry owns orchestration only: which MLflow experiment, for which target,
+from which training source, evaluated at which center.  Which metrics a figure
+shows, and how it presents them, belongs to the figure script itself, so adding
+an input here never changes what an existing figure plots.
+
 ``training_source`` is the sole source for single-source sweeps, the external
 source for augmentation, and the candidate-pool source for retrieval.
 ``evaluation_center`` is set for directional augmentation/retrieval designs and
@@ -17,16 +22,14 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from src.plotting.defaults import metric_scale, task_label
+from src.plotting.defaults import task_label
 
 MAIN_TARGETS = ("mortality", "LOS7", "hours_to_readmit_72")
 DATA_SOURCES = ("mimic", "tudd")
-CLASSIFICATION_METRICS = ("roc_auc", "prc_auc")
 
 SINGLE_SOURCE = "single_source_sample_size"
 COMPOSITION = "composition"
 AUGMENTATION_FULL_EXTERNAL = "augmentation_full_external"
-AUGMENTATION_FIXED_LOCAL = "augmentation_fixed_local"
 RETRIEVAL = "retrieval"
 # The unrestricted candidate-pool reference is a separately registered input:
 # existing full-held-out-set results are not equivalent to a matched-batch run.
@@ -42,12 +45,8 @@ class PlotExperiment:
     training_source: str | None
     evaluation_center: str | None
     experiment_name: str | None
-    metrics: tuple[str, ...] = CLASSIFICATION_METRICS
 
     def __post_init__(self) -> None:
-        scales = {metric_scale(metric) for metric in self.metrics}
-        if len(scales) != 1:
-            raise ValueError(f"Task {self.target!r} mixes metrics on different display scales: {self.metrics}")
         for field, value in (
             ("training_source", self.training_source),
             ("evaluation_center", self.evaluation_center),
@@ -58,16 +57,6 @@ class PlotExperiment:
     @property
     def label(self) -> str:
         return task_label(self.target)
-
-    @property
-    def score_scale(self) -> float:
-        """Return the shared points-to-percent scale of this task's metrics."""
-        return float(metric_scale(self.metrics[0]))
-
-    @property
-    def cross_metric(self) -> str:
-        """Return the metric used where one representative is enough (matrices, ranks)."""
-        return self.metrics[0]
 
     @property
     def available(self) -> bool:
@@ -103,10 +92,8 @@ _EXPERIMENT_NAMES: dict[tuple[str, str, str | None, str | None], str] = {
     (SINGLE_SOURCE, "hours_to_readmit_72", "mimic", None): "sample_size_mimic_hours_to_readmit_72",
     # Constant total budget with a shifting MIMIC/TUDD composition, both centers.
     (COMPOSITION, "mortality", None, None): "mixed_fixed_size_mortality",
-    # The same mixed-source sweep supports two views: full EUH plus growing local
-    # MIMIC, and full local EUH plus growing external MIMIC.
+    # Full EUH training pool plus a growing local MIMIC contribution.
     (AUGMENTATION_FULL_EXTERNAL, "mortality", "tudd", "mimic"): "mixed_sample_size_mimic_mortality",
-    (AUGMENTATION_FIXED_LOCAL, "mortality", "mimic", "tudd"): "mixed_sample_size_mimic_mortality",
     (RETRIEVAL, "mortality", "tudd", "tudd"): "retriever_tudd_mortality",
 }
 
@@ -130,10 +117,9 @@ PLOT_EXPERIMENTS: tuple[PlotExperiment, ...] = (
     *(_experiment(SINGLE_SOURCE, target, source, None) for target in MAIN_TARGETS for source in DATA_SOURCES),
     # F6 inputs: source composition is symmetric and both centers are evaluated.
     *(_experiment(COMPOSITION, target, None, None) for target in MAIN_TARGETS),
-    # F7/F8 inputs: training_source is external; evaluation_center is local/target.
+    # F7 inputs: training_source is external; evaluation_center is local/target.
     *(
-        _experiment(family, target, _other_source(target_center), target_center)
-        for family in (AUGMENTATION_FULL_EXTERNAL, AUGMENTATION_FIXED_LOCAL)
+        _experiment(AUGMENTATION_FULL_EXTERNAL, target, _other_source(target_center), target_center)
         for target in MAIN_TARGETS
         for target_center in DATA_SOURCES
     ),
@@ -163,7 +149,6 @@ _FIGURE_EXPERIMENT_FAMILY = {
     "pairwise_tables": SINGLE_SOURCE,
     "composition": COMPOSITION,
     "augmentation_full_external": AUGMENTATION_FULL_EXTERNAL,
-    "augmentation_fixed_local": AUGMENTATION_FIXED_LOCAL,
     "retriever_comparison": RETRIEVAL,
     "retrieval_budget": RETRIEVAL,
 }

@@ -17,6 +17,7 @@ import math
 import os
 import sys
 import warnings
+from collections.abc import Sequence
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -166,15 +167,38 @@ def use_style(family: str = "sans") -> None:
     )
 
 
-def figure(width: float = COLUMN, ratio: float = 0.68, **kwargs):
-    """One axes at a final printed size. `ratio` is height/width."""
-    fig, ax = plt.subplots(figsize=(width, width * ratio), layout="constrained", **kwargs)
+def figure(width: float = COLUMN, row_height: float = 0.68, **kwargs):
+    """One axes at a final printed size. `row_height` is height/width."""
+    fig, ax = plt.subplots(figsize=(width, width * row_height), layout="constrained", **kwargs)
     return fig, ax
 
 
-def figure_grid(nrows: int = 1, ncols: int = 2, width: float = TEXT, ratio: float = 0.4, **kwargs):
-    """A panel grid at a final printed size, sharing one constrained layout."""
-    fig, axes = plt.subplots(nrows, ncols, figsize=(width, width * ratio), layout="constrained", **kwargs)
+def figure_grid(
+    nrows: int = 1,
+    ncols: int = 2,
+    width: float = TEXT,
+    row_height: float | Sequence[float] = 0.4,
+    overhead: float = 0.0,
+    **kwargs,
+):
+    """A panel grid at a final printed size, sharing one constrained layout.
+
+    `row_height` is the height of one row as a fraction of `width`, given once
+    for every row or once per row. The grid grows and shrinks with its row
+    count, so a figure that drops a metric row gets shorter rather than
+    stretching the rows it keeps — never pass a total height here, or a
+    one-metric figure silently doubles the height of its panels.
+
+    `overhead` adds height in inches for what belongs to no single row, such as
+    a band of panel labels.
+    """
+    heights = np.atleast_1d(np.asarray(row_height, dtype=float))
+    if heights.size == 1:
+        heights = np.full(nrows, heights[0])
+    elif heights.size != nrows:
+        raise ValueError(f"row_height needs one value or one per row ({nrows}); received {heights.size}")
+    figure_height = float(heights.sum()) * width + overhead
+    fig, axes = plt.subplots(nrows, ncols, figsize=(width, figure_height), layout="constrained", **kwargs)
     return fig, axes
 
 

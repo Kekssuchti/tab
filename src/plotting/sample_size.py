@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -21,7 +21,7 @@ import pandas as pd
 from matplotlib.figure import Figure
 
 from src.config import config
-from src.plotting.defaults import dataset_label, metric_label, set_plot_style, task_label
+from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style, task_label
 from src.plotting.experiments import (
     DATA_SOURCES,
     PlotExperiment,
@@ -57,21 +57,20 @@ class DataSettings:
     pipeline_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
     # Model names to leave out of every figure.
-    exclude_models: tuple[str, ...] | None = None
+    exclude_models: tuple[str, ...] | None = ("tabpfn-3.5-fast",)
     output_dir: Path = config.dir_plots / "sample_size"
 
 
 @dataclass(frozen=True)
-class VisualSettings:
+class VisualSettings(MetricPanelSettings):
     """All locally editable presentation choices for this figure."""
 
     metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
     datasets: tuple[str, ...] | None = None
-    show_ci: bool = True
+    show_ci: bool = False
     ci_level: float = 0.95
     figure_width: float = WIDE
-    figure_height_ratio: float = 1.08
-    score_scale: float = 100.0
+    row_height: float = 0.54
     log_sample_axis: bool = True
     max_sample_ticks: int = 6
     marker_size: float = 3.6
@@ -81,11 +80,11 @@ class VisualSettings:
     ci_alpha: float = 0.65
     sample_axis_label: str = "Training sample count"
     metric_axis_template: str = "{metric} on {dataset}"
-    legend_columns: int = 3
+    legend_columns: int = 5
     axis_padding_fraction: float = 0.08
     benchmark_line_width: float = 0.9
     benchmark_linestyle: str = "--"
-    difference_axis_template: str = "{metric} difference from XGBoost on {dataset} (pp)"
+    difference_axis_template: str = "$\\Delta$ {metric} to XGBoost on {dataset}"
     output_formats: tuple[str, ...] = ("pdf",)
 
 
@@ -113,7 +112,7 @@ def make_figure(
         len(data.metrics),
         len(datasets),
         width=visual.figure_width,
-        ratio=visual.figure_height_ratio,
+        row_height=visual.row_height,
         sharex=True,
         sharey="row",
         squeeze=False,
@@ -206,7 +205,7 @@ def make_xgboost_difference_figure(
         len(data.metrics),
         len(datasets),
         width=visual.figure_width,
-        ratio=visual.figure_height_ratio,
+        row_height=visual.row_height,
         sharex=True,
         sharey="row",
         squeeze=False,
@@ -456,7 +455,6 @@ def _parse_args() -> argparse.Namespace:
         choices=DATA_SOURCES,
         help="Training source to rebuild; repeat for several. Defaults to both sources.",
     )
-    parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
 
 
@@ -486,7 +484,7 @@ def main() -> None:
             warn_skipped(task, missing)
             continue
 
-        visual = replace(VISUAL, metrics=task.metrics, score_scale=task.score_scale)
+        visual = VISUAL
         local_full_size, local_full_run_count = _load_local_full_metadata(task)
         prepared = prepare_sample_size_evaluation(
             artifacts,
@@ -497,7 +495,7 @@ def main() -> None:
         )
         benchmark, unavailable_reason = _load_reciprocal_benchmark(task, visual)
 
-        output_dir = args.output_dir / prepared.target
+        output_dir = DATA.output_dir / prepared.target
         output_dir.mkdir(parents=True, exist_ok=True)
         stem = output_dir / f"{prepared.trained_on}_performance"
         outputs = save(

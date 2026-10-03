@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -38,6 +38,7 @@ from src.plotting.defaults import (
     dataset_label,
     metric_label,
     model_label,
+    panel_scale,
     set_plot_style,
 )
 from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
@@ -75,16 +76,15 @@ class DataSettings:
 class VisualSettings:
     """All locally editable presentation choices for these figures."""
 
-    comparison_metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
+    comparison_metrics: tuple[str, ...] = ("roc_auc",)
     cross_metrics: tuple[str, ...] = ("roc_auc",)
     rank_metrics: tuple[str, ...] = ("roc_auc",)
     ci_level: float | None = 0.95
     alpha: float = 0.05
     reference_model: str | None = "xgboost"
-    exclude_models: tuple[str, ...] | None = ("ebm", "tabicl-2")
+    exclude_models: tuple[str, ...] | None = None  # ("ebm", "tabicl-2")
 
     figure_width: float = WIDE
-    score_scale: float = 100.0
     output_formats: tuple[str, ...] = ("pdf",)
     marker_size: float = 4.4
     line_width: float = 1.0
@@ -92,6 +92,8 @@ class VisualSettings:
 
     cross_height: float = 0.92
     cross_cell_digits: int = 0
+    # One metric is one row of the paired forest.
+    paired_row_height: float = 0.34
     rank_diagram_height: float = 1.6
     trajectory_height: float = 1.7
     movement_height: float = 1.6
@@ -99,6 +101,11 @@ class VisualSettings:
     show_rank_movement: bool = True
     show_rank_spread: bool = False
     setting_panels: bool = True
+
+    @property
+    def score_scale(self) -> float:
+        """Return the display scale shared by the comparison, cross, and rank panels."""
+        return panel_scale((*self.comparison_metrics, *self.cross_metrics, *self.rank_metrics))
 
 
 DATA = DataSettings()
@@ -119,29 +126,39 @@ def make_cross_cohort_figure(summary: PairwiseSummary, metric: str, visual: Visu
 
     The split keeps both cohorts in one cell instead of plotting their
     difference: a difference of zero is ambiguous, while two win shares either
-    agree about the winner or they do not.
+    agree about the winner or they do not. Rows and columns follow the shared
+    model order rather than the in-domain ranking, so the matrix reads against
+    every other figure; which model of a pair sits first is then not a ranking
+    statement, so each triangle is oriented from the pair's own better model.
     """
     set_plot_style()
     cells = summary.cross_cells.loc[summary.cross_cells["metric"].eq(metric)]
     if cells.empty:
         raise ValueError(f"No cross-cohort pairs for metric {metric!r}")
-    ordered = summary.order_for(summary.trained_on, metric)
-    instances = list(ordered["model_instance"])
     styles = instance_plot_styles(summary.model_metadata)
+    instances = list(styles)
     names = [styles[instance][1] for instance in instances]
     size = len(instances)
     position = {instance: index for index, instance in enumerate(instances)}
 
     values = np.full((size, size), np.nan)
     for row in cells.itertuples():
-        top, bottom = position[row.row_instance], position[row.column_instance]
         # Both triangles read row over column: the upper is the in-domain cohort,
-        # the lower is the external one, so the lower cell holds the share of the
-        # model that the in-domain ranking puts second.
-        values[top, bottom] = visual.score_scale * float(row.share_internal)
-        values[bottom, top] = visual.score_scale * (1.0 - float(row.share_external))
+        # the lower is the external one. Either drawn side can be the better model,
+        # so each cell takes the pair's share for whichever model it names first.
+        better, worse = position[row.row_instance], position[row.column_instance]
+        if better < worse:
+            upper, lower = (better, worse), (worse, better)
+            internal = float(row.share_internal)
+            external = 1.0 - float(row.share_external)
+        else:
+            upper, lower = (worse, better), (better, worse)
+            internal = 1.0 - float(row.share_internal)
+            external = float(row.share_external)
+        values[upper] = visual.score_scale * internal
+        values[lower] = visual.score_scale * external
 
-    fig, ax = figure(width=visual.figure_width, ratio=visual.cross_height)
+    fig, ax = figure(width=visual.figure_width, row_height=visual.cross_height)
     color_map = plt.get_cmap(PAIRWISE_CMAP).copy()
     color_map.set_bad("#FFFFFF")
     image = ax.imshow(values, cmap=color_map, vmin=0.0, vmax=visual.score_scale, interpolation="nearest")
@@ -196,7 +213,7 @@ def make_paired_forest_figure(summary: PairwiseSummary, visual: VisualSettings =
         len(summary.metrics),
         len(datasets),
         width=visual.figure_width,
-        ratio=0.34 * len(summary.metrics),
+        row_height=visual.paired_row_height,
         sharey=True,
         squeeze=False,
     )
@@ -233,8 +250,8 @@ def make_paired_forest_figure(summary: PairwiseSummary, visual: VisualSettings =
                     else f"{visual.score_scale * float(row.win_share):.{visual.paired_digits}f}%"
                 )
                 ax.text(limit * 0.985, position, text, ha="right", va="center", fontsize=5.5, color=BASELINE)
-            ax.set_xlabel(f"{metric_label(metric)} vs {reference_label} on {dataset_label(dataset)}")
-            ax.set_ylabel("Model" if dataset_index == 0 else "")
+            ax.set_xlabel(f"$\\Delta$ {metric_label(metric)} vs {reference_label} on {dataset_label(dataset)}")
+            ax.set_ylabel("")  # if dataset_index == 0 else "")
 
     panel_labels(axes)
     return fig
@@ -252,7 +269,8 @@ def make_rank_figure(ranks: RankSummary, setting_label: str, visual: VisualSetti
         len(heights),
         1,
         width=visual.figure_width,
-        ratio=(sum(heights) + 0.4) / visual.figure_width,
+        row_height=[height / visual.figure_width for height in heights],
+        overhead=0.4,
         gridspec_kw={"height_ratios": heights},
         squeeze=False,
     )
@@ -273,7 +291,8 @@ def make_setting_rank_figure(ranks: RankSummary, setting_source: str, visual: Vi
         len(settings),
         1,
         width=visual.figure_width,
-        ratio=(visual.setting_panel_height * len(settings) + 0.4) / visual.figure_width,
+        row_height=visual.setting_panel_height / visual.figure_width,
+        overhead=0.4,
         squeeze=False,
     )
     labels = []
@@ -479,11 +498,12 @@ def cross_caption(summary: PairwiseSummary, metric: str) -> str:
     return (
         rf"\textbf{{{reversed_count} of {len(cells)} comparisons change hands between the in-domain and the "
         rf"external cohort.}} "
-        f"Each cell holds two win shares for one model pair: the share of {summary.bootstrap_count:,} paired "
-        f"cohort-bootstrap draws in which the row model beat the column model, above the diagonal on the held-out "
+        f"Each cell holds two {metric_label(metric)} win shares for one model pair: the share of "
+        f"{summary.bootstrap_count:,} paired cohort-bootstrap draws in which the row model beat the column model, "
+        f"above the diagonal on the held-out "
         f"{dataset_label(summary.trained_on)} cohort and below it on the held-out "
-        f"{dataset_label(summary.external_dataset)} cohort. Rows and columns are ordered by the in-domain "
-        f"{metric_label(metric)} estimate, and the white diagonal separates the two halves. Both triangles read row "
+        f"{dataset_label(summary.external_dataset)} cohort. Rows and columns follow the shared model order used by "
+        f"the other figures, and the white diagonal separates the two halves. Both triangles read row "
         f"over column, so a pair whose winner does not change has one warm cell and one cool cell, while a pair that "
         f"changes hands is warm in both. Cells near 50 are undecided, and a share counts resamples of these cohorts "
         f"rather than the chance that a model generalizes better."
@@ -598,8 +618,6 @@ def _parse_args() -> argparse.Namespace:
         choices=DATA_SOURCES,
         help="Training source to rebuild; repeat for several. Defaults to both sources.",
     )
-    parser.add_argument("--baseline-dir", type=Path, default=DATA.baseline_dir)
-    parser.add_argument("--rank-dir", type=Path, default=DATA.rank_dir)
     return parser.parse_args()
 
 
@@ -616,13 +634,7 @@ def main() -> None:
         if experiment_name is None:
             warn_skipped(task, "the intended experiment has not been registered yet")
             continue
-        visual = replace(
-            VISUAL,
-            comparison_metrics=task.metrics,
-            cross_metrics=(task.cross_metric,),
-            rank_metrics=(task.cross_metric,),
-            score_scale=task.score_scale,
-        )
+        visual = VISUAL
         try:
             summary, ranks = load_pairwise_inputs(
                 experiment_name,
@@ -657,8 +669,8 @@ def main() -> None:
                     f"CD = {test.critical_difference:.2f}"
                 )
 
-        baseline_dir = args.baseline_dir / summary.target
-        rank_dir = args.rank_dir / summary.target
+        baseline_dir = DATA.baseline_dir / summary.target
+        rank_dir = DATA.rank_dir / summary.target
         baseline_dir.mkdir(parents=True, exist_ok=True)
         rank_dir.mkdir(parents=True, exist_ok=True)
         stems: list[Path] = []

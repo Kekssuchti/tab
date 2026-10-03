@@ -3,7 +3,7 @@
 Current figure scripts:
 
 - `baseline_transfer.py` — full-data performance and generalizability
-- `training_source_contrast.py` — same-target local-versus-external full-data cost
+- `training_source_contrast.py` — same-target local-versus-external full-data contrast
 - `sample_size.py` — AUROC/AUPRC progression over training sample size, plus
   same-size XGBoost differences
 - `training_composition.py` — fixed-budget MIMIC/TUDD composition curves
@@ -24,7 +24,7 @@ Shared mechanics live in `utils/`:
 - `artifacts.py` — MLflow artifact loading, full-training-run selection, and the
   declared-target check
 - `aggregation.py` — strict repeated-run validation and bootstrap averaging
-- `transfer.py` — positive transfer degradation and relative external loss
+- `transfer.py` — signed model-specific and comparative generalizability changes
 - `grouped.py` — repeated-run aggregation by an explicit experimental setting
 - `sample_size.py` — sample-count inference and repeated-run preparation
 - `pairwise.py` — win shares, paired differences, and the split-encoded LaTeX matrices
@@ -47,6 +47,23 @@ The Nemenyi diagrams themselves come from `scikit-posthocs`.
 failed; pass a substring to run only the matching steps (`recreate_all_figs.sh
 pairwise`). It stays a flat list of families, because the prediction tasks a
 family covers are declared in Python, not in the shell.
+
+The steps are independent, so the script runs up to three of them at a time by
+default. `JOBS` raises or lowers that ceiling and `JOBS=1` restores plain
+sequential execution with streaming output; parallel steps buffer their console
+output and print it as one block when they finish, so every printed caption still
+sits next to the step that produced it.
+
+The ceiling is about CPU only; the real limit is memory. The heavy families
+(`sample_size`, `augmentation`, `training_composition`, `retrieval_budget`) hold
+several GB each, and a run is added only while `MemAvailable` is at least
+`MEM_FLOOR_MB` (default 4096), so a loaded desktop degrades the run towards
+sequential instead of letting the kernel OOM-kill a step. `MEM_FLOOR_MB=0`
+disables that guard.
+
+```bash
+JOBS=4 src/plotting/recreate_all_figs.sh
+```
 
 ```bash
 src/plotting/recreate_all_figs.sh
@@ -81,10 +98,31 @@ Every figure path reads `plots/<experiment>/<target>/<source>_<what>.pdf`:
   composition, starts the file name with `<what>` instead.
 - `<what>` names the figure and the design settings it fixes, for example
   `generalizability`, `roc_auc_ranks`, `roc_auc_budget-1600`, or
-  `fixed_local-1600_roc_auc`.
+  `xgboost_difference`.
 
 Estimator-count ablations and feature distributions are investigation figures and
 keep their own flat directories.
+
+### Figure geometry
+
+Every height is stated per grid row, as a fraction of the figure width:
+`figure_grid(nrows, ncols, width, row_height, overhead)` multiplies it by the
+row count, and `figure(row_height=...)` is the one-row case. A figure therefore
+grows and shrinks with its rows instead of stretching the panels it keeps, so
+dropping a metric from `VISUAL.metrics` shortens the figure by exactly one row
+height. Never pass a total height for a grid: that is what silently doubled the
+panel height of every one-metric figure. `overhead` is the only absolute height,
+in inches, for what belongs to no single row (a band of panel labels).
+
+### Where a figure's metrics come from
+
+The registry orchestrates inputs only: which experiment, which target, which
+training source, which evaluation center. Which metrics a figure plots is a
+plot-level decision in the figure's own `VISUAL` (or `TABLES`) settings, next to
+its colors, sizes, and axis labels, so registering a new input never changes what
+an existing figure shows. `score_scale` is derived from `metrics` through
+`defaults.panel_scale`, so the two cannot disagree; a tuple mixing percentage and
+original-unit metrics is rejected instead of being plotted on one axis.
 
 ### Registering an experiment
 
@@ -123,8 +161,6 @@ _EXPERIMENT_NAMES = {
     # evaluation_center.
     (AUGMENTATION_FULL_EXTERNAL, "mortality", "tudd", "mimic"): "mixed_sample_size_mimic_mortality",
     (AUGMENTATION_FULL_EXTERNAL, "mortality", "mimic", "tudd"): "mixed_sample_size_tudd_mortality",
-    # F8 fixed local budget at evaluation_center plus a growing external sample.
-    (AUGMENTATION_FIXED_LOCAL, "mortality", "tudd", "mimic"): "mixed_fixed_local_mimic_mortality",
     # F9 paired strategy effects for one candidate-source/target-batch direction.
     (RETRIEVAL, "mortality", "tudd", "tudd"): "retriever_tudd_mortality",
     # F10 budget curves, plus the matched unrestricted reference in its own experiment.
@@ -142,11 +178,10 @@ What the runs of an experiment have to record:
 | F4/F5 | that sweep, one run per absolute count `fraction: <int>`, plus the `1.0` run |
 | F6 | `train_on` as integer counts of both sources summing to one fixed total per budget |
 | F7 | `[{"dataset": "<external>", "fraction": 1.0}, {"dataset": "<local>", "fraction": <int>}]` per local size, optionally the external-only run and the both-full run |
-| F8 | `[{"dataset": "<local>", "fraction": <L>}, {"dataset": "<external>", "fraction": <int>}]` per added size, plus the local-only run at `L` |
 | F9 | `custom_retriever` runs whose strategies share one budget, batch center, batch size, and batch seed |
 | F10 | the same at several budgets, plus a separately registered unrestricted candidate-pool run per direction |
 
-The local-only and external-only reference curves of F7/F8 are taken from the
+The local-only and external-only reference curves of F7 are taken from the
 single-source sweeps already registered for that center, matched cell by cell on
 `training_sample_seed` and realized count; unmatched repeats are reported and
 left out. All inputs of one figure must share one model roster — models missing
@@ -156,7 +191,7 @@ error if an input does not cover it.
 Then rebuild that figure:
 
 ```bash
-uv run python -m src.plotting.augmentation   # F7/F8
+uv run python -m src.plotting.augmentation   # F7
 uv run python -m src.plotting.retrieval_budget   # F10
 ```
 

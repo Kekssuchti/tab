@@ -35,4 +35,5 @@ def draw_feature_distribution(
             color=DATASET_COLORS.get(dataset),
             label=dataset_label(dataset),
             ax=ax,
+            line_kws={"alpha": 1.0},
         )

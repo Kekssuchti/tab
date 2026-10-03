@@ -59,7 +59,7 @@ def make_figure(
 ):
     """Draw one feature distribution figure."""
     set_plot_style()
-    fig, ax = figure(width=visual.figure_width, ratio=visual.figure_height_ratio)
+    fig, ax = figure(width=visual.figure_width, row_height=visual.figure_height_ratio)
     draw_feature_distribution(
         ax,
         frames,

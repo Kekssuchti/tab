@@ -75,7 +75,7 @@ VISUAL = VisualSettings()
 def make_performance_figure(data: GroupedEvaluation, visual: VisualSettings = VISUAL) -> Figure:
     """Draw model performance over estimator count."""
     set_plot_style()
-    fig, ax = figure(width=visual.figure_width, ratio=visual.performance_height_ratio)
+    fig, ax = figure(width=visual.figure_width, row_height=visual.performance_height_ratio)
     styles = instance_plot_styles(data.model_metadata)
     rows = data.performance.loc[
         data.performance["dataset"].eq(DATA.dataset) & data.performance["metric"].eq(DATA.metric)
@@ -119,7 +119,7 @@ def make_performance_figure(data: GroupedEvaluation, visual: VisualSettings = VI
 def make_runtime_figure(data: GroupedEvaluation, visual: VisualSettings = VISUAL) -> Figure:
     """Draw total runtime over estimator count."""
     set_plot_style()
-    fig, ax = figure(width=visual.figure_width, ratio=visual.runtime_height_ratio)
+    fig, ax = figure(width=visual.figure_width, row_height=visual.runtime_height_ratio)
     styles = instance_plot_styles(data.model_metadata)
     rows = data.runtimes.copy()
     rows["setting_value"] = pd.to_numeric(rows["setting"])

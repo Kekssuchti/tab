@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from matplotlib.figure import Figure
 
 from src.config import config
-from src.plotting.defaults import dataset_label, metric_label, set_plot_style, task_label
+from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style, task_label
 from src.plotting.experiments import (
     DATA_SOURCES,
     MAIN_TARGETS,
@@ -47,16 +47,16 @@ class DataSettings:
 
 
 @dataclass(frozen=True)
-class VisualSettings:
+class VisualSettings(MetricPanelSettings):
     """Locally editable presentation choices for F3."""
 
     metrics: tuple[str, ...] = ("roc_auc",)  # "prc_auc")
     show_ci: bool = True
     ci_level: float = 0.95
-    score_scale: float = 100.0
     figure_width: float = WIDE
-    figure_height_ratio: float = 1.08
-    axis_label: str = "Model Specific Generalizability Loss"
+    # One metric is one grid row.
+    row_height: float = 0.54
+    axis_label_template: str = "{metric}: local $-$ external training (pp)"
     model_axis_label: str = ""
     shade_baselines: bool = True
     baseline_band_alpha: float = 0.13
@@ -78,7 +78,7 @@ def make_figure(data: SourceContrastEvaluation, visual: VisualSettings = VISUAL)
         len(data.metrics),
         len(data.evaluation_centers),
         width=visual.figure_width,
-        ratio=visual.figure_height_ratio,
+        row_height=visual.row_height,
         sharey=True,
         squeeze=False,
     )
@@ -112,8 +112,7 @@ def make_figure(data: SourceContrastEvaluation, visual: VisualSettings = VISUAL)
             )
             ax.axvline(0, color=BASELINE, linewidth=0.8, linestyle="--", zorder=1)
             ax.set_xlim(limits)
-            axis_label = visual.axis_label  # .format(metric=metric_label(metric))
-            ax.set_xlabel(axis_label)
+            ax.set_xlabel(visual.axis_label_template.format(metric=metric_label(metric)))
             if center_index == 0:
                 ax.set_ylabel(f"{visual.model_axis_label}")
             if metric_index == 0:
@@ -192,7 +191,6 @@ def _parse_args() -> argparse.Namespace:
         choices=MAIN_TARGETS,
         help="Prediction target to rebuild; repeat for several. Defaults to all three main targets.",
     )
-    parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
 
 
@@ -211,7 +209,7 @@ def main() -> None:
         if loaded is None:
             continue
         artifacts_by_source = loaded
-        visual = replace(VISUAL, metrics=pair[0].metrics, score_scale=pair[0].score_scale)
+        visual = VISUAL
         prepared = prepare_source_contrast(
             artifacts_by_source,
             metrics=visual.metrics,
@@ -224,7 +222,7 @@ def main() -> None:
             )
         _pairing_report(prepared)
 
-        output_dir = args.output_dir / prepared.target
+        output_dir = DATA.output_dir / prepared.target
         stem = output_dir / f"{DATA_SOURCES[0]}_{DATA_SOURCES[1]}_source_contrast"
         outputs = save(make_figure(prepared, visual), str(stem), formats=visual.output_formats)
         print("LaTeX caption:")

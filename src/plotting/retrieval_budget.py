@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import argparse
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -30,7 +30,7 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
 from src.config import config
-from src.plotting.defaults import dataset_label, metric_label, set_plot_style, task_label
+from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style, task_label
 from src.plotting.experiments import (
     DATA_SOURCES,
     MAIN_TARGETS,
@@ -69,13 +69,12 @@ class DataSettings:
 
 
 @dataclass(frozen=True)
-class VisualSettings:
+class VisualSettings(MetricPanelSettings):
     """Locally editable presentation choices for F10."""
 
-    metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
+    metrics: tuple[str, ...] = ("roc_auc",)
     show_ci: bool = True
     ci_level: float = 0.95
-    score_scale: float = 100.0
     figure_width: float = WIDE
     panel_height_ratio: float = 0.34
     max_columns: int = 3
@@ -247,7 +246,7 @@ def _model_grid(count: int, visual: VisualSettings) -> tuple[Figure, list, int]:
         row_count,
         column_count,
         width=visual.figure_width,
-        ratio=visual.panel_height_ratio * row_count,
+        row_height=visual.panel_height_ratio,
         sharex=True,
         sharey=True,
         squeeze=False,
@@ -267,9 +266,7 @@ def _bottom_row(axes: list, column_count: int) -> list:
 def caption(view: RetrievalBatchView, metric: str, visual: VisualSettings = VISUAL) -> str:
     """Return a self-contained F10 caption."""
     counts = ", ".join(f"{count:,}" for count in view.selected_counts)
-    strategies = ", ".join(
-        sorted(set(view.conditions["strategy_label"].astype(str)), key=lambda label: label)
-    )
+    strategies = ", ".join(sorted(set(view.conditions["strategy_label"].astype(str)), key=lambda label: label))
     repeats = sorted(set(view.conditions["run_count"].astype(int)))
     repeat_text = (
         "one pipeline run per setting"
@@ -332,7 +329,6 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--run-id", action="append", dest="run_ids")
     parser.add_argument("--unrestricted-run-id", action="append", dest="unrestricted_run_ids")
-    parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
 
 
@@ -370,7 +366,7 @@ def main() -> None:
             warn_skipped(task, missing)
             continue
 
-        visual = replace(VISUAL, metrics=task.metrics, score_scale=task.score_scale)
+        visual = VISUAL
         unrestricted_artifacts = _load_unrestricted(task, unrestricted_ids, DATA)
         try:
             prepared = prepare_retrieval_budget_evaluation(
@@ -386,7 +382,7 @@ def main() -> None:
         if prepared.unrestricted_run_ids:
             print("Selected unrestricted pipeline runs: " + ", ".join(prepared.unrestricted_run_ids))
 
-        output_root = args.output_dir / prepared.target
+        output_root = DATA.output_dir / prepared.target
         for view in prepared.batch_views:
             for metric in prepared.metrics:
                 stem = output_root / (

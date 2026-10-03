@@ -27,7 +27,7 @@ from matplotlib.lines import Line2D
 from mlflow import MlflowClient
 from src.config import config
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI, load_evaluation_data
-from src.plotting.defaults import metric_label, ordered_models, set_plot_style
+from src.plotting.defaults import MetricPanelSettings, metric_label, ordered_models, set_plot_style
 from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import BASELINE, DIVERGING, PALETTE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import MissingExperimentError
@@ -51,15 +51,15 @@ class DataSettings:
 
 
 @dataclass(frozen=True)
-class VisualSettings:
+class VisualSettings(MetricPanelSettings):
     """All locally editable presentation choices for this figure."""
 
-    metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
+    metrics: tuple[str, ...] = ("roc_auc",)
     figure_width: float = WIDE
-    figure_height_ratio: float = 1.10
+    # One metric is one grid row.
+    row_height: float = 0.55
     heatmap_width_ratio: float = 3.6
     summary_width_ratio: float = 1.8
-    score_scale: float = 100.0
     heatmap_decimals: int = 1
     heatmap_font_size: float = 5.5
     cohort_colors: tuple[str, ...] = (PALETTE["blue"], PALETTE["orange"], PALETTE["green"])
@@ -67,7 +67,7 @@ class VisualSettings:
     cohort_marker_size: float = 3.5
     repeat_range_width: float = 0.9
     grand_mean_marker_size: float = 4.5
-    output_formats: tuple[str, ...] = ("pdf", "svg")
+    output_formats: tuple[str, ...] = ("pdf",)
 
 
 @dataclass(frozen=True)
@@ -122,9 +122,7 @@ def load_retriever_comparisons(
         raise MissingExperimentError(f"No evaluation data found for experiment {experiment_name!r}")
 
     points = metrics.loc[
-        metrics["scope"].eq("test")
-        & metrics["statistic"].eq("point")
-        & metrics["dataset"].eq(RETRIEVER_DATASET)
+        metrics["scope"].eq("test") & metrics["statistic"].eq("point") & metrics["dataset"].eq(RETRIEVER_DATASET)
     ].copy()
     if points.empty:
         raise ValueError("No retriever point metrics are available")
@@ -140,8 +138,7 @@ def load_retriever_comparisons(
     selected = _select_designs(designs, data_settings)
     if not selected:
         raise ValueError(
-            "No retrieval runs match train_sizes="
-            f"{data_settings.train_sizes} and test_sizes={data_settings.test_sizes}"
+            f"No retrieval runs match train_sizes={data_settings.train_sizes} and test_sizes={data_settings.test_sizes}"
         )
 
     selected_run_ids = {design.run_id for design in selected}
@@ -177,9 +174,7 @@ def _prepare_comparison(
     model_instances = tuple(
         instance
         for model in model_names
-        for instance in sorted(
-            model_metadata.loc[model_metadata["model_name"].eq(model), "model_instance"].astype(str)
-        )
+        for instance in sorted(model_metadata.loc[model_metadata["model_name"].eq(model), "model_instance"].astype(str))
     )
     model_labels = {instance: _wrap_model_label(styles[instance][1]) for instance in model_instances}
 
@@ -286,7 +281,9 @@ def _select_designs(designs: tuple[RetrieverDesign, ...], data_settings: DataSet
         available = {design.batch_size for design in designs}
         missing = sorted(wanted - available)
         if missing:
-            raise ValueError(f"Requested target-batch sizes {missing} were not measured; available: {sorted(available)}")
+            raise ValueError(
+                f"Requested target-batch sizes {missing} were not measured; available: {sorted(available)}"
+            )
         selected = tuple(design for design in selected if design.batch_size in wanted)
     return selected
 
@@ -367,7 +364,7 @@ def make_figure(data: RetrieverComparison, visual: VisualSettings = VISUAL) -> F
         len(visual.metrics),
         2,
         width=visual.figure_width,
-        ratio=visual.figure_height_ratio,
+        row_height=visual.row_height,
         squeeze=False,
         gridspec_kw={"width_ratios": [visual.heatmap_width_ratio, visual.summary_width_ratio]},
     )
@@ -506,7 +503,7 @@ def _format_heatmap(ax, data: RetrieverComparison, metric: str) -> None:
         np.arange(len(data.settings)),
         [data.setting_labels[setting] for setting in data.settings],
     )
-    ax.set_xlabel("Model")
+    ax.set_xlabel("")
     ax.set_ylabel(f"Retriever setting ({metric_label(metric)})")
     ax.tick_params(axis="both", length=0)
     ax.grid(visible=False)
@@ -531,9 +528,7 @@ def _draw_repeat_summary(
     for row_index, setting in enumerate(data.settings):
         setting_rows = summary.loc[summary["setting"].eq(setting)]
         for offset, test_seed in zip(offsets, data.test_seeds, strict=True):
-            values = setting_rows.loc[
-                setting_rows["test_sample_seed"].eq(test_seed), "delta"
-            ].to_numpy(dtype=float)
+            values = setting_rows.loc[setting_rows["test_sample_seed"].eq(test_seed), "delta"].to_numpy(dtype=float)
             if len(values) != data.repeat_count:
                 raise ValueError(
                     f"Setting {setting!r}, test seed {test_seed} has {len(values)} repeats; "
@@ -648,7 +643,6 @@ def _parse_args() -> argparse.Namespace:
         help="Explicit pipeline MLflow run ID; repeat to select several runs.",
     )
     parser.add_argument("--tracking-uri", default=DEFAULT_TRACKING_URI)
-    parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
 
 
@@ -686,7 +680,7 @@ def main() -> None:
             warn_skipped(task, missing)
             continue
 
-        output_dir = args.output_dir / task.target
+        output_dir = DATA.output_dir / task.target
         output_dir.mkdir(parents=True, exist_ok=True)
         for prepared in comparisons:
             output_stem = output_dir / (

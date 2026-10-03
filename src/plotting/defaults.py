@@ -41,6 +41,36 @@ def metric_scale(metric: str) -> int:
     return 100 if metric in POINT_SCALE_METRICS else 1
 
 
+def panel_scale(metrics: Sequence[str]) -> float:
+    """Return the display scale shared by a figure's metric panels.
+
+    One figure has one axis scale: a metric tuple mixing percentages with
+    original units cannot share an axis, so it is rejected here instead of
+    being mislabelled.
+    """
+    if not metrics:
+        raise ValueError("a figure needs at least one metric")
+    scales = {metric_scale(metric) for metric in metrics}
+    if len(scales) != 1:
+        raise ValueError(f"metrics {tuple(metrics)} mix display scales; select one scale per figure")
+    return float(scales.pop())
+
+
+class MetricPanelSettings:
+    """Base for figure settings that declare their own ``metrics``.
+
+    The axis scale is derived from those metrics, so a figure's scale can never
+    disagree with the panels it labels.
+    """
+
+    metrics: tuple[str, ...]
+
+    @property
+    def score_scale(self) -> float:
+        """Return the display scale of the declared metric panels."""
+        return panel_scale(self.metrics)
+
+
 # --- Dataset and task defaults --------------------------------------------
 
 # Dataset and task colors are separate semantic namespaces. A plot comparing

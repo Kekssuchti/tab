@@ -1,12 +1,11 @@
-"""F7 and F8: training-data augmentation with external observations.
+"""F7: training-data augmentation with external observations.
 
 Regenerate with:
 
     uv run python -m src.plotting.augmentation
 
-F7 fixes the complete external training pool and varies the number of local
-target-center observations. F8 fixes a local budget and varies the number of
-added external observations. Both are declared per prediction task and target
+This figure fixes the complete external training pool and varies the number of
+local target-center observations. It is declared per prediction task and target
 center in `src.plotting.experiments`; a declaration without a registered
 experiment, or without its matched local-only reference, is reported and skipped
 rather than replaced by another experiment.
@@ -21,7 +20,7 @@ from __future__ import annotations
 import argparse
 import math
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -30,18 +29,15 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
 from src.config import config
-from src.plotting.defaults import dataset_label, metric_label, set_plot_style, task_label
+from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style, task_label
 from src.plotting.experiments import DATA_SOURCES, MAIN_TARGETS, tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import BASELINE, PALETTE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
-    FixedLocalAugmentation,
-    FixedLocalBudgetView,
     FullExternalAugmentation,
     IncompleteExperimentError,
     MissingExperimentError,
     PlotArtifacts,
     load_plot_artifacts,
-    prepare_fixed_local_augmentation,
     prepare_full_external_augmentation,
 )
 from src.plotting.utils.augmentation import COMBINED, EXTERNAL_ONLY, LOCAL_ONLY
@@ -55,7 +51,7 @@ from src.plotting.utils.rendering import (
 
 @dataclass(frozen=True)
 class DataSettings:
-    """Run/model selection and F7/F8 output location."""
+    """Run/model selection and F7 output location."""
 
     pipeline_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
@@ -64,13 +60,12 @@ class DataSettings:
 
 
 @dataclass(frozen=True)
-class VisualSettings:
-    """Locally editable presentation choices for F7 and F8."""
+class VisualSettings(MetricPanelSettings):
+    """Locally editable presentation choices for F7."""
 
     metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
     show_ci: bool = True
     ci_level: float = 0.95
-    score_scale: float = 100.0
     figure_width: float = WIDE
     panel_height_ratio: float = 0.34
     max_columns: int = 3
@@ -80,10 +75,6 @@ class VisualSettings:
     cap_size: float = 1.8
     ci_alpha: float = 0.7
     max_x_ticks: int = 6
-    # The external-only boundary sits left of the logarithmic range: the zero
-    # marker is a position in a narrow gutter, not a measured local count.
-    zero_gap_factor: float = 6.0
-    zero_marker_position: float = 1.35
     show_external_baseline: bool = True
     external_baseline_color: str = BASELINE
     external_baseline_linestyle: str = "--"
@@ -91,7 +82,6 @@ class VisualSettings:
     axis_padding_fraction: float = 0.08
     local_color: str = PALETTE["blue"]
     combined_color: str = PALETTE["orange"]
-    reference_color: str = BASELINE
     output_formats: tuple[str, ...] = ("pdf",)
 
 
@@ -122,8 +112,7 @@ def make_full_external_figure(
         show_ci=visual.show_ci,
         padding_fraction=visual.axis_padding_fraction,
     )
-    measured = tuple(count for count in data.local_counts if count > 0)
-    positions = _sample_axis(axes[0], measured, visual, measured_zero=data.external_only_measured)
+    positions = _sample_axis(axes[0], data.local_counts, visual)
 
     for ax, instance in zip(axes, data.model_instances, strict=True):
         instance_rows = rows.loc[rows["model_instance"].astype(str).eq(instance)]
@@ -151,93 +140,7 @@ def make_full_external_figure(
     for ax in _bottom_row(axes, column_count):
         ax.set_xlabel(f"{dataset_label(data.local_center)} training observations")
     legend = _condition_legend(data, visual)
-    fig.legend(*legend, loc="outside upper center", ncol=2)
-    panel_labels(axes)
-    return fig
-
-
-def make_fixed_local_figure(
-    view: FixedLocalBudgetView,
-    metric: str,
-    visual: VisualSettings = VISUAL,
-) -> Figure:
-    """Draw the added-external curve against its local-only reference."""
-    set_plot_style()
-    rows = _metric_rows(view.performance, view.metrics, metric, view.local_center)
-    fig, axes, column_count = _model_grid(len(view.model_instances), visual)
-    styles = instance_plot_styles(view.model_metadata)
-    limits = interval_axis_limits(
-        rows,
-        scale=visual.score_scale,
-        show_ci=visual.show_ci,
-        padding_fraction=visual.axis_padding_fraction,
-    )
-    external_counts = view.external_counts
-    if not external_counts:
-        raise ValueError("Fixed-local augmentation requires at least one positive added-external count")
-    if len(external_counts) > 1:
-        axes[0].set_xscale("log", base=2)
-        axes[0].set_xlim(external_counts[0] / 1.6, external_counts[-1] * 1.6)
-    else:
-        axes[0].set_xlim(0.0, external_counts[0] * 2.0)
-    ticks = log_sample_ticks(external_counts, visual.max_x_ticks)
-    axes[0].set_xticks(ticks, [short_count(value) for value in ticks])
-    axes[0].minorticks_off()
-
-    for ax, instance in zip(axes, view.model_instances, strict=True):
-        instance_rows = rows.loc[rows["model_instance"].astype(str).eq(instance)]
-        reference = instance_rows.loc[instance_rows["external_count"].eq(0)]
-        if len(reference) != 1:
-            raise ValueError(f"Model {instance!r} needs exactly one local-only reference; found {len(reference)}")
-        value = visual.score_scale * float(reference.iloc[0]["estimate"])
-        ax.axhline(
-            value,
-            color=visual.reference_color,
-            linewidth=visual.line_width,
-            linestyle="--",
-            label=f"Local only ({view.local_count:,})",
-            zorder=1,
-        )
-        cell = instance_rows.loc[instance_rows["external_count"].gt(0)].sort_values("external_count")
-        if cell.empty:
-            raise ValueError(f"Model {instance!r} has no combined-training cell for {metric!r}")
-        estimates = visual.score_scale * cell["estimate"].to_numpy(dtype=float)
-        lower = visual.score_scale * cell["lower"].to_numpy(dtype=float)
-        upper = visual.score_scale * cell["upper"].to_numpy(dtype=float)
-        ax.errorbar(
-            cell["external_count"].to_numpy(dtype=float),
-            estimates,
-            yerr=np.vstack((estimates - lower, upper - estimates)) if visual.show_ci else None,
-            color=visual.combined_color,
-            marker=_CONDITION_STYLES[COMBINED]["marker"],
-            linestyle=_CONDITION_STYLES[COMBINED]["linestyle"],
-            markersize=visual.marker_size,
-            linewidth=visual.line_width,
-            elinewidth=visual.ci_line_width,
-            capsize=visual.cap_size if visual.show_ci else 0,
-            alpha=visual.ci_alpha if visual.show_ci else 1.0,
-            label="Local budget + added external",
-            zorder=2,
-        )
-        ax.set_ylim(limits)
-        ax.grid(axis="both")
-        ax.annotate(
-            styles[instance][1],
-            xy=(1, 1),
-            xycoords="axes fraction",
-            xytext=(-2, -2),
-            textcoords="offset points",
-            ha="right",
-            va="top",
-            fontsize="small",
-            fontweight="bold",
-        )
-
-    axes[0].set_ylabel(f"Absolute {metric_label(metric)} on {dataset_label(view.local_center)} (%)")
-    for ax in _bottom_row(axes, column_count):
-        ax.set_xlabel(f"Added {dataset_label(view.external_source)} training observations")
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside upper center", ncol=2)
+    fig.legend(*legend, loc="outside upper center", ncol=3)
     panel_labels(axes)
     return fig
 
@@ -261,14 +164,8 @@ def _draw_condition(
 ) -> None:
     color = visual.local_color if condition == LOCAL_ONLY else visual.combined_color
     style = _CONDITION_STYLES[condition]
-    measured = cell.loc[cell["local_count"].gt(0)].sort_values("local_count").copy()
-    measured["position"] = measured["local_count"].astype(int).map(positions).astype(float)
-    zero = cell.loc[cell["local_count"].eq(0)].copy()
-    if len(zero) > 1:
-        raise ValueError(f"Found {len(zero)} external-only rows for {condition!r}; expected at most one setting")
-    if len(zero) == 1:
-        zero["position"] = positions[0]
-    curve = pd.concat((zero, measured), ignore_index=True).sort_values("position")
+    curve = cell.loc[cell["local_count"].gt(0)].sort_values("local_count").copy()
+    curve["position"] = curve["local_count"].astype(int).map(positions).astype(float)
     _draw_curve(ax, curve["position"], curve, color, style, label=condition, visual=visual)
 
 
@@ -367,28 +264,14 @@ def _condition_legend(data: FullExternalAugmentation, visual: VisualSettings) ->
     return handles, [handle.get_label() for handle in handles]
 
 
-def _sample_axis(
-    ax,
-    local_counts: tuple[int, ...],
-    visual: VisualSettings,
-    *,
-    measured_zero: bool,
-) -> dict[int, float]:
+def _sample_axis(ax, local_counts: tuple[int, ...], visual: VisualSettings) -> dict[int, float]:
     """Set the local-count axis and return the drawn position of each count."""
     if not local_counts:
         raise ValueError("Augmentation requires at least one positive local training count")
-    smallest = min(local_counts)
     positions = {count: float(count) for count in local_counts}
-    if measured_zero:
-        ax.set_xscale("log", base=2)
-        left = smallest / visual.zero_gap_factor
-        positions[0] = left * visual.zero_marker_position
-        ax.set_xlim(left, max(local_counts) * 1.25)
-        ticks = [0, *log_sample_ticks(local_counts, visual.max_x_ticks)]
-    else:
-        ax.set_xscale("log", base=2)
-        ax.set_xlim(smallest / 1.6, max(local_counts) * 1.6)
-        ticks = list(log_sample_ticks(local_counts, visual.max_x_ticks))
+    ax.set_xscale("log", base=2)
+    ax.set_xlim(min(local_counts) / 1.6, max(local_counts) * 1.6)
+    ticks = log_sample_ticks(local_counts, visual.max_x_ticks)
     ax.set_xticks([positions[value] for value in ticks], [short_count(value) for value in ticks])
     ax.minorticks_off()
     return positions
@@ -405,7 +288,7 @@ def _model_grid(count: int, visual: VisualSettings) -> tuple[Figure, list, int]:
         row_count,
         column_count,
         width=visual.figure_width,
-        ratio=visual.panel_height_ratio * row_count,
+        row_height=visual.panel_height_ratio,
         sharex=True,
         sharey=True,
         squeeze=False,
@@ -429,26 +312,11 @@ def full_external_caption(
 ) -> str:
     """Return a self-contained F7 caption."""
     counts = ", ".join(f"{count:,}" for count in data.local_counts)
-    boundary = (
-        f"the leftmost combined marker is external-only training on the complete "
-        f"{dataset_label(data.external_source)} pool of {data.external_count:,} observations at zero local "
-        "observations, drawn at the labelled zero position left of the measured counts and connected to the "
-        "curve because zero has no position on a logarithmic axis"
-        if data.external_only_measured
-        else "no external-only run was selected, so the zero-local boundary is unmeasured and omitted"
-    )
     baseline = (
         " The grey dashed line repeats that model's externally trained score as the level its local data has to "
         "beat; it is a measured reference, not a fitted threshold, and it can be switched off with "
         "show_external_baseline in VisualSettings."
         if visual.show_external_baseline and data.external_only_measured
-        else ""
-    )
-    ignored = (
-        " Runs of the fixed-local design were present in the same experiment and are not drawn here: "
-        + ", ".join(data.ignored_runs)
-        + "."
-        if data.ignored_runs
         else ""
     )
     provenance = (
@@ -469,38 +337,11 @@ def full_external_caption(
         f"target center.}} {metric_label(metric)} on the held-out {dataset_label(data.local_center)} cohort for "
         f"{len(data.model_instances)} models, each in its own panel. Measured local counts are {counts}; the fixed "
         f"external contribution is the complete {dataset_label(data.external_source)} pool of "
-        f"{data.external_count:,} observations. The solid curve trains on local data only, the dashed curve trains "
-        f"on the complete external pool plus the same local count, and {boundary}. Combined training deliberately "
-        "has a larger total training count than local-only training. Runs of one cell share their "
+        f"{data.external_count:,} observations. The solid curve trains on local data only, and the dashed curve "
+        "trains on the complete external pool plus the same local count. Combined training deliberately has a "
+        "larger total training count than local-only training. Runs of one cell share their "
         "training_sample_seed, so the local-only and combined conditions use the same local observations; "
-        f"{_repeat_coverage(data.performance)}.{baseline}{provenance} {_uncertainty(data, visual)}{ignored}"
-    )
-
-
-def fixed_local_caption(
-    view: FixedLocalBudgetView,
-    metric: str,
-    visual: VisualSettings = VISUAL,
-) -> str:
-    """Return a self-contained F8 caption."""
-    counts = ", ".join(f"{count:,}" for count in view.external_counts)
-    return (
-        rf"\textbf{{Adding {dataset_label(view.external_source)} observations to a fixed local "
-        f"{dataset_label(view.local_center)} training budget changes {task_label(view.target)} performance on the "
-        f"target center.}} {metric_label(metric)} on the held-out {dataset_label(view.local_center)} cohort for "
-        f"{len(view.model_instances)} models, each in its own panel. Every panel fixes {view.local_count:,} local "
-        f"observations and increases the added {dataset_label(view.external_source)} count over {counts}; the "
-        "dashed horizontal reference is that model's local-only score at the same budget, which is also the "
-        "augmented condition at zero added observations. Runs of one budget share their training_sample_seed, so "
-        "the local subset stays fixed while the external contribution grows; "
-        f"{_repeat_coverage(view.performance)}."
-        + (
-            f" The local-only reference comes from that center's own single-source sweep ({view.local_only_experiment}), "
-            "matched on training_sample_seed and realized local count."
-            if view.local_only_experiment is not None
-            else ""
-        )
-        + f" {_uncertainty(view, visual)}"
+        f"{_repeat_coverage(data.performance)}.{baseline}{provenance} {_uncertainty(data, visual)}"
     )
 
 
@@ -543,42 +384,43 @@ def _parse_args() -> argparse.Namespace:
         help="Designated target center; repeat for several. Defaults to both centers.",
     )
     parser.add_argument("--run-id", action="append", dest="run_ids")
-    parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     run_ids = tuple(args.run_ids) if args.run_ids else DATA.pipeline_runs
-    for family in ("augmentation_full_external", "augmentation_fixed_local"):
-        tasks = tasks_for(family, args.targets, evaluation_centers=args.evaluation_centers)
-        if len(tasks) > 1 and run_ids:
-            raise SystemExit("--run-id pins one augmentation input; select exactly one target and evaluation center")
-        for task in tasks:
-            print(f"\n=== {task.label} [{task.direction}] ({task.experiment_name or 'not registered'})")
-            if task.experiment_name is None:
-                warn_skipped(task, f"the intended {family} experiment has not been registered yet")
-                continue
-            try:
-                artifacts = load_plot_artifacts(
-                    task.experiment_name,
-                    pipeline_runs=run_ids,
-                    models=DATA.models,
-                    exclude_models=DATA.exclude_models,
-                    expected_target=task.target,
-                )
-            except MissingExperimentError as missing:
-                warn_skipped(task, missing)
-                continue
+    tasks = tasks_for("augmentation_full_external", args.targets, evaluation_centers=args.evaluation_centers)
+    if len(tasks) > 1 and run_ids:
+        raise SystemExit("--run-id pins one augmentation input; select exactly one target and evaluation center")
+    for task in tasks:
+        print(f"\n=== {task.label} [{task.direction}] ({task.experiment_name or 'not registered'})")
+        if task.experiment_name is None:
+            warn_skipped(task, "the intended augmentation experiment has not been registered yet")
+            continue
+        try:
+            artifacts = load_plot_artifacts(
+                task.experiment_name,
+                pipeline_runs=run_ids,
+                models=DATA.models,
+                exclude_models=DATA.exclude_models,
+                expected_target=task.target,
+            )
+        except MissingExperimentError as missing:
+            warn_skipped(task, missing)
+            continue
 
-            visual = replace(VISUAL, metrics=task.metrics, score_scale=task.score_scale)
-            local_center = str(task.evaluation_center)
-            external_source = str(task.training_source)
-            runner = _run_full_external if family == "augmentation_full_external" else _run_fixed_local
-            try:
-                runner(task, artifacts, local_center, external_source, visual, args.output_dir)
-            except IncompleteExperimentError as incomplete:
-                warn_skipped(task, incomplete)
+        try:
+            _run_full_external(
+                task,
+                artifacts,
+                str(task.evaluation_center),
+                str(task.training_source),
+                VISUAL,
+                DATA.output_dir,
+            )
+        except IncompleteExperimentError as incomplete:
+            warn_skipped(task, incomplete)
 
 
 def _load_single_source_reference(task, source: str) -> PlotArtifacts | None:
@@ -668,37 +510,6 @@ def _run_full_external(task, artifacts, local_center: str, external_source: str,
         print(f"\\caption{{{full_external_caption(prepared, metric, visual)}}}")
         for output in outputs:
             print("figure: " + str(Path(output).relative_to(config.dir_root)))
-
-
-def _run_fixed_local(task, artifacts, local_center: str, external_source: str, visual, output_dir: Path) -> None:
-    local_reference = _load_single_source_reference(task, local_center)
-    artifacts, local_reference = _common_roster(artifacts, local_reference)
-    prepared: FixedLocalAugmentation = prepare_fixed_local_augmentation(
-        artifacts,
-        local_center=local_center,
-        external_source=external_source,
-        metrics=visual.metrics,
-        ci_level=visual.ci_level,
-        local_only_artifacts=local_reference,
-    )
-    print("Selected augmentation pipeline runs: " + ", ".join(artifacts.run_ids))
-    if prepared.local_only_experiment is not None:
-        print(f"Local-only reference experiment: {prepared.local_only_experiment!r}")
-    if prepared.dropped_runs:
-        print("Unmatched reference runs not drawn (different repeat seeds): " + ", ".join(prepared.dropped_runs))
-    output_root = output_dir / prepared.target
-    for view in prepared.budget_views:
-        for metric in prepared.metrics:
-            stem = output_root / f"{external_source}_to_{local_center}_fixed_local-{view.local_count}_{metric}"
-            outputs = save(
-                make_fixed_local_figure(view, metric, visual),
-                str(stem),
-                formats=visual.output_formats,
-            )
-            print(f"LaTeX caption ({metric_label(metric)}, local={view.local_count:,}):")
-            print(f"\\caption{{{fixed_local_caption(view, metric, visual)}}}")
-            for output in outputs:
-                print("figure: " + str(Path(output).relative_to(config.dir_root)))
 
 
 if __name__ == "__main__":

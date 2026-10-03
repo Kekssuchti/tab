@@ -12,11 +12,11 @@ from src.schemas.training_schemas import scoring_is_lower_better
 
 @dataclass(frozen=True)
 class TransferSummary:
-    """Absolute performance and two positive generalizability losses."""
+    """Absolute performance and signed model-specific and comparative changes."""
 
     performance: pd.DataFrame
-    degradation: pd.DataFrame
-    relative_loss: pd.DataFrame
+    delta_spec: pd.DataFrame
+    delta_comp: pd.DataFrame
     aggregated: AggregatedEvaluation
     external_dataset: str
 
@@ -58,11 +58,12 @@ class TransferSummary:
 
 
 def prepare_transfer_summary(aggregated: AggregatedEvaluation) -> TransferSummary:
-    """Calculate positive degradation and loss to the best external model.
+    """Calculate signed model-specific and comparative generalizability changes.
 
-    Degradation is oriented so positive values are worse transfer. Relative loss
-    is calculated against the model with the best aggregated external point
-    estimate for each metric, making that reference model exactly zero.
+    ``delta_spec`` is target minus source performance, oriented so negative
+    values consistently indicate worse target-cohort performance. ``delta_comp``
+    compares each target-cohort result with the best transferred model for that
+    metric; the reference is exactly zero and worse models are negative.
     """
     external_datasets = [dataset for dataset in aggregated.datasets if dataset != aggregated.trained_on]
     if aggregated.trained_on not in aggregated.datasets or len(external_datasets) != 1:
@@ -78,8 +79,8 @@ def prepare_transfer_summary(aggregated: AggregatedEvaluation) -> TransferSummar
     indexed_points = performance.set_index(["model_instance", "dataset", "metric"])["estimate"]
     names_by_instance = aggregated.model_metadata.set_index("model_instance")["model_name"]
     alpha = (1.0 - aggregated.ci_level) / 2.0
-    degradation_rows: list[dict[str, object]] = []
-    relative_rows: list[dict[str, object]] = []
+    delta_spec_rows: list[dict[str, object]] = []
+    delta_comp_rows: list[dict[str, object]] = []
 
     for metric in aggregated.metrics:
         internal_scores = aggregated.scores(aggregated.trained_on, metric)
@@ -97,45 +98,45 @@ def prepare_transfer_summary(aggregated: AggregatedEvaluation) -> TransferSummar
             internal_point = float(indexed_points.loc[(instance, aggregated.trained_on, metric)])
             external_point = float(indexed_points.loc[(instance, external_dataset, metric)])
             if lower_is_better:
-                degradation_estimate = external_point - internal_point
-                degradation_draws = external_scores[instance] - internal_scores[instance]
-                relative_estimate = external_point - float(best_value)
-                relative_draws = external_scores[instance] - external_scores[best_instance]
+                delta_spec_estimate = internal_point - external_point
+                delta_spec_draws = internal_scores[instance] - external_scores[instance]
+                delta_comp_estimate = float(best_value) - external_point
+                delta_comp_draws = external_scores[best_instance] - external_scores[instance]
             else:
-                degradation_estimate = internal_point - external_point
-                degradation_draws = internal_scores[instance] - external_scores[instance]
-                relative_estimate = float(best_value) - external_point
-                relative_draws = external_scores[best_instance] - external_scores[instance]
+                delta_spec_estimate = external_point - internal_point
+                delta_spec_draws = external_scores[instance] - internal_scores[instance]
+                delta_comp_estimate = external_point - float(best_value)
+                delta_comp_draws = external_scores[instance] - external_scores[best_instance]
 
-            degradation_lower, degradation_upper = degradation_draws.quantile([alpha, 1.0 - alpha])
-            relative_lower, relative_upper = relative_draws.quantile([alpha, 1.0 - alpha])
+            delta_spec_lower, delta_spec_upper = delta_spec_draws.quantile([alpha, 1.0 - alpha])
+            delta_comp_lower, delta_comp_upper = delta_comp_draws.quantile([alpha, 1.0 - alpha])
             common = {
                 "model_name": str(names_by_instance.loc[instance]),
                 "model_instance": instance,
                 "metric": metric,
             }
-            degradation_rows.append(
+            delta_spec_rows.append(
                 {
                     **common,
-                    "estimate": degradation_estimate,
-                    "lower": float(degradation_lower),
-                    "upper": float(degradation_upper),
+                    "estimate": delta_spec_estimate,
+                    "lower": float(delta_spec_lower),
+                    "upper": float(delta_spec_upper),
                 }
             )
-            relative_rows.append(
+            delta_comp_rows.append(
                 {
                     **common,
-                    "estimate": relative_estimate,
-                    "lower": float(relative_lower),
-                    "upper": float(relative_upper),
+                    "estimate": delta_comp_estimate,
+                    "lower": float(delta_comp_lower),
+                    "upper": float(delta_comp_upper),
                     "reference_model_instance": best_instance,
                 }
             )
 
     return TransferSummary(
         performance=performance,
-        degradation=pd.DataFrame(degradation_rows),
-        relative_loss=pd.DataFrame(relative_rows),
+        delta_spec=pd.DataFrame(delta_spec_rows),
+        delta_comp=pd.DataFrame(delta_comp_rows),
         aggregated=aggregated,
         external_dataset=external_dataset,
     )

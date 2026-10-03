@@ -22,9 +22,9 @@ Two tables per metric:
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
-from src.plotting.defaults import dataset_label, metric_label
+from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label
 from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
 from src.plotting.utils import MissingExperimentError, PairwiseSummary, RankSummary, load_pairwise_inputs
 from src.plotting.utils.pairwise import pairwise_matrix_to_latex, rank_table_to_latex
@@ -44,7 +44,7 @@ class DataSettings:
 
 
 @dataclass(frozen=True)
-class TableSettings:
+class TableSettings(MetricPanelSettings):
     """All locally editable table choices."""
 
     metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
@@ -53,7 +53,6 @@ class TableSettings:
     alpha: float = 0.05
     reference_model: str | None = "xgboost"
     exclude_models: tuple[str, ...] | None = None
-    score_scale: float = 100.0
     win_digits: int = 1
     delta_digits: int = 2
     rank_digits: int = 2
@@ -146,7 +145,7 @@ def main() -> None:
         if experiment_name is None:
             warn_skipped(task, "the intended experiment has not been registered yet")
             continue
-        tables = replace(TABLES, metrics=task.metrics, score_scale=task.score_scale)
+        tables = TABLES
         try:
             summary, ranks = load_pairwise_inputs(
                 experiment_name,

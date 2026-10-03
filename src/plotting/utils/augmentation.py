@@ -1,16 +1,9 @@
-"""Prepare augmentation curves: local-only versus combined training.
+"""Prepare full-external augmentation curves: local-only versus combined training.
 
-Two RQ2 designs share this preparation. In both, one source is the designated
-target center (local) and the other is the external source.
-
-* Full-external augmentation (F7) fixes the complete external training pool and
-  varies the number of local observations. Its combined runs therefore record one
-  full-pool entry and one integer local count, and the measured external count is
-  the remainder of the realized training size.
-* Fixed-local augmentation (F8) fixes a local budget and varies the number of
-  added external observations. The local budget may be an integer or the complete
-  pool; the external additions are integers, and the realized training size has
-  to equal their sum.
+The RQ2 design fixes the complete external training pool and varies the number
+of local observations. Its combined runs therefore record one full-pool entry
+and one integer local count, and the measured external count is the remainder of
+the realized training size.
 
 Because the dataset builder draws each source's subset independently from that
 source's split with the training-side sample seed, two runs that share a seed and
@@ -81,7 +74,6 @@ class FullExternalAugmentation:
     external_count: int
     local_counts: tuple[int, ...]
     external_only_measured: bool
-    ignored_runs: tuple[str, ...]
     dropped_runs: tuple[str, ...] = ()
     local_only_experiment: str | None = None
 
@@ -116,81 +108,6 @@ class FullExternalAugmentation:
     @property
     def ci_level(self) -> float:
         return self.grouped.ci_level
-
-
-@dataclass(frozen=True)
-class FixedLocalBudgetView:
-    """Augmentation curves for one fixed local training budget."""
-
-    grouped: GroupedEvaluation
-    conditions: pd.DataFrame
-    target: str
-    local_center: str
-    external_source: str
-    local_count: int
-    local_only_experiment: str | None = None
-    dropped_runs: tuple[str, ...] = ()
-
-    @property
-    def performance(self) -> pd.DataFrame:
-        return self.grouped.performance.merge(self.conditions, on="setting", how="left", validate="many_to_one")
-
-    @property
-    def external_counts(self) -> tuple[int, ...]:
-        counts = set(self.conditions["external_count"].astype(int))
-        return tuple(sorted(count for count in counts if count > 0))
-
-    @property
-    def model_metadata(self) -> pd.DataFrame:
-        return self.grouped.model_metadata
-
-    @property
-    def model_instances(self) -> tuple[str, ...]:
-        return self.grouped.model_instances
-
-    @property
-    def metrics(self) -> tuple[str, ...]:
-        return self.grouped.metrics
-
-    @property
-    def evaluation_centers(self) -> tuple[str, ...]:
-        return EVALUATION_CENTERS
-
-    @property
-    def run_counts(self) -> dict[str, int]:
-        return self.grouped.run_counts
-
-    @property
-    def bootstrap_count(self) -> int:
-        return self.grouped.bootstrap_count
-
-    @property
-    def ci_level(self) -> float:
-        return self.grouped.ci_level
-
-
-@dataclass(frozen=True)
-class FixedLocalAugmentation:
-    """One view per measured local budget; budgets are never averaged together."""
-
-    budget_views: tuple[FixedLocalBudgetView, ...]
-    target: str
-    metrics: tuple[str, ...]
-    local_center: str
-    external_source: str
-    ignored_runs: tuple[str, ...]
-    dropped_runs: tuple[str, ...] = ()
-    local_only_experiment: str | None = None
-
-    @property
-    def local_counts(self) -> tuple[int, ...]:
-        return tuple(view.local_count for view in self.budget_views)
-
-    def for_local_count(self, local_count: int) -> FixedLocalBudgetView:
-        matches = tuple(view for view in self.budget_views if view.local_count == local_count)
-        if len(matches) != 1:
-            raise ValueError(f"Expected one augmentation view for local budget {local_count}; found {len(matches)}")
-        return matches[0]
 
 
 def prepare_full_external_augmentation(
@@ -252,7 +169,7 @@ def prepare_full_external_augmentation(
         raise IncompleteExperimentError(
             f"The {artifacts.experiment_name!r} experiment does not measure the full-external design: no run "
             "records the complete external pool (fraction 1.0) plus a positive local observation count. Runs that "
-            "record an integer external count belong to the fixed-local augmentation figure instead."
+            "record an integer external count and do not belong to this figure."
         )
 
     external_counts = {design.external_count for design in combined}
@@ -260,7 +177,7 @@ def prepare_full_external_augmentation(
         raise ValueError(
             "Full-external augmentation fixes the complete external pool, but the selected runs realize "
             f"{sorted(external_counts)} external observations. A varying external contribution is the "
-            "fixed-local augmentation design, not this one."
+            "different augmentation design, not this one."
         )
     external_count = next(iter(external_counts))
     for design in external_only:
@@ -275,12 +192,6 @@ def prepare_full_external_augmentation(
     measured_local_only, dropped_local_only = _matched_local_cells(measured_local_only, combined, local_counts)
     external_only, dropped_external_only = _selected_external_only(external_only, combined)
 
-    ignored = tuple(
-        design.run_id
-        for design in designs
-        if design.condition == COMBINED and not design.external_is_full
-        or design.condition == LOCAL_ONLY and design.local_count not in set(local_counts)
-    )
     runs = (*external_only, *measured_local_only, *combined)
     setting_by_run = {
         design.run_id: _full_external_setting(design) for design in runs
@@ -310,124 +221,7 @@ def prepare_full_external_augmentation(
         external_count=external_count,
         local_counts=local_counts,
         external_only_measured=bool(external_only),
-        ignored_runs=ignored,
         dropped_runs=(*dropped_local_only, *dropped_external_only),
-        local_only_experiment=None if local_only_artifacts is None else local_only_artifacts.experiment_name,
-    )
-
-
-def prepare_fixed_local_augmentation(
-    artifacts: PlotArtifacts,
-    *,
-    local_center: str,
-    external_source: str,
-    metrics: Sequence[str],
-    ci_level: float = 0.95,
-    tracking_uri: str = DEFAULT_TRACKING_URI,
-    local_only_artifacts: PlotArtifacts | None = None,
-) -> FixedLocalAugmentation:
-    """Prepare F8 with one view per fixed local budget and a varying external count.
-
-    As in F7, the local-only reference may be supplied by the local center's
-    single-source experiment; a budget is plotted only when that reference is
-    measured with the same repeat seeds.
-    """
-    selected_metrics, point_data, designs, bootstrap_ids = _read_run_designs(
-        artifacts,
-        local_center=local_center,
-        external_source=external_source,
-        metrics=metrics,
-        tracking_uri=tracking_uri,
-    )
-
-    combined = tuple(design for design in designs if design.condition == COMBINED and not design.external_is_full)
-    local_only = tuple(design for design in designs if design.condition == LOCAL_ONLY)
-    if local_only_artifacts is not None:
-        reference = _read_reference_designs(
-            local_only_artifacts,
-            role=LOCAL_ONLY,
-            local_center=local_center,
-            external_source=external_source,
-            metrics=metrics,
-            tracking_uri=tracking_uri,
-            expected_target=point_data.target,
-        )
-        local_only = _merge_cells(local_only, reference.designs, description="local-only")
-        bootstrap_ids = {**bootstrap_ids, **reference.bootstrap_ids}
-    budgets = sorted({design.local_count for design in combined})
-    if not budgets:
-        raise IncompleteExperimentError(
-            f"The {artifacts.experiment_name!r} experiment does not measure the fixed-local design: no run "
-            "records a fixed local contribution plus added external observations"
-        )
-
-    references = {
-        count: tuple(design for design in local_only if design.local_count == count) for count in budgets
-    }
-    missing = [count for count, runs in references.items() if not runs]
-    if missing:
-        raise IncompleteExperimentError(
-            "Fixed-local augmentation needs the local-only reference at the same local budget; missing local "
-            "budget(s): " + ", ".join(f"{count:,}" for count in missing)
-        )
-    dropped: list[str] = []
-    for count in budgets:
-        matched, unmatched = _selected_reference_cells(
-            references[count],
-            tuple(design for design in combined if design.local_count == count),
-            count,
-        )
-        references[count] = matched
-        dropped.extend(unmatched)
-
-    ignored = tuple(
-        design.run_id
-        for design in designs
-        if design.condition == LOCAL_ONLY and design.local_count not in set(budgets)
-    )
-    reference_runs = (*local_only, *combined)
-    require_aligned_bootstrap_ids(
-        bootstrap_ids,
-        group_by_run={design.run_id: "fixed-local" for design in reference_runs},
-        description="Fixed-local augmentation runs",
-    )
-
-    views = []
-    for count in budgets:
-        runs = (*references[count], *(d for d in combined if d.local_count == count))
-        setting_by_run = {design.run_id: _fixed_local_setting(design) for design in runs}
-        external_counts = sorted({design.external_count for design in runs if design.condition == COMBINED})
-        setting_order = ("local_only", *(f"external:e{value}" for value in external_counts))
-        grouped = _aggregate(
-            _combine_artifacts(artifacts, local_only_artifacts),
-            runs,
-            setting_by_run,
-            setting_order,
-            selected_metrics,
-            ci_level,
-        )
-        views.append(
-            FixedLocalBudgetView(
-                grouped=grouped,
-                conditions=_conditions_frame(runs, setting_by_run, grouped),
-                target=point_data.target,
-                local_center=local_center,
-                external_source=external_source,
-                local_count=count,
-                local_only_experiment=(
-                    None if local_only_artifacts is None else local_only_artifacts.experiment_name
-                ),
-                dropped_runs=tuple(dropped),
-            )
-        )
-    return FixedLocalAugmentation(
-        budget_views=tuple(views),
-        target=point_data.target,
-        metrics=selected_metrics,
-        local_center=local_center,
-        external_source=external_source,
-        ignored_runs=ignored,
-        dropped_runs=tuple(dropped),
         local_only_experiment=None if local_only_artifacts is None else local_only_artifacts.experiment_name,
     )
 
@@ -637,18 +431,6 @@ def _read_run_designs(
         )
     external_pool = next(iter(external_pools)) if external_pools else None
 
-    local_pools = {
-        item.training_size - int(item.external_configured)
-        for item in raw
-        if item.local_is_full and not item.external_is_full and item.external_configured is not None
-    }
-    if len(local_pools) > 1:
-        raise ValueError(
-            "Augmentation runs that fix the complete local pool disagree on its realized size: "
-            + ", ".join(f"{value:,}" for value in sorted(local_pools))
-        )
-    local_pool = next(iter(local_pools)) if local_pools else None
-
     designs = []
     for item in raw:
         local_count = item.local_configured or 0
@@ -657,19 +439,12 @@ def _read_run_designs(
             if external_pool is not None:
                 external_count = external_pool
                 local_count = item.training_size - external_count
-            elif local_pool is not None:
-                local_count = local_pool
-                external_count = item.training_size - local_count
             else:
                 raise IncompleteExperimentError(
                     f"Run {item.run_id} trains on both complete pools, but no run of "
                     f"{artifacts.experiment_name!r} realizes either pool size, so its contributions "
                     "cannot be determined"
                 )
-            condition = COMBINED
-        elif item.local_is_full and item.external_configured is not None:
-            external_count = int(item.external_configured)
-            local_count = item.training_size - external_count
             condition = COMBINED
         elif item.local_is_full:
             local_count = item.training_size
@@ -796,24 +571,6 @@ def _selected_external_only(
     return matched, dropped
 
 
-def _selected_reference_cells(
-    reference: Sequence[_RunDesign],
-    combined: Sequence[_RunDesign],
-    local_count: int,
-) -> tuple[tuple[_RunDesign, ...], tuple[str, ...]]:
-    """Keep the local-only reference runs whose repeats match one local budget."""
-    combined_seeds = {design.training_sample_seed for design in combined}
-    matched = tuple(design for design in reference if design.training_sample_seed in combined_seeds)
-    if not matched:
-        raise IncompleteExperimentError(
-            f"Local budget {local_count:,} has no local-only reference with the repeat seeds of its combined runs: "
-            f"reference {sorted(design.training_sample_seed for design in reference)} versus combined "
-            f"{sorted(combined_seeds)}"
-        )
-    dropped = tuple(design.run_id for design in reference if design.training_sample_seed not in combined_seeds)
-    return matched, dropped
-
-
 def _full_external_setting(design: _RunDesign) -> str:
     if design.condition == LOCAL_ONLY:
         return f"local_only:n{design.local_count}"
@@ -827,10 +584,6 @@ def _full_external_setting_order(local_counts: Sequence[int], *, measured_zero: 
     for count in local_counts:
         order.extend((f"local_only:n{count}", f"combined:n{count}"))
     return tuple(order)
-
-
-def _fixed_local_setting(design: _RunDesign) -> str:
-    return "local_only" if design.condition == LOCAL_ONLY else f"external:e{design.external_count}"
 
 
 def _require_distinct_sources(local_center: str, external_source: str) -> None:

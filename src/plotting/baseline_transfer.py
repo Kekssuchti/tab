@@ -13,14 +13,19 @@ selected tasks and ``--run-id`` pins explicit pipeline runs.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 from matplotlib.figure import Figure
 
 from src.config import config
-from src.plotting.defaults import dataset_label, metric_label, set_plot_style
+from src.plotting.defaults import (
+    MetricPanelSettings,
+    dataset_label,
+    metric_label,
+    set_plot_style,
+)
 from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
@@ -46,20 +51,21 @@ class DataSettings:
 
 
 @dataclass(frozen=True)
-class VisualSettings:
+class VisualSettings(MetricPanelSettings):
     """All locally editable presentation choices for these figures."""
 
-    metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
+    metrics: tuple[str, ...] = ("roc_auc",)
     show_ci: bool = True
     ci_level: float = 0.95
     figure_width: float = WIDE
-    performance_height_ratio: float = 1.08
-    generalizability_height_ratio: float = 1.08
-    score_scale: float = 100.0
+    # One metric is one grid row; the grid adds these heights, so dropping a
+    # metric shortens the figure instead of stretching the remaining panels.
+    performance_row_height: float = 0.54
+    generalizability_row_height: float = 0.54
     model_axis_label: str = ""
-    performance_axis_template: str = "{metric} on {dataset} (%)"
-    degradation_axis_template: str = "{metric} degradation (pp)"
-    relative_axis_template: str = "{metric} relative external loss (pp)"
+    performance_axis_template: str = "{metric} on {dataset}"
+    delta_spec_axis_template: str = r"$\Delta_{{\mathrm{{spec}}}}$"
+    delta_comp_axis_template: str = r"$\Delta_{{\mathrm{{comp}}}}$"
     shade_baselines: bool = True
     baseline_band_alpha: float = 0.13
     marker_size: float = 4.4
@@ -85,7 +91,7 @@ def make_performance_figure(data: TransferSummary, visual: VisualSettings = VISU
         len(data.metrics),
         2,
         width=visual.figure_width,
-        ratio=visual.performance_height_ratio,
+        row_height=visual.performance_row_height,
         sharey=True,
         squeeze=False,
     )
@@ -126,31 +132,31 @@ def make_performance_figure(data: TransferSummary, visual: VisualSettings = VISU
 
 
 def make_generalizability_figure(data: TransferSummary, visual: VisualSettings = VISUAL) -> Figure:
-    """Draw positive transfer degradation and relative external loss."""
+    """Draw signed model-specific and comparative generalizability changes."""
     set_plot_style()
     fig, axes = figure_grid(
         len(data.metrics),
         2,
         width=visual.figure_width,
-        ratio=visual.generalizability_height_ratio,
+        row_height=visual.generalizability_row_height,
         sharey=False,
         squeeze=False,
     )
     styles = instance_plot_styles(data.model_metadata)
 
     for metric_index, metric in enumerate(data.metrics):
-        degradation = data.degradation.loc[data.degradation["metric"].eq(metric)]
-        relative = data.relative_loss.loc[data.relative_loss["metric"].eq(metric)]
+        delta_spec = data.delta_spec.loc[data.delta_spec["metric"].eq(metric)]
+        delta_comp = data.delta_comp.loc[data.delta_comp["metric"].eq(metric)]
         limits = interval_axis_limits(
-            pd.concat((degradation, relative), ignore_index=True),
+            pd.concat((delta_spec, delta_comp), ignore_index=True),
             scale=visual.score_scale,
             include_zero=True,
             show_ci=visual.show_ci,
             padding_fraction=visual.axis_padding_fraction,
         )
         panels = (
-            (degradation, visual.degradation_axis_template),
-            (relative, visual.relative_axis_template),
+            (delta_spec, visual.delta_spec_axis_template),
+            (delta_comp, visual.delta_comp_axis_template),
         )
         for contrast_index, (rows, axis_template) in enumerate(panels):
             ax = axes[metric_index, contrast_index]
@@ -212,21 +218,24 @@ def generalizability_caption(data: TransferSummary, visual: VisualSettings = VIS
     references = []
     styles = instance_plot_styles(data.model_metadata)
     for metric in data.metrics:
-        rows = data.relative_loss.loc[data.relative_loss["metric"].eq(metric)]
+        rows = data.delta_comp.loc[data.delta_comp["metric"].eq(metric)]
         reference_instance = str(rows["reference_model_instance"].iloc[0])
         references.append(f"{metric_label(metric)}: {styles[reference_instance][1]}")
     uncertainty = _uncertainty_caption(data, visual)
     prevalence_caveat = (
-        " AUPRC degradation also reflects differences in outcome prevalence between cohorts."
+        r" $\Delta_{\mathrm{spec}}$ for AUPRC also reflects differences in outcome prevalence between cohorts."
         if "prc_auc" in data.metrics
         else ""
     )
     return (
-        r"\textbf{Transfer degradation and rank loss expose different generalizability failures.} "
+        r"\textbf{Signed generalizability changes separate model-specific transfer from comparative performance.} "
         f"Models were trained on {dataset_label(data.trained_on)} and transferred to "
-        f"{dataset_label(data.external_dataset)}. Left panels show positive in-domain minus external performance "
-        f"loss; right panels show loss relative to the strongest transferred model ({'; '.join(references)}), whose "
-        f"loss is zero. Points are run-averaged estimates. {uncertainty}{prevalence_caveat}"
+        f"{dataset_label(data.external_dataset)}. Left panels show "
+        r"$\Delta_{\mathrm{spec}}$ (target minus source performance); right panels show "
+        r"$\Delta_{\mathrm{comp}}$ (target performance minus the strongest transferred model: "
+        f"{'; '.join(references)}). Zero denotes no model-specific change or the comparative reference; more "
+        f"negative values indicate worse generalizability. Points are run-averaged estimates. "
+        f"{uncertainty}{prevalence_caveat}"
     )
 
 
@@ -280,7 +289,6 @@ def _parse_args() -> argparse.Namespace:
         choices=DATA_SOURCES,
         help="Training source to rebuild; repeat for several. Defaults to both sources.",
     )
-    parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
 
 
@@ -310,12 +318,12 @@ def main() -> None:
             warn_skipped(task, missing)
             continue
 
-        visual = replace(VISUAL, metrics=task.metrics, score_scale=task.score_scale)
+        visual = VISUAL
         aggregated = aggregate_evaluation_runs(artifacts, metrics=visual.metrics, ci_level=visual.ci_level)
         prepared = prepare_transfer_summary(aggregated)
         print("Selected pipeline runs: " + ", ".join(prepared.run_ids))
 
-        output_dir = args.output_dir / prepared.target
+        output_dir = DATA.output_dir / prepared.target
         output_dir.mkdir(parents=True, exist_ok=True)
         prefix = f"{prepared.trained_on}"
         performance_path = output_dir / f"{prefix}_performance"

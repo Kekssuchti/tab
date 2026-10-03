@@ -9,13 +9,7 @@ from src.plotting.utils.artifacts import (
     load_plot_artifacts,
     select_single_source_full_data_run_ids,
 )
-from src.plotting.utils.augmentation import (
-    FixedLocalAugmentation,
-    FixedLocalBudgetView,
-    FullExternalAugmentation,
-    prepare_fixed_local_augmentation,
-    prepare_full_external_augmentation,
-)
+from src.plotting.utils.augmentation import FullExternalAugmentation, prepare_full_external_augmentation
 from src.plotting.utils.composition import (
     CompositionBudgetView,
     CompositionEvaluation,
@@ -61,8 +55,6 @@ __all__ = [
     "BatchIdentity",
     "CompositionBudgetView",
     "CompositionEvaluation",
-    "FixedLocalAugmentation",
-    "FixedLocalBudgetView",
     "FullDataBenchmark",
     "FullExternalAugmentation",
     "GroupedEvaluation",
@@ -89,7 +81,6 @@ __all__ = [
     "load_pairwise_inputs",
     "load_plot_artifacts",
     "prepare_composition_evaluation",
-    "prepare_fixed_local_augmentation",
     "prepare_full_data_benchmark",
     "prepare_full_external_augmentation",
     "prepare_pairwise_summary",

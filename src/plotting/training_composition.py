@@ -12,14 +12,22 @@ from __future__ import annotations
 
 import argparse
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 from matplotlib.figure import Figure
 
 from src.config import config
-from src.plotting.defaults import DATASET_COLORS, dataset_label, metric_label, set_plot_style, task_label
+from src.plotting.defaults import (
+    DATASET_COLORS,
+    DATASET_NAMES,
+    MetricPanelSettings,
+    dataset_label,
+    metric_label,
+    set_plot_style,
+    task_label,
+)
 from src.plotting.experiments import MAIN_TARGETS, tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
@@ -42,13 +50,12 @@ class DataSettings:
 
 
 @dataclass(frozen=True)
-class VisualSettings:
+class VisualSettings(MetricPanelSettings):
     """Locally editable presentation choices for F6."""
 
     metrics: tuple[str, ...] = ("roc_auc",)  # , "prc_auc")
     show_ci: bool = True
     ci_level: float = 0.95
-    score_scale: float = 100.0
     figure_width: float = WIDE
     panel_height_ratio: float = 0.34
     max_columns: int = 3
@@ -91,7 +98,7 @@ def make_figure(
         row_count,
         column_count,
         width=visual.figure_width,
-        ratio=visual.panel_height_ratio * row_count,
+        row_height=visual.panel_height_ratio,
         sharex=True,
         sharey=True,
         squeeze=False,
@@ -154,10 +161,13 @@ def make_figure(
             fontweight="bold",
         )
 
-    active_axes[0].set_ylabel(f"Absolute {metric_label(metric)} (%)")
+    row_starts = range(0, len(active_axes), column_count)
+    for i in row_starts:
+        active_axes[i].set_ylabel(f"{metric_label(metric)}")
+
     bottom_row_start = (row_count - 1) * column_count
     for ax in active_axes[bottom_row_start:]:
-        ax.set_xlabel(f"{dataset_label('mimic')} share of training observations")
+        ax.set_xlabel(f"{DATASET_NAMES['mimic']} share of training observations")
     handles, labels = active_axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="outside upper center", ncol=2)
     panel_labels(active_axes)
@@ -187,9 +197,7 @@ def caption(
         f"evaluation centers for {task_label(data.target)}.}} Each panel fixes one model at N={data.total_count:,} "
         "training observations and shows exactly two absolute-performance curves: the solid MIMIC-IV curve and "
         "the dashed EUH curve identify the ordinary held-out evaluation centers. Measured training compositions "
-        f"are {measured}. Points summarize {_repeat_coverage(data)}. {uncertainty} {_endpoint_coverage(data)} "
-        "Only measured compositions with complete model and evaluation-center coverage are connected; no missing "
-        "endpoint or composition is synthesized."
+        f"are {measured}. Points summarize {_repeat_coverage(data)}. {uncertainty} Both pure-source endpoints were measured. "
     )
 
 
@@ -203,9 +211,9 @@ def _share_ticks(data: CompositionBudgetView, maximum: int) -> tuple[list[float]
         measured = [measured[index] for index in np.unique(indices)]
     ticks = [0.0, *measured, 100.0]
     labels = [
-        f"0% {dataset_label('mimic')} /\n100% {dataset_label('tudd')}",
+        "0%",
         *[_format_share(value) for value in measured],
-        f"100% {dataset_label('mimic')} /\n0% {dataset_label('tudd')}",
+        "100%",
     ]
     return ticks, labels
 
@@ -233,18 +241,6 @@ def _run_count_text(count: int) -> str:
     return "one pipeline run" if count == 1 else f"{count} repeated pipeline runs"
 
 
-def _endpoint_coverage(data: CompositionBudgetView) -> str:
-    shares = set(data.compositions["mimic_share"].astype(float))
-    missing = []
-    if 0.0 not in shares:
-        missing.append(f"0% {dataset_label('mimic')} / 100% {dataset_label('tudd')}")
-    if 100.0 not in shares:
-        missing.append(f"100% {dataset_label('mimic')} / 0% {dataset_label('tudd')}")
-    if not missing:
-        return "Both pure-source endpoints were measured."
-    return "Unmeasured pure-source endpoint(s) are omitted: " + " and ".join(missing) + "."
-
-
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -255,7 +251,6 @@ def _parse_args() -> argparse.Namespace:
         help="Prediction target to rebuild; repeat for several. Defaults to all three main targets.",
     )
     parser.add_argument("--run-id", action="append", dest="run_ids")
-    parser.add_argument("--output-dir", type=Path, default=DATA.output_dir)
     return parser.parse_args()
 
 
@@ -284,7 +279,7 @@ def main() -> None:
             warn_skipped(task, missing)
             continue
 
-        visual = replace(VISUAL, metrics=task.metrics, score_scale=task.score_scale)
+        visual = VISUAL
         prepared = prepare_composition_evaluation(
             artifacts,
             metrics=visual.metrics,
@@ -292,7 +287,7 @@ def main() -> None:
         )
         print("Selected composition pipeline runs: " + ", ".join(artifacts.run_ids))
         for view in prepared.budget_views:
-            output_dir = args.output_dir / view.target
+            output_dir = DATA.output_dir / view.target
             for metric in view.metrics:
                 stem = output_dir / f"{metric}_budget-{view.total_count}"
                 outputs = save(
