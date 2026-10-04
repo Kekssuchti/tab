@@ -14,10 +14,10 @@ matrix:
   # common metadata to change
   # task
   - path: dataset.target
-    values: ["mortality"]
+    values: ["LOS7"]
   # mlflow name + source, KEEP IN SYNC!
   - path: mlflow.experiment_name
-    values: ["sample_size_tudd_mortality"]
+    values: ["sample_size_tudd_LOS7"]
 
   # repeat runs with other seeds (pretty much dont need to touch)
   - path: random_states

@@ -12,7 +12,7 @@ steps=(
     src.plotting.training_composition
     src.plotting.augmentation
     src.plotting.ablation_estimators
-    src.plotting.feature_distributions
+#    src.plotting.feature_distributions
     src.plotting.pairwise_wins
     src.plotting.pairwise_tables
     src.plotting.retriever_comparison
@@ -21,7 +21,7 @@ steps=(
 
 filter="${1:-}"
 jobs="${JOBS:-3}"
-mem_floor_mb="${MEM_FLOOR_MB:-4096}"
+mem_floor_mb="${MEM_FLOOR_MB:-8192}"
 
 selected=()
 for step in "${steps[@]}"; do
