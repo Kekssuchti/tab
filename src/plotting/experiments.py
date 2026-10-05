@@ -91,6 +91,7 @@ _EXPERIMENT_NAMES: dict[tuple[str, str, str | None, str | None], str] = {
     (SINGLE_SOURCE, "hours_to_readmit_72", "tudd", None): "sample_size_tudd_hours_to_readmit_72",
     (SINGLE_SOURCE, "hours_to_readmit_72", "mimic", None): "sample_size_mimic_hours_to_readmit_72",
     (SINGLE_SOURCE, "LOS7", "tudd", None): "sample_size_tudd_LOS7",
+    (SINGLE_SOURCE, "LOS7", "mimic", None): "sample_size_mimic_LOS7",
     # Constant total budget with a shifting MIMIC/TUDD composition, both centers.
     (COMPOSITION, "mortality", None, None): "mixed_fixed_size_mortality",
     # Full EUH training pool plus a growing local MIMIC contribution.
