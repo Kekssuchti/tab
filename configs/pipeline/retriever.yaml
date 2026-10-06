@@ -11,12 +11,12 @@ dataset:
   random_state: 1337
   train_size: 0.8
   train_on:
-    - dataset: tudd
+    - dataset: mimic
       fraction: 1.0
   custom_retriever:
     train_size: 6400
     test_on:
-      - dataset: tudd
+      - dataset: mimic
         fraction: 1000
     selection_strategy: random
     distance_metric: euclidean
@@ -82,4 +82,4 @@ mlflow:
   enabled: true
   tracking_uri: sqlite:///mlflow.db
   artifact_location: mlartifacts
-  experiment_name: retriever_tudd_mortality
+  experiment_name: retriever_mimic_mortality

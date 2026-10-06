@@ -75,7 +75,12 @@ def recorded_evaluation(monkeypatch):
 
     def run(tables, seed=17):
         calls.clear()
-        result = prediction_metrics.evaluate_classification_models(tables, n_bootstrap=N_DRAWS, random_state=seed)
+        result = prediction_metrics.evaluate_classification_models(
+            tables,
+            n_bootstrap=N_DRAWS,
+            random_state=seed,
+            n_jobs=1,
+        )
         rows = result.metrics.loc[result.metrics.scope.eq("test")]
         captured = {}
         for row, (scores, labels, indices, bootstrap) in zip(rows.itertuples(), calls, strict=True):
@@ -164,6 +169,33 @@ def test_bootstrap_samples_are_paired_reproducible_and_model_order_independent(r
     _, changed = recorded_evaluation(tables, seed=29)
     for dataset in tables:
         assert not np.array_equal(original["a", dataset][0], changed["a", dataset][0])
+
+
+def test_four_model_parallel_bootstrap_is_bitwise_identical_to_sequential():
+    """Exercise real metrics over 1,000 paired draws before and after process dispatch."""
+    tables = {
+        dataset: table.assign(y_pred_extra=np.linspace(.05, .95, len(table)))
+        for dataset, table in _tables().items()
+    }
+    sequential = prediction_metrics.evaluate_classification_models(
+        tables,
+        n_bootstrap=1_000,
+        random_state=17,
+        n_jobs=1,
+    )
+    parallel = prediction_metrics.evaluate_classification_models(
+        tables,
+        n_bootstrap=1_000,
+        random_state=17,
+        n_jobs=2,
+    )
+
+    assert list(sequential.bootstrap_scores.columns[3:]) == ["a", "b", "copy", "extra"]
+    pd.testing.assert_frame_equal(parallel.metrics, sequential.metrics, check_exact=True)
+    pd.testing.assert_frame_equal(parallel.bootstrap_scores, sequential.bootstrap_scores, check_exact=True)
+    assert parallel.pairwise_wins.keys() == sequential.pairwise_wins.keys()
+    for key in sequential.pairwise_wins:
+        pd.testing.assert_frame_equal(parallel.pairwise_wins[key], sequential.pairwise_wins[key], check_exact=True)
 
 
 def test_half_probability_is_negative_and_no_positive_predictions_have_zero_precision():

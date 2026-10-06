@@ -50,15 +50,25 @@ def bootstrap_scores_classification(
     positive_predictions = batch.y_pred[positive]
     n_negative = negative_scores.size
     n_positive = positive_scores.size
-    sample_y_true = np.r_[np.zeros(n_negative, dtype=np.int8), np.ones(n_positive, dtype=np.int8)]
+    negative_score_groups, positive_score_groups, n_score_groups = _score_groups(
+        negative_scores,
+        positive_scores,
+    )
     output = np.empty((6, n_bootstrap))
 
     for bootstrap_index in range(n_bootstrap):
         negative_sample = rng.integers(n_negative, size=n_negative)
         positive_sample = rng.integers(n_positive, size=n_positive)
-        sample_scores = np.concatenate((negative_scores[negative_sample], positive_scores[positive_sample]))
+        negative_group_counts = np.bincount(
+            negative_score_groups[negative_sample],
+            minlength=n_score_groups,
+        )[::-1]
+        positive_group_counts = np.bincount(
+            positive_score_groups[positive_sample],
+            minlength=n_score_groups,
+        )[::-1]
 
-        roc_auc, prc_auc = _bootstrap_ranking_metrics(sample_y_true, sample_scores)
+        roc_auc, prc_auc = _bootstrap_ranking_metrics(negative_group_counts, positive_group_counts)
         false_positive = np.count_nonzero(negative_predictions[negative_sample])
         true_positive = np.count_nonzero(positive_predictions[positive_sample])
         confusion_scores = _confusion_scores(
@@ -72,21 +82,28 @@ def bootstrap_scores_classification(
     return output
 
 
-def _bootstrap_ranking_metrics(
-    y_true: np.ndarray,
-    positive_probability: np.ndarray,
-) -> tuple[float, float]:
-    """Calculate AUROC and average precision with one shared score sort."""
-    order = np.argsort(positive_probability, kind="stable")[::-1]
-    ordered_y_true = y_true[order]
-    ordered_probability = positive_probability[order]
-    group_ends = np.r_[
-        np.flatnonzero(ordered_probability[1:] != ordered_probability[:-1]),
-        y_true.size - 1,
-    ]
+def _score_groups(
+    negative_scores: np.ndarray,
+    positive_scores: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Map fixed model scores to ascending tie-group indices once."""
+    _, score_groups = np.unique(
+        np.concatenate((negative_scores, positive_scores)),
+        return_inverse=True,
+    )
+    n_negative = negative_scores.size
+    return score_groups[:n_negative], score_groups[n_negative:], int(score_groups.max()) + 1
 
-    true_positive = np.cumsum(ordered_y_true)[group_ends]
-    false_positive = group_ends + 1 - true_positive
+
+def _bootstrap_ranking_metrics(
+    negative_group_counts: np.ndarray,
+    positive_group_counts: np.ndarray,
+) -> tuple[float, float]:
+    """Calculate AUROC and average precision from descending score-group counts."""
+    represented_groups = (negative_group_counts + positive_group_counts) != 0
+    true_positive = np.cumsum(positive_group_counts)[represented_groups]
+    false_positive = np.cumsum(negative_group_counts)[represented_groups]
+    positive_increments = positive_group_counts[represented_groups]
     n_positive = true_positive[-1]
     n_negative = false_positive[-1]
 
@@ -95,7 +112,7 @@ def _bootstrap_ranking_metrics(
         np.r_[0, false_positive],
     ) / (n_positive * n_negative)
     precision = true_positive / (true_positive + false_positive)
-    prc_auc = np.sum(np.diff(np.r_[0, true_positive]) * precision) / n_positive
+    prc_auc = np.sum(positive_increments * precision) / n_positive
     return float(roc_auc), float(prc_auc)
 
 
