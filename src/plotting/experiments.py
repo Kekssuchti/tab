@@ -200,41 +200,14 @@ def reciprocal_single_source(task: PlotExperiment) -> PlotExperiment:
     """Return the opposite-center single-source input for the same target."""
     if task.family != SINGLE_SOURCE or task.training_source is None or task.evaluation_center is not None:
         raise ValueError(f"Reciprocal lookup requires a single-source task; received {task}")
-    reciprocal_source = _other_source(task.training_source)
-    matches = tuple(
-        candidate
-        for candidate in PLOT_EXPERIMENTS
-        if candidate.family == task.family
-        and candidate.target == task.target
-        and candidate.training_source == reciprocal_source
-        and candidate.evaluation_center is None
-    )
-    if len(matches) != 1:
-        raise RuntimeError(
-            f"Expected one reciprocal input for {task.target!r} trained on {task.training_source!r}; "
-            f"found {len(matches)}"
-        )
-    return matches[0]
+    return _experiment(SINGLE_SOURCE, task.target, _other_source(task.training_source), None)
 
 
 def retrieval_unrestricted_input(task: PlotExperiment) -> PlotExperiment:
     """Return the declared unrestricted candidate-pool input for a retrieval task."""
     if task.family != RETRIEVAL:
         raise ValueError(f"Unrestricted lookup requires a retrieval input; received {task}")
-    matches = tuple(
-        candidate
-        for candidate in PLOT_EXPERIMENTS
-        if candidate.family == RETRIEVAL_UNRESTRICTED
-        and candidate.target == task.target
-        and candidate.training_source == task.training_source
-        and candidate.evaluation_center == task.evaluation_center
-    )
-    if len(matches) != 1:
-        raise RuntimeError(
-            f"Expected one unrestricted retrieval declaration for {task.target!r}/{task.direction}; "
-            f"found {len(matches)}"
-        )
-    return matches[0]
+    return _experiment(RETRIEVAL_UNRESTRICTED, task.target, task.training_source, task.evaluation_center)
 
 
 def _require_known_filter(

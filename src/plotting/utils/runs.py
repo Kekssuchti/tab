@@ -386,6 +386,15 @@ def require_columns(frame: pd.DataFrame, required: set[str], description: str) -
         raise ValueError(f"Missing {description} columns: {', '.join(missing)}")
 
 
+def validate_model_identity(frame: pd.DataFrame) -> None:
+    """Require every model instance to identify the same model in all rows."""
+    names = frame[["model_instance", "model_name"]].drop_duplicates()
+    conflicts = names.groupby("model_instance", sort=False)["model_name"].nunique()
+    if conflicts.ne(1).any():
+        bad = conflicts[conflicts.ne(1)].index.astype(str).tolist()
+        raise ValueError("Model instances map to multiple model names: " + ", ".join(bad))
+
+
 def preview_cells(cells: set[tuple[object, ...]], maximum: int = 3) -> str:
     if not cells:
         return "none"

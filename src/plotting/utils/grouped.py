@@ -10,6 +10,7 @@ import pandas as pd
 
 from src.plotting.defaults import ordered_models
 from src.plotting.utils.artifacts import PlotArtifacts
+from src.plotting.utils.runs import require_columns, validate_model_identity
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,7 @@ class GroupedEvaluation:
     metrics: tuple[str, ...]
     run_counts: dict[str, int]
     bootstrap_count: int
-    ci_level: float
+    ci_level: float | None
 
 
 def aggregate_runs_by_setting(
@@ -36,14 +37,18 @@ def aggregate_runs_by_setting(
     setting_order: Sequence[str] | None = None,
     metrics: Sequence[str],
     runtime_columns: Sequence[str] = (),
-    ci_level: float = 0.95,
+    ci_level: float | None = 0.95,
 ) -> GroupedEvaluation:
-    """Average repeated runs within settings and recompute bootstrap intervals."""
+    """Average repeated runs within settings and recompute bootstrap intervals.
+
+    Draws must align within a setting, including across runs, models, metrics,
+    and evaluation cohorts. Different settings can have different draw plans.
+    """
     selected_metrics = tuple(dict.fromkeys(metrics))
     runtime_columns = tuple(dict.fromkeys(runtime_columns))
     if not selected_metrics:
         raise ValueError("metrics must contain at least one metric")
-    if not 0 < ci_level < 1:
+    if ci_level is not None and not 0 < ci_level < 1:
         raise ValueError("ci_level must lie strictly between zero and one")
 
     run_map = {str(run_id): str(setting) for run_id, setting in setting_by_run.items()}
@@ -76,19 +81,25 @@ def aggregate_runs_by_setting(
         "bootstrap_id",
         "score",
     }
-    _require_columns(artifacts.metrics, required_points, "evaluation metrics")
-    _require_columns(artifacts.bootstrap_scores, required_bootstrap, "bootstrap scores")
+    require_columns(artifacts.metrics, required_points, "evaluation metrics")
+    require_columns(artifacts.bootstrap_scores, required_bootstrap, "bootstrap scores")
 
     points = artifacts.metrics.loc[
         artifacts.metrics["scope"].eq("test") & artifacts.metrics["statistic"].eq("point")
     ].copy()
     bootstraps = artifacts.bootstrap_scores.loc[artifacts.bootstrap_scores["metric"].isin(selected_metrics)].copy()
+    if points.empty or bootstraps.empty:
+        raise ValueError("Selected artifacts do not contain both point metrics and bootstrap scores")
+    point_runs = set(points["pipeline_mlflow_run_id"].astype(str))
+    bootstrap_runs = set(bootstraps["pipeline_mlflow_run_id"].astype(str))
+    if point_runs != artifact_runs or bootstrap_runs != artifact_runs:
+        raise ValueError("Selected point and bootstrap artifacts must cover exactly the selected pipeline runs")
     for frame in (points, bootstraps):
         frame["pipeline_mlflow_run_id"] = frame["pipeline_mlflow_run_id"].astype(str)
         frame["model_instance"] = frame["model_instance"].astype(str)
         frame["model_name"] = frame["model_name"].astype(str)
         frame["setting"] = frame["pipeline_mlflow_run_id"].map(run_map)
-        _validate_model_identity(frame)
+        validate_model_identity(frame)
     if points["setting"].isna().any() or bootstraps["setting"].isna().any():
         raise ValueError("Selected artifacts contain pipeline runs without a setting assignment")
 
@@ -110,16 +121,19 @@ def aggregate_runs_by_setting(
 
     point_columns = [*selected_metrics, *runtime_columns]
     points.loc[:, point_columns] = points.loc[:, point_columns].apply(pd.to_numeric, errors="coerce")
-    if points.loc[:, point_columns].isna().any().any():
-        raise ValueError("Selected metric and runtime values must be numeric and non-missing")
+    if points.loc[:, point_columns].isna().any().any() or not np.isfinite(points[point_columns]).all().all():
+        raise ValueError("Selected metric and runtime values must be finite numeric values")
     point_means = points.groupby(["setting", "model_name", "model_instance", "dataset"], sort=False, as_index=False)[
         list(selected_metrics)
     ].mean()
 
     bootstraps["score"] = pd.to_numeric(bootstraps["score"], errors="coerce")
     bootstraps["bootstrap_id"] = pd.to_numeric(bootstraps["bootstrap_id"], errors="coerce")
-    if bootstraps[["score", "bootstrap_id"]].isna().any().any():
-        raise ValueError("Bootstrap scores and IDs must be numeric and non-missing")
+    if (
+        bootstraps[["score", "bootstrap_id"]].isna().any().any()
+        or not np.isfinite(bootstraps[["score", "bootstrap_id"]]).all().all()
+    ):
+        raise ValueError("Bootstrap scores and IDs must be finite numeric values")
     duplicate_keys = [
         "pipeline_mlflow_run_id",
         "dataset",
@@ -129,23 +143,25 @@ def aggregate_runs_by_setting(
     ]
     if bootstraps.duplicated(duplicate_keys).any():
         raise ValueError("Bootstrap artifacts contain duplicate run/dataset/metric/bootstrap/model rows")
+    _validate_bootstrap_cells(points, bootstraps, selected_metrics)
 
     averaged_bootstraps = bootstraps.groupby(
         ["setting", "dataset", "metric", "bootstrap_id", "model_name", "model_instance"],
         sort=False,
         as_index=False,
     )["score"].mean()
-    alpha = (1.0 - ci_level) / 2.0
-    intervals = (
-        averaged_bootstraps.groupby(
-            ["setting", "dataset", "metric", "model_name", "model_instance"],
-            sort=False,
-        )["score"]
-        .quantile([alpha, 1.0 - alpha])
-        .unstack()
-        .reset_index()
-        .rename(columns={alpha: "lower", 1.0 - alpha: "upper"})
-    )
+    interval_keys = ["setting", "dataset", "metric", "model_name", "model_instance"]
+    if ci_level is None:
+        intervals = averaged_bootstraps[interval_keys].drop_duplicates().assign(lower=np.nan, upper=np.nan)
+    else:
+        alpha = (1.0 - ci_level) / 2.0
+        intervals = (
+            averaged_bootstraps.groupby(interval_keys, sort=False)["score"]
+            .quantile([alpha, 1.0 - alpha])
+            .unstack()
+            .reset_index()
+            .rename(columns={alpha: "lower", 1.0 - alpha: "upper"})
+        )
 
     performance_rows = []
     for metric in selected_metrics:
@@ -186,12 +202,30 @@ def aggregate_runs_by_setting(
     )
 
 
-def _validate_model_identity(frame: pd.DataFrame) -> None:
-    identity = frame[["model_instance", "model_name"]].drop_duplicates()
-    conflicts = identity.groupby("model_instance", sort=False)["model_name"].nunique()
-    if conflicts.ne(1).any():
-        bad = conflicts[conflicts.ne(1)].index.astype(str).tolist()
-        raise ValueError("Model instances map to multiple model names: " + ", ".join(bad))
+def _validate_bootstrap_cells(points: pd.DataFrame, bootstraps: pd.DataFrame, metrics: Sequence[str]) -> None:
+    """Require complete paired draws inside every experimental setting."""
+    cell_keys = ["pipeline_mlflow_run_id", "dataset", "metric", "model_instance"]
+    expected = {
+        (row.pipeline_mlflow_run_id, row.dataset, metric, row.model_instance)
+        for row in points.itertuples()
+        for metric in metrics
+    }
+    ids = bootstraps.groupby(cell_keys, sort=False)["bootstrap_id"].agg(lambda values: tuple(sorted(values)))
+    observed = set(ids.index.tolist())
+    if expected != observed:
+        raise ValueError(
+            "Bootstrap artifacts have incomplete model scores or unmatched cells: "
+            f"missing={len(expected - observed)}, extra={len(observed - expected)}"
+        )
+    cells = ids.reset_index(name="draw_ids")
+    cells["setting"] = cells["pipeline_mlflow_run_id"].map(
+        points.drop_duplicates("pipeline_mlflow_run_id").set_index("pipeline_mlflow_run_id")["setting"]
+    )
+    for setting, group in cells.groupby("setting", sort=False):
+        if group["draw_ids"].nunique() != 1:
+            raise ValueError(
+                f"Bootstrap artifacts have incomplete model scores or misaligned bootstrap IDs in setting {setting!r}"
+            )
 
 
 def _validate_point_cells(points: pd.DataFrame, datasets: Sequence[str]) -> None:
@@ -253,9 +287,3 @@ def _preview_index(index: pd.Index, maximum: int = 3) -> str:
     values = [str(value) for value in index[:maximum]]
     suffix = f" (+{len(index) - maximum} more)" if len(index) > maximum else ""
     return ", ".join(values) + suffix
-
-
-def _require_columns(frame: pd.DataFrame, required: set[str], description: str) -> None:
-    missing = sorted(required - set(frame.columns))
-    if missing:
-        raise ValueError(f"Missing {description} columns: {', '.join(missing)}")
