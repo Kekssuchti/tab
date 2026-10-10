@@ -21,11 +21,13 @@ import pandas as pd
 
 from mlflow import MlflowClient
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI
+from src.mlflow.tracking_contract import ARTIFACT_CONFIG
 from src.plotting.utils.artifacts import PlotArtifacts
 from src.plotting.utils.grouped import GroupedEvaluation, aggregate_runs_by_setting, require_grouped_coverage
 from src.plotting.utils.runs import (
     IncompleteExperimentError,
     RunPointData,
+    read_json_artifact,
     read_train_on_design,
     read_training_sample_seed,
     require_aligned_bootstrap_ids,
@@ -41,6 +43,46 @@ EXTERNAL_ONLY = "external_only"
 
 CONDITION_LABELS = {LOCAL_ONLY: "Local only", COMBINED: "Full external + local"}
 EVALUATION_CENTERS = PREDICTION_DATASETS
+
+
+def reuse_full_pool_runs(
+    artifacts: PlotArtifacts,
+    reciprocal: PlotArtifacts,
+    *,
+    tracking_uri: str = DEFAULT_TRACKING_URI,
+) -> PlotArtifacts:
+    """Fill missing both-full endpoints from the same target's reciprocal sweep, matched by seeds."""
+    client = MlflowClient(tracking_uri=tracking_uri)
+    seeds_by_run = {}
+    full_runs: set[str] = set()
+    for run_id in dict.fromkeys((*artifacts.run_ids, *reciprocal.run_ids)):
+        payload = read_json_artifact(client, run_id, ARTIFACT_CONFIG)
+        design = read_train_on_design(client, run_id)
+        seeds_by_run[run_id] = tuple(sorted(payload["random_states"].items()))
+        if all(design.is_full_pool(source) for source in PREDICTION_DATASETS):
+            full_runs.add(run_id)
+
+    wanted = {seeds_by_run[run_id] for run_id in artifacts.run_ids}
+    present = {seeds_by_run[run_id] for run_id in artifacts.run_ids if run_id in full_runs}
+    borrowed = []
+    for run_id in reciprocal.run_ids:
+        seeds = seeds_by_run[run_id]
+        if run_id in full_runs and seeds in wanted and seeds not in present:
+            borrowed.append(run_id)
+            present.add(seeds)
+    if not borrowed:
+        return artifacts
+    print(
+        f"Reusing both-full endpoint(s) from {reciprocal.experiment_name!r} "
+        f"in {artifacts.experiment_name!r}: {', '.join(borrowed)}"
+    )
+    combined = _combine_artifacts(artifacts, select_artifact_runs(reciprocal, borrowed))
+    return PlotArtifacts(
+        metrics=combined.metrics,
+        bootstrap_scores=combined.bootstrap_scores,
+        experiment_name=artifacts.experiment_name,
+        run_ids=combined.run_ids,
+    )
 
 
 @dataclass(frozen=True)

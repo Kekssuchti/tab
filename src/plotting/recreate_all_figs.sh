@@ -14,14 +14,14 @@ steps=(
     src.plotting.ablation_estimators
 #    src.plotting.feature_distributions
     src.plotting.pairwise_wins
-    src.plotting.pairwise_tables
-    src.plotting.retriever_comparison
+#    src.plotting.pairwise_tables
+#    src.plotting.retriever_comparison
     src.plotting.retrieval_budget
 )
 
 filter="${1:-}"
 jobs="${JOBS:-3}"
-mem_floor_mb="${MEM_FLOOR_MB:-8192}"
+mem_floor_mb="${MEM_FLOOR_MB:-13192}"
 
 selected=()
 for step in "${steps[@]}"; do

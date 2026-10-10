@@ -97,6 +97,8 @@ _EXPERIMENT_NAMES: dict[tuple[str, str, str | None, str | None], str] = {
     # Full EUH training pool plus a growing local MIMIC contribution.
     (AUGMENTATION_FULL_EXTERNAL, "mortality", "tudd", "mimic"): "mixed_sample_size_mimic_mortality",
     (AUGMENTATION_FULL_EXTERNAL, "mortality", "mimic", "tudd"): "mixed_sample_size_tudd_mortality",
+    (AUGMENTATION_FULL_EXTERNAL, "LOS7", "tudd", "mimic"): "mixed_sample_size_mimic_LOS7",
+    (AUGMENTATION_FULL_EXTERNAL, "LOS7", "mimic", "tudd"): "mixed_sample_size_tudd_LOS7",
     (RETRIEVAL, "mortality", "tudd", "tudd"): "retriever_tudd_mortality",
 }
 

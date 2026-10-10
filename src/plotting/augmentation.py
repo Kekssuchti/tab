@@ -28,7 +28,9 @@ import pandas as pd
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
+from mlflow import MlflowClient
 from src.config import config
+from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI
 from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style, task_label
 from src.plotting.experiments import DATA_SOURCES, MAIN_TARGETS, tasks_for, warn_skipped
 from src.plotting.scientific_figstyle import BASELINE, PALETTE, WIDE, figure_grid, panel_labels, save
@@ -40,13 +42,14 @@ from src.plotting.utils import (
     load_plot_artifacts,
     prepare_full_external_augmentation,
 )
-from src.plotting.utils.augmentation import COMBINED, EXTERNAL_ONLY, LOCAL_ONLY
+from src.plotting.utils.augmentation import COMBINED, EXTERNAL_ONLY, LOCAL_ONLY, reuse_full_pool_runs
 from src.plotting.utils.rendering import (
     instance_plot_styles,
     interval_axis_limits,
     log_sample_ticks,
     short_count,
 )
+from src.plotting.utils.runs import read_training_sample_seed, select_artifact_runs
 
 
 @dataclass(frozen=True)
@@ -384,6 +387,7 @@ def _parse_args() -> argparse.Namespace:
         help="Designated target center; repeat for several. Defaults to both centers.",
     )
     parser.add_argument("--run-id", action="append", dest="run_ids")
+    parser.add_argument("--seed", type=int, help="Keep augmentation runs with this training_sample_seed.")
     return parser.parse_args()
 
 
@@ -409,6 +413,35 @@ def main() -> None:
         except MissingExperimentError as missing:
             warn_skipped(task, missing)
             continue
+
+        if args.seed is not None:
+            client = MlflowClient(tracking_uri=DEFAULT_TRACKING_URI)
+            selected_ids = [
+                run_id
+                for run_id in artifacts.run_ids
+                if read_training_sample_seed(client, run_id) == args.seed
+            ]
+            if not selected_ids:
+                warn_skipped(task, f"no augmentation runs record training_sample_seed={args.seed}")
+                continue
+            artifacts = select_artifact_runs(artifacts, selected_ids)
+
+        reciprocal_tasks = tasks_for(
+            "augmentation_full_external", [task.target], evaluation_centers=[str(task.training_source)]
+        )
+        reciprocal_name = reciprocal_tasks[0].experiment_name
+        if reciprocal_name is not None:
+            try:
+                reciprocal = load_plot_artifacts(
+                    reciprocal_name,
+                    models=DATA.models,
+                    exclude_models=DATA.exclude_models,
+                    expected_target=task.target,
+                )
+            except MissingExperimentError as missing:
+                print(f"note: reciprocal full-data endpoint unavailable: {missing}", file=sys.stderr)
+            else:
+                artifacts = reuse_full_pool_runs(artifacts, reciprocal)
 
         try:
             _run_full_external(

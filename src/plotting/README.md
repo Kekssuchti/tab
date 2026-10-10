@@ -103,6 +103,39 @@ Every figure path reads `plots/<experiment>/<target>/<source>_<what>.pdf`:
 Estimator-count ablations and feature distributions are investigation figures and
 keep their own flat directories.
 
+### Baseline uncertainty versions
+
+Set `VISUAL.plot_type` in `baseline_transfer.py` to select:
+
+- `"current"`: mean across runs with the existing 95% percentile
+  interval from aligned, run-averaged cohort-bootstrap draws.
+- `"bootstrap"`: a small hollow point and its own bootstrap CI for each run,
+  plus a larger filled mean point without a whisker.
+- `"min_max"` (default): one filled mean point and one whisker spanning the
+  minimum and maximum run estimates. Individual runs are not drawn. This range
+  is not a CI.
+
+The setting applies to both performance and generalizability figures. Contrasts
+are calculated within each run; the comparative reference is the strongest
+model by mean external performance and stays fixed across repeats. Run count
+comes from the selected logical repeats, rather than assuming exactly three.
+`show_ci=False` hides whiskers in every version; individual run points remain
+visible only in the `"bootstrap"` version.
+
+CLI overrides and comparison rendering:
+
+```bash
+uv run python -m src.plotting.baseline_transfer --plot-type bootstrap
+uv run python -m src.plotting.baseline_transfer --plot-type min_max
+uv run python -m src.plotting.baseline_transfer --plot-type all --output-dir plots/baseline/versions
+```
+
+The current version retains the original filenames. Alternatives append
+`_bootstrap` or `_min_max`; each version is exported as PDF and SVG. The
+comparison outputs under `plots/baseline/versions/<target>/` preserve existing
+baseline PDFs. Captions printed by the script describe each version's markers
+and interval interpretation.
+
 ### Figure geometry
 
 Every height is stated per grid row, as a fraction of the figure width:
@@ -187,6 +220,14 @@ single-source sweeps already registered for that center, matched cell by cell on
 left out. All inputs of one figure must share one model roster — models missing
 from any input are reported and dropped, and a pinned `DATA.models` roster is an
 error if an input does not cover it.
+
+F7 also reuses a missing `1.0 + 1.0` endpoint from the registered reciprocal
+mixed-sample sweep for the same seeds, keeping existing endpoints. To plot the
+completed LOS7 seed:
+
+```bash
+uv run python -m src.plotting.augmentation --target LOS7 --seed 1337
+```
 
 Then rebuild that figure:
 

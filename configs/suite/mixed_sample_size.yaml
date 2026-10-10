@@ -10,8 +10,9 @@ matrix:
   - path: dataset.train_on.0.dataset
     values: ["tudd"]
   - path: dataset.train_on.0.fraction
-    values: [100, 200, 400, 800, 1600, 3200, 6400, 12800, 1.0]
+    values: [1.0] #100, 200, 400, 800, 1600, 3200, 6400, 12800,
     # still need 25600 and 1.0 run
+    # for this need 1 repeat of 1.0
 
   - path: dataset.train_on.1.dataset
     values: ["mimic"]
@@ -30,7 +31,7 @@ matrix:
   # repeat runs with other seeds (pretty much dont need to touch)
   - path: random_states
     values:
-      - { model_training_seed: 1337, training_sample_seed: 1337, cv_split_seed: 1337 }
+      #  - { model_training_seed: 1337, training_sample_seed: 1337, cv_split_seed: 1337 }
       - { model_training_seed: 1338, training_sample_seed: 1338, cv_split_seed: 1338 }
     #  - { model_training_seed: 1339, training_sample_seed: 1339, cv_split_seed: 1339 }
     #  - { model_training_seed: 1341, training_sample_seed: 1341, cv_split_seed: 1341 }

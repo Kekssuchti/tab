@@ -57,13 +57,17 @@ class TransferSummary:
         return self.aggregated.ci_level
 
 
-def prepare_transfer_summary(aggregated: AggregatedEvaluation) -> TransferSummary:
+def prepare_transfer_summary(
+    aggregated: AggregatedEvaluation, *, reference_by_metric: dict[str, str] | None = None
+) -> TransferSummary:
     """Calculate signed model-specific and comparative generalizability changes.
 
     ``delta_spec`` is target minus source performance, oriented so negative
     values consistently indicate worse target-cohort performance. ``delta_comp``
     compares each target-cohort result with the best transferred model for that
     metric; the reference is exactly zero and worse models are negative.
+    ``reference_by_metric`` fixes the reference across individual repeats to
+    the model selected from their run-averaged performance.
     """
     external_datasets = [dataset for dataset in aggregated.datasets if dataset != aggregated.trained_on]
     if aggregated.trained_on not in aggregated.datasets or len(external_datasets) != 1:
@@ -93,6 +97,9 @@ def prepare_transfer_summary(aggregated: AggregatedEvaluation) -> TransferSummar
         best_instance = next(
             instance for instance in aggregated.model_instances if external_points.loc[instance] == best_value
         )
+        if reference_by_metric is not None:
+            best_instance = reference_by_metric[metric]
+            best_value = float(external_points.loc[best_instance])
 
         for instance in aggregated.model_instances:
             internal_point = float(indexed_points.loc[(instance, aggregated.trained_on, metric)])
