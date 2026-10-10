@@ -62,7 +62,7 @@ def _():
 
     # Training sources are always origins; the target selects normal/readmission files.
     TARGET = "mortality"
-    TRAIN_ON = (("tudd", 0.1),)
+    TRAIN_ON = (("mimic", 1.0),("tudd", 2500))
 
     TEST_SETS = ("mimic", "tudd")
     RANDOM_STATE = 1337
@@ -76,10 +76,10 @@ def _():
     }
     DATASET_SCALER = {"type": "none"}
 
-    MODEL_NAME = "tabpfn-3.5"
+    MODEL_NAME = "kumo_tabular"
 
     MODEL_PARAMS = {
-        "n_estimators": ["auto"]
+        "size": ["small"]
     }
     # Optional model-specific preprocessing override. Set to None to use dataset defaults.
     MODEL_PREPROCESSING = None

@@ -162,6 +162,7 @@ EXAONE_ADAPTER = "src.adapter.exaone_adapter:EXAONEAdapter"
 CAUSILO_ADAPTER = "src.adapter.causilo_adapter:CausiloAdapter"
 LIMIX_V2_ADAPTER = "src.adapter.limix_2_adapter:LimixV2Adapter"
 TABDPT_ADAPTER = "src.adapter.tabdpt_adapter:TabDPTAdapter"
+KUMO_TABULAR_ADAPTER = "src.adapter.kumo_tabular_adapter:KumoTabularAdapter"
 
 
 SEARCH_SPACES = {
@@ -313,6 +314,11 @@ SEARCH_SPACES = {
     "tabdpt": {
         "default": {"n_ensembles": [8]},
     },
+    "kumo_tabular": {
+        "small": {"size": ["small"]},
+        "medium": {"size": ["medium"]},
+        "large": {"size": ["large"]},
+    },
 }
 
 # Note that search spaces with parameters that have only 1 value are still worth it
@@ -349,6 +355,7 @@ _COMMON_REGISTRY = {
     "exaone": ModelSpec(EXAONE_ADAPTER, search_spaces=SEARCH_SPACES["exaone"]),
     "causilo": ModelSpec(CAUSILO_ADAPTER, search_spaces=SEARCH_SPACES["causilo"]),
     "tabdpt": ModelSpec(TABDPT_ADAPTER, search_spaces=SEARCH_SPACES["tabdpt"]),
+    "kumo_tabular": ModelSpec(KUMO_TABULAR_ADAPTER, search_spaces=SEARCH_SPACES["kumo_tabular"]),
 }
 
 MODEL_REGISTRY_CLS = {

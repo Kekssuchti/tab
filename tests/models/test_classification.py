@@ -23,6 +23,7 @@ SMOKE_PARAMS = {
     "exaone": {"ensemble_count": 1, "device": "cuda"},
     "causilo": {"n_estimators": 1, "device": "cuda"},
     "tabdpt": {"n_ensembles": 1, "device": "cuda"},
+    "kumo_tabular": {"n_estimators": 1, "size": "small", "device": "cuda"},
     "tabfm": {"n_estimators": 1, "predict_batch_size": 12},
 }
 CPU_MODELS = {"logistic-regression", "xgboost", "ebm"}
