@@ -5,6 +5,7 @@ from typing import Literal
 
 import pandas as pd
 
+from src.classes.data_registry import data_files_for_kind, dataset_task_for_target
 from src.config import config
 
 _FEATURES = (
@@ -17,9 +18,9 @@ _FEATURES = (
     ("HR+100%mean", "Heart Rate"),
     ("GLU+100%mean", "Glucose"),
     ("MBP+100%mean", "Mean Blood Pressure"),
-    ("Ph+100%mean", "Potential Hydrogen"),
+    ("Ph+100%mean", "pH"),
     ("GCST+100%mean", "Glasgow Coma Scale Total"),
-    ("Sex", "Gender (Female \\%)"),
+    ("Sex", "Sex (Female \\%)"),
     ("PaO2+100%mean", "Partial Pressure of O2"),
     ("FiO2+100%mean", "Fraction of Inspired O2"),
     ("Kalium+100%mean", "Potassium"),
@@ -47,104 +48,91 @@ def descriptive_statistics_table_to_latex(
     filtered_dir: str | Path | None = None,
     type: Literal["normal", "readmission"] = "normal",
 ) -> str:
-    """Return a ready-to-paste LaTeX table for the filtered MIMIC-IV and EUH data.
+    """Return a combined MIMIC-IV/EUH table for one filtered cohort variant.
 
-    Continuous features are reported as mean, sample standard deviation, and
-    percentage missing. ``Sex == 1`` is reported as the female percentage.
-    Outcome percentages are mortality, length of stay over seven days, and
-    readmission within 72 hours. Readmission is calculated from the separately
-    filtered readmission cohorts.
-
-    The table uses the LaTeX ``booktabs`` and ``graphicx`` packages.
+    Report mean, sample SD, and missing percentage before model preprocessing,
+    using all filtered stays (not a training/test split). BMI is derived from
+    weight and height. Female percentage uses observed sex values. Outcome
+    definitions come from the data registry; only outcomes of this variant
+    are included. Requires LaTeX booktabs and graphicx.
     """
+    if type not in ("normal", "readmission"):
+        raise ValueError(f"Unknown cohort variant: {type}")
     data_dir = Path(filtered_dir) if filtered_dir is not None else config.dir_data / "filtered"
-    files = {
-        "mimic": data_dir / "mimic4_mean_100_full.csv",
-        "tudd": data_dir / "tudd_mean_100_full.csv",
-        "mimic_readmission": data_dir / "mimic4_readmission.csv",
-        "tudd_readmission": data_dir / "tudd_readmission.csv",
-    }
-    data = {name: pd.read_csv(path) for name, path in files.items()}
-
-    data = _add_bmi(data)
-
-    required_features = {column for column, _ in _FEATURES} | {"mortality", "LOS"}
-    for dataset in ("mimic", "tudd"):
-        missing = sorted(required_features - set(data[dataset].columns))
+    files = {item.data_origin: data_dir / item.file_name for item in data_files_for_kind(type)}
+    data = _add_bmi({name: pd.read_csv(path) for name, path in files.items()})
+    features = _FEATURES + readmission_extra_feature if type == "readmission" else _FEATURES
+    outcome_specs = (
+        (("hours_to_readmit_72", r"Readmission within 72 h (\%)"),)
+        if type == "readmission"
+        else (("mortality", r"Mortality (\%)"), ("LOS7", r"Length of stay \textgreater 7 days (\%)"))
+    )
+    required = {column for column, _ in features} | (
+        {"hours_to_readmit"} if type == "readmission" else {"mortality", "LOS"}
+    )
+    for name, frame in data.items():
+        missing = sorted(required - set(frame.columns))
         if missing:
-            raise ValueError(f"{files[dataset]} is missing required columns: {', '.join(missing)}")
+            raise ValueError(f"{files[name]} is missing required columns: {', '.join(missing)}")
+        if frame.empty:
+            raise ValueError(f"{files[name]} contains no stays")
 
-    def format_number(value: float) -> str:
+    def number(value: float) -> str:
         return "--" if pd.isna(value) else f"{value:.2f}"
 
-    def feature_cells(dataset: str, column: str) -> list[str]:
-        values = pd.to_numeric(data[dataset][column], errors="coerce")
-        missing_percentage = values.isna().mean() * 100
+    def cells(name: str, column: str) -> list[str]:
+        values = pd.to_numeric(data[name][column], errors="raise")
         if column == "Sex":
-            return [
-                format_number(values.mean() * 100),
-                "--",
-                f"{missing_percentage:.2f}",
-            ]
-        return [
-            format_number(values.mean()),
-            format_number(values.std()),
-            f"{missing_percentage:.2f}",
-        ]
+            if not values.dropna().isin([0, 1]).all():
+                raise ValueError(f"{files[name]}: Sex must encode male=0, female=1")
+            return [number(values.mean() * 100), "--", number(values.isna().mean() * 100)]
+        return [number(values.mean()), number(values.std()), number(values.isna().mean() * 100)]
 
     rows = []
-    if type == "normal":
-        data_tudd_name = "tudd"
-        data_mimic_name = "mimic"
-    else:
-        data_tudd_name = "tudd_readmission"
-        data_mimic_name = "mimic_readmission"
-
-    if type == "readmission":
-        features = _FEATURES + readmission_extra_feature
-    else:
-        features = _FEATURES
-
     for column, label in features:
-        cells = feature_cells(data_mimic_name, column) + feature_cells(data_tudd_name, column)
-        rows.append(f"        {label} & " + " & ".join(cells) + r" \\")
+        rows.append(f"        {label} & " + " & ".join(cells("mimic", column) + cells("tudd", column)) + r" \\")
+    rows.append(r"        \midrule")
+    for target, label in outcome_specs:
+        outcome_cells = []
+        raw_column = "hours_to_readmit" if target == "hours_to_readmit_72" else "LOS" if target == "LOS7" else target
+        for name in ("mimic", "tudd"):
+            # Missing time-to-readmission means no recorded readmission in the registry.
+            missing = 0.0 if type == "readmission" else data[name][raw_column].isna().mean() * 100
+            selected = data[name] if type == "readmission" else data[name].loc[data[name][raw_column].notna()]
+            observed = dataset_task_for_target(target).labels_from(selected)
+            outcome_cells.extend([number(observed.mean() * 100), "--", number(missing)])
+        rows.append(f"        {label} & " + " & ".join(outcome_cells) + r" \\")
 
-    outcomes = (
-        (
-            "Mortality (\\%)",
-            data[data_mimic_name]["mortality"].mean() * 100,
-            data[data_tudd_name]["mortality"].mean() * 100,
-        ),
-        (
-            "Length of stay \\textgreater 7 days (\\%)",
-            data[data_mimic_name]["LOS"].gt(7 * 24).mean() * 100,
-            data[data_tudd_name]["LOS"].gt(7 * 24).mean() * 100,
-        ),
-        (
-            "Readmission (\\%)",
-            data["mimic_readmission"]["hours_to_readmit"].le(3 * 24).mean() * 100,
-            data["tudd_readmission"]["hours_to_readmit"].le(3 * 24).mean() * 100,
-        ),
+    cohort = "readmission" if type == "readmission" else "main"
+    note = (
+        "Readmission denotes a recorded readmission within 72 hours; missing time-to-readmission denotes no recorded readmission."
+        if type == "readmission"
+        else "Length of stay denotes stays longer than seven days."
     )
-    for label, mimic_value, tudd_value in outcomes:
-        rows.append(f"        {label} & {mimic_value:.2f} & -- & 0.00 & {tudd_value:.2f} & -- & 0.00" + r" \\")
-
+    caption = (
+        "Descriptive statistics of the filtered MIMIC-IV and EUH cohorts, using all stays before splitting "
+        "or model preprocessing. SD is the sample standard deviation; missingness is reported as a percentage of all stays. "
+        f"Female and outcome percentages use observed values. BMI is derived from weight and height. {note}"
+    )
     lines = [
+        r"% Requires \usepackage{booktabs,graphicx}",
         r"\begin{table}[htbp]",
         r"    \centering",
+        f"    \\caption{{{caption}}}",
+        f"    \\label{{tab:cohort-descriptive-statistics-{type}}}",
         r"    \resizebox{\linewidth}{!}{%",
         r"    \begin{tabular}{lrrrrrr}",
         r"        \toprule",
         r"        & \multicolumn{3}{c}{\textbf{MIMIC-IV}} & \multicolumn{3}{c}{\textbf{EUH}} \\",
+        f"        & \\multicolumn{{3}}{{c}}{{N = {len(data['mimic']):,}}} & \\multicolumn{{3}}{{c}}{{N = {len(data['tudd']):,}}} "
+        + r"\\",
         r"        \cmidrule(lr){2-4} \cmidrule(lr){5-7}",
-        r"        \textbf{Feature} & Mean & Std & Missing (\%) & Mean & Std & Missing (\%) \\",
+        r"        \textbf{Feature} & Mean & SD & Missing (\%) & Mean & SD & Missing (\%) \\",
         r"        \midrule",
         *rows,
         r"        \bottomrule",
         r"    \end{tabular}%",
         r"    }",
-        r"    \caption{Descriptive statistics of the filtered MIMIC-IV and EUH cohorts. Length of stay denotes stays longer than seven days; readmission denotes readmission within 72 hours.}",
-        r"    \label{tab:cohort-descriptive-statistics}",
         r"\end{table}",
     ]
     return "\n".join(lines)
@@ -257,7 +245,7 @@ def single_df_descriptive_statistics_table_to_latex(
 
 
 def _add_bmi(data: dict) -> dict:
-    for name, df in data.items():
+    for df in data.values():
         if "Height+100%mean" in df.columns and "Weight+100%mean" in df.columns:
             df["BMI"] = df["Weight+100%mean"] / (df["Height+100%mean"] / 100) ** 2
     return data

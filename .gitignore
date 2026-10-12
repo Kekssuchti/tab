@@ -34,3 +34,6 @@ plots/cv_analysis**
 swift.ckpt
 data/plot/**
 diagrams/**
+
+# Locally generated clinical summary tables
+/tables/
