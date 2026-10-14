@@ -166,7 +166,8 @@ def _pairing_report(data: SourceContrastEvaluation) -> None:
     print("Pairing validation:")
     print(
         f"  Models: the same {len(data.model_instances)} configured and successfully evaluated instances "
-        "occur in every selected run from both sources; no exclusions or missing models."
+        "occur in every selected logical repeat from both sources, including complementary model runs; "
+        "no exclusions or missing models."
     )
     for center in data.evaluation_centers:
         evidence = data.pairing_evidence[center]

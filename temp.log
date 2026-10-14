@@ -1,0 +1,370 @@
+running 3 step(s), up to 3 at a time (memory floor 8192 MiB)
+
+=== src.plotting.training_source_contrast
+  note: combined 3 complementary MLflow run group(s): 9d208f03 + dafd5979; 5a7e9905 + 0da654d1; 3c68739a + e77e29d1
+  note: combined 3 complementary MLflow run group(s): 1b36fb5e + b3d721d0; 960fcc80 + 47a16abc; 6b7887e2 + d83af65f
+FIGURE AUDIT /var/home/keks/projects/tab/plots/baseline/mortality/mimic_tudd_source_contrast: 1 problem(s) — fix before using
+  - an axes has no y label
+FIGURE AUDIT /var/home/keks/projects/tab/plots/baseline/LOS7/mimic_tudd_source_contrast: 1 problem(s) — fix before using
+  - an axes has no y label
+FIGURE AUDIT /var/home/keks/projects/tab/plots/baseline/hours_to_readmit_72/mimic_tudd_source_contrast: 1 problem(s) — fix before using
+  - an axes has no y label
+
+=== Mortality [reciprocal full-data source contrast]
+Selected MIMIC-IV full-data runs (44,454 observations): 9d208f03e24644fd84cd6b5f54631ea6, 5a7e9905ab1d4daeb6ebd67210d17e83, 3c68739ace1841578ccab944bd287a4b
+Selected EUH full-data runs (16,379 observations): 1b36fb5e05d54ea1ac1827ca8397b1cd, 960fcc8032bc407a9d168e9bd7b620e4, 6b7887e217a6491b98a33ee454d1b2de
+Pairing validation:
+  Models: the same 10 configured and successfully evaluated instances occur in every selected logical repeat from both sources, including complementary model runs; no exclusions or missing models.
+  MIMIC-IV: one cohort fingerprint across every reciprocal run (41df522b11394fa479fe124e4f3e056de18f2b31be3ada3c8d9bd303c217b1af); exact ordered IDs/labels for 11,114 held-out observations; target=mortality, dataset.random_state=1337, dataset.train_size=0.8, evaluation_bootstrap_seed=1337; prediction schema 1/2 order=('mimic', 'tudd'); exact bootstrap IDs 0..9999 (10,000 draws) across both sources and metrics.
+  EUH: one cohort fingerprint across every reciprocal run (50e24d458a0d42d786534f80da26b596a391cccdcece0f1a8df3f38890d3f5f1); exact ordered IDs/labels for 4,095 held-out observations; target=mortality, dataset.random_state=1337, dataset.train_size=0.8, evaluation_bootstrap_seed=1337; prediction schema 1/2 order=('mimic', 'tudd'); exact bootstrap IDs 0..9999 (10,000 draws) across both sources and metrics.
+LaTeX caption:
+\caption{\textbf{Local rather than external full-data training has model-specific effects for Mortality.} Columns fix the held-out MIMIC-IV and EUH evaluation populations; rows show AUROC. Each point is score(the same model trained on the evaluation center's complete pool) minus score(the same model trained on the other center's complete pool), in percentage points, so positive values favor local training and negative values favor external training. The complete pools contain 44,454 MIMIC-IV observations (3 repeated pipeline runs) and 16,379 EUH observations (3 repeated pipeline runs), selected only from runs explicitly configured with training fraction 1.0; this is an all-available-data comparison, not an equal-budget source-effect estimate. Whiskers are 95\% percentile intervals from 10,000 paired test-cohort bootstrap score differences after averaging repeated full-data runs within each training source by draw. They quantify resampling of each fixed held-out cohort, not training-repeat variation; cohort fingerprints, ordered cohort IDs and labels, split settings, bootstrap seed/count/IDs, and prediction-dataset order were required to match before pairing. Circles denote classical baselines and triangles tabular foundation models.}
+figure: plots/baseline/mortality/mimic_tudd_source_contrast.pdf
+
+=== LOS > 7 d [reciprocal full-data source contrast]
+Selected MIMIC-IV full-data runs (44,454 observations): 3653b4e0031b415ebc83d6c53f3ed775, 4e78bd9c0c774777b0adcadf13c6e39a, 5e07568f004b48798d4a51634d7ebb5f
+Selected EUH full-data runs (16,379 observations): ee570896319a4e7994cf5d09e5115bf4, e20836ab3de245008a6bf1f91cd44ab8, 7a78a07eca04496983a038aedcd82e50
+Pairing validation:
+  Models: the same 10 configured and successfully evaluated instances occur in every selected logical repeat from both sources, including complementary model runs; no exclusions or missing models.
+  MIMIC-IV: one cohort fingerprint across every reciprocal run (2b23e3ff9d4ca0b7bd62f984930cf14a930e665074b7af9abca6128269d91e3b); exact ordered IDs/labels for 11,114 held-out observations; target=LOS7, dataset.random_state=1337, dataset.train_size=0.8, evaluation_bootstrap_seed=1337; prediction schema 2 order=('mimic', 'tudd'); exact bootstrap IDs 0..9999 (10,000 draws) across both sources and metrics.
+  EUH: one cohort fingerprint across every reciprocal run (8019d106647bf953ee3500796987e53b36986e82752a5f494a67f511846e5967); exact ordered IDs/labels for 4,095 held-out observations; target=LOS7, dataset.random_state=1337, dataset.train_size=0.8, evaluation_bootstrap_seed=1337; prediction schema 2 order=('mimic', 'tudd'); exact bootstrap IDs 0..9999 (10,000 draws) across both sources and metrics.
+LaTeX caption:
+\caption{\textbf{Local rather than external full-data training has model-specific effects for LOS > 7 d.} Columns fix the held-out MIMIC-IV and EUH evaluation populations; rows show AUROC. Each point is score(the same model trained on the evaluation center's complete pool) minus score(the same model trained on the other center's complete pool), in percentage points, so positive values favor local training and negative values favor external training. The complete pools contain 44,454 MIMIC-IV observations (3 repeated pipeline runs) and 16,379 EUH observations (3 repeated pipeline runs), selected only from runs explicitly configured with training fraction 1.0; this is an all-available-data comparison, not an equal-budget source-effect estimate. Whiskers are 95\% percentile intervals from 10,000 paired test-cohort bootstrap score differences after averaging repeated full-data runs within each training source by draw. They quantify resampling of each fixed held-out cohort, not training-repeat variation; cohort fingerprints, ordered cohort IDs and labels, split settings, bootstrap seed/count/IDs, and prediction-dataset order were required to match before pairing. Circles denote classical baselines and triangles tabular foundation models.}
+figure: plots/baseline/LOS7/mimic_tudd_source_contrast.pdf
+
+=== Readmission within 72h [reciprocal full-data source contrast]
+Selected MIMIC-IV full-data runs (39,805 observations): c4f2ea95439e4ef882e6c593411761e0, c9add5d8ddcf4672a8580c23232f288a, 77277a2d8da64b1fba9005a4f881c174
+Selected EUH full-data runs (20,213 observations): 46eb52c64dd942e3b51dfff8cd50b182, 5c8bd302e86a4790b4b39a10c6b8231b, 4570fd604ede49f4add380555eaf4ab7
+Pairing validation:
+  Models: the same 10 configured and successfully evaluated instances occur in every selected logical repeat from both sources, including complementary model runs; no exclusions or missing models.
+  MIMIC-IV: one cohort fingerprint across every reciprocal run (188c172b25b91038c0b7db52d888a0146f55476d62557518a9b1b31c8cde9106); exact ordered IDs/labels for 9,952 held-out observations; target=hours_to_readmit_72, dataset.random_state=1337, dataset.train_size=0.8, evaluation_bootstrap_seed=1337; prediction schema 2 order=('mimic', 'tudd'); exact bootstrap IDs 0..9999 (10,000 draws) across both sources and metrics.
+  EUH: one cohort fingerprint across every reciprocal run (48571b1a590bb71ba7363dfc6a9f21ccd9e5af9b77904dce4d84cec48d21d048); exact ordered IDs/labels for 5,054 held-out observations; target=hours_to_readmit_72, dataset.random_state=1337, dataset.train_size=0.8, evaluation_bootstrap_seed=1337; prediction schema 2 order=('mimic', 'tudd'); exact bootstrap IDs 0..9999 (10,000 draws) across both sources and metrics.
+LaTeX caption:
+\caption{\textbf{Local rather than external full-data training has model-specific effects for Readmission within 72h.} Columns fix the held-out MIMIC-IV and EUH evaluation populations; rows show AUROC. Each point is score(the same model trained on the evaluation center's complete pool) minus score(the same model trained on the other center's complete pool), in percentage points, so positive values favor local training and negative values favor external training. The complete pools contain 39,805 MIMIC-IV observations (3 repeated pipeline runs) and 20,213 EUH observations (3 repeated pipeline runs), selected only from runs explicitly configured with training fraction 1.0; this is an all-available-data comparison, not an equal-budget source-effect estimate. Whiskers are 95\% percentile intervals from 10,000 paired test-cohort bootstrap score differences after averaging repeated full-data runs within each training source by draw. They quantify resampling of each fixed held-out cohort, not training-repeat variation; cohort fingerprints, ordered cohort IDs and labels, split settings, bootstrap seed/count/IDs, and prediction-dataset order were required to match before pairing. Circles denote classical baselines and triangles tabular foundation models.}
+figure: plots/baseline/hours_to_readmit_72/mimic_tudd_source_contrast.pdf
+
+=== src.plotting.pairwise_wins
+  note: combined 3 complementary MLflow run group(s): 9d208f03 + dafd5979; 5a7e9905 + 0da654d1; 3c68739a + e77e29d1
+  note: combined 30 complementary MLflow run group(s): 776c8fd1 + c748d50d; 565bbe5a + b29ab21e; 4b0d26c6 + a7f89096 (+27 more)
+figure audit /var/home/keks/projects/tab/plots/baseline/mortality/mimic_roc_auc_cross_cohort: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/baseline/mortality/mimic_paired_forest: 1 problem(s) — fix before using
+  - an axes has no y label
+figure audit /var/home/keks/projects/tab/plots/sample_size/mortality/mimic_roc_auc_ranks: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/sample_size/mortality/mimic_roc_auc_ranks_by_setting: 1 problem(s) — fix before using
+  - overlapping text: 'tabpfn-3.5 (2.5)' over 'tabpfn-3.5-fast (2.8)'; 'tabpfn-3.5-fast (2.8)' over 'tabdpt (4.5)'; 'tabdpt (4.5)' over 'tabfm (4.8)' (+77 more)
+  note: combined 3 complementary MLflow run group(s): 1b36fb5e + b3d721d0; 960fcc80 + 47a16abc; 6b7887e2 + d83af65f
+  note: combined 27 complementary MLflow run group(s): 48edd964 + 0ab960e6; 08ff6cc0 + 6f2d7fe0; 2f248c1e + da11b8b4 (+24 more)
+figure audit /var/home/keks/projects/tab/plots/baseline/mortality/tudd_roc_auc_cross_cohort: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/baseline/mortality/tudd_paired_forest: 1 problem(s) — fix before using
+  - an axes has no y label
+figure audit /var/home/keks/projects/tab/plots/sample_size/mortality/tudd_roc_auc_ranks: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/sample_size/mortality/tudd_roc_auc_ranks_by_setting: 1 problem(s) — fix before using
+  - overlapping text: 'tabpfn-3.5-fast (2.3)' over 'tabdpt (2.5)'; 'tabdpt (2.5)' over 'tabpfn-3.5 (3.7)'; 'tabpfn-3.5 (3.7)' over 'tabfm (3.7)' (+69 more)
+
+=== Mortality [mimic -> both evaluation centers] (sample_size_mimic_mortality)
+Selected pipeline runs (pairwise view): 9d208f03e24644fd84cd6b5f54631ea6, 5a7e9905ab1d4daeb6ebd67210d17e83, 3c68739ace1841578ccab944bd287a4b
+
+Rank summary for roc_auc: 60 blocks, 10 models
+  setting 100: N = 6, k = 10, Friedman p = 0.01179, Iman-Davenport p = 0.004185, CD = 5.53
+  setting 200: N = 6, k = 10, Friedman p = 0.0002735, Iman-Davenport p = 3.978e-06, CD = 5.53
+  setting 400: N = 6, k = 10, Friedman p = 0.0008648, Iman-Davenport p = 4.45e-05, CD = 5.53
+  setting 800: N = 6, k = 10, Friedman p = 0.002507, Iman-Davenport p = 0.0003257, CD = 5.53
+  setting 1600: N = 6, k = 10, Friedman p = 6.462e-05, Iman-Davenport p = 1.187e-07, CD = 5.53
+  setting 3200: N = 6, k = 10, Friedman p = 4.953e-05, Iman-Davenport p = 5.781e-08, CD = 5.53
+  setting 6400: N = 6, k = 10, Friedman p = 6.237e-06, Iman-Davenport p = 7.372e-11, CD = 5.53
+  setting 12800: N = 6, k = 10, Friedman p = 6.656e-05, Iman-Davenport p = 1.284e-07, CD = 5.53
+  setting 25600: N = 6, k = 10, Friedman p = 9.683e-06, Iman-Davenport p = 3.659e-10, CD = 5.53
+  setting 44454: N = 6, k = 10, Friedman p = 2.346e-06, Iman-Davenport p = 1.268e-12, CD = 5.53
+  experiment: N = 60, k = 10, Friedman p = 1.65e-56, Iman-Davenport p = 1.408e-81, CD = 1.75
+
+Cross-cohort caption (roc_auc):
+\caption{\textbf{11 of 45 comparisons change hands between the in-domain and the external cohort.} Each cell holds two AUROC win shares for one model pair: the share of 10,000 paired cohort-bootstrap draws in which the row model beat the column model, above the diagonal on the held-out MIMIC-IV cohort and below it on the held-out EUH cohort. Rows and columns follow the shared model order used by the other figures, and the white diagonal separates the two halves. Both triangles read row over column, so a pair whose winner does not change has one warm cell and one cool cell, while a pair that changes hands is warm in both. Cells near 50 are undecided, and a share counts resamples of these cohorts rather than the chance that a model generalizes better.}
+
+Paired difference forest caption:
+\caption{\textbf{Effect sizes against one reference model anchor the win shares.} Points are paired AUROC differences against XGBoost, so a positive value means the model beat XGBoost on the held-out MIMIC-IV cohort and a negative value means it lost to it, and the same reading holds on EUH. Whiskers are 95\% percentile intervals from 10,000 aligned cohort-bootstrap draws. The number at the right of each row is the share of those draws in which the model outperformed XGBoost. Circles denote classical baselines and triangles tabular foundation models.}
+
+Rank figure caption (roc_auc):
+\caption{\textbf{Average AUROC rank over 60 evaluation blocks: TabPFNv3.5 leads, and 5 of 10 models move at least a rank position between the lowest and the highest setting.} Top panel: Nemenyi critical difference diagram of the average rank over 60 evaluation blocks, one per configuration and held-out cohort, from 30 pipeline runs. Models joined by a bar cannot be separated at $\alpha$ = 0.05 (Friedman p < 0.001), and two average ranks have to differ by 1.75 rank positions to count as separated. Middle panel: average rank per setting, with the model name at the right end. Bottom panel: average rank in the smallest and the largest setting, with the net movement annotated. }
+Per-setting rank figure caption (roc_auc):
+\caption{\textbf{Per-setting critical difference diagrams show where the overall ranking comes from.} One diagram per configuration level, each with its own Nemenyi critical difference and block count. A setting that contributes only a few blocks cannot separate any pair, which the scale bar makes explicit.}
+
+Figures:
+plots/baseline/mortality/mimic_roc_auc_cross_cohort.pdf
+plots/baseline/mortality/mimic_paired_forest.pdf
+plots/sample_size/mortality/mimic_roc_auc_ranks.pdf
+plots/sample_size/mortality/mimic_roc_auc_ranks_by_setting.pdf
+
+=== Mortality [tudd -> both evaluation centers] (sample_size_tudd_mortality)
+Selected pipeline runs (pairwise view): 1b36fb5e05d54ea1ac1827ca8397b1cd, 960fcc8032bc407a9d168e9bd7b620e4, 6b7887e217a6491b98a33ee454d1b2de
+
+Rank summary for roc_auc: 54 blocks, 10 models
+  setting 100: N = 6, k = 10, Friedman p = 4.27e-05, Iman-Davenport p = 3.828e-08, CD = 5.53
+  setting 200: N = 6, k = 10, Friedman p = 0.0005278, Iman-Davenport p = 1.638e-05, CD = 5.53
+  setting 400: N = 6, k = 10, Friedman p = 0.000445, Iman-Davenport p = 1.146e-05, CD = 5.53
+  setting 800: N = 6, k = 10, Friedman p = 0.0007103, Iman-Davenport p = 3.007e-05, CD = 5.53
+  setting 1600: N = 6, k = 10, Friedman p = 0.0001426, Iman-Davenport p = 8.788e-07, CD = 5.53
+  setting 3200: N = 6, k = 10, Friedman p = 0.0003541, Iman-Davenport p = 7.023e-06, CD = 5.53
+  setting 6400: N = 6, k = 10, Friedman p = 0.0009809, Iman-Davenport p = 5.696e-05, CD = 5.53
+  setting 12800: N = 6, k = 10, Friedman p = 2.652e-05, Iman-Davenport p = 9.596e-09, CD = 5.53
+  setting 16379: N = 6, k = 10, Friedman p = 6.43e-06, Iman-Davenport p = 8.268e-11, CD = 5.53
+  experiment: N = 54, k = 10, Friedman p = 9.874e-41, Iman-Davenport p = 4.408e-54, CD = 1.84
+
+Cross-cohort caption (roc_auc):
+\caption{\textbf{15 of 45 comparisons change hands between the in-domain and the external cohort.} Each cell holds two AUROC win shares for one model pair: the share of 10,000 paired cohort-bootstrap draws in which the row model beat the column model, above the diagonal on the held-out EUH cohort and below it on the held-out MIMIC-IV cohort. Rows and columns follow the shared model order used by the other figures, and the white diagonal separates the two halves. Both triangles read row over column, so a pair whose winner does not change has one warm cell and one cool cell, while a pair that changes hands is warm in both. Cells near 50 are undecided, and a share counts resamples of these cohorts rather than the chance that a model generalizes better.}
+
+Paired difference forest caption:
+\caption{\textbf{Effect sizes against one reference model anchor the win shares.} Points are paired AUROC differences against XGBoost, so a positive value means the model beat XGBoost on the held-out EUH cohort and a negative value means it lost to it, and the same reading holds on MIMIC-IV. Whiskers are 95\% percentile intervals from 10,000 aligned cohort-bootstrap draws. The number at the right of each row is the share of those draws in which the model outperformed XGBoost. Circles denote classical baselines and triangles tabular foundation models.}
+
+Rank figure caption (roc_auc):
+\caption{\textbf{Average AUROC rank over 54 evaluation blocks: TabPFNv3.5 Fast leads, and 8 of 10 models move at least a rank position between the lowest and the highest setting.} Top panel: Nemenyi critical difference diagram of the average rank over 54 evaluation blocks, one per configuration and held-out cohort, from 27 pipeline runs. Models joined by a bar cannot be separated at $\alpha$ = 0.05 (Friedman p < 0.001), and two average ranks have to differ by 1.84 rank positions to count as separated. Middle panel: average rank per setting, with the model name at the right end. Bottom panel: average rank in the smallest and the largest setting, with the net movement annotated. }
+Per-setting rank figure caption (roc_auc):
+\caption{\textbf{Per-setting critical difference diagrams show where the overall ranking comes from.} One diagram per configuration level, each with its own Nemenyi critical difference and block count. A setting that contributes only a few blocks cannot separate any pair, which the scale bar makes explicit.}
+
+Figures:
+plots/baseline/mortality/tudd_roc_auc_cross_cohort.pdf
+plots/baseline/mortality/tudd_paired_forest.pdf
+plots/sample_size/mortality/tudd_roc_auc_ranks.pdf
+plots/sample_size/mortality/tudd_roc_auc_ranks_by_setting.pdf
+
+=== LOS > 7 d [mimic -> both evaluation centers] (sample_size_mimic_LOS7)
+Selected pipeline runs (pairwise view): 3653b4e0031b415ebc83d6c53f3ed775, 4e78bd9c0c774777b0adcadf13c6e39a, 5e07568f004b48798d4a51634d7ebb5f
+
+Rank summary for roc_auc: 60 blocks, 10 models
+  setting 100: N = 6, k = 10, Friedman p = 0.2413, Iman-Davenport p = 0.236, CD = 5.53figure audit /var/home/keks/projects/tab/plots/baseline/LOS7/mimic_roc_auc_cross_cohort: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/baseline/LOS7/mimic_paired_forest: 1 problem(s) — fix before using
+  - an axes has no y label
+FIGURE AUDIT /var/home/keks/projects/tab/plots/sample_size/LOS7/mimic_roc_auc_ranks: 1 problem(s) — fix before using
+  - overlapping text: 'TabICLv2' over 'LR'; 'TabFM' over 'Causilo'
+FIGURE AUDIT /var/home/keks/projects/tab/plots/sample_size/LOS7/mimic_roc_auc_ranks_by_setting: 1 problem(s) — fix before using
+  - overlapping text: 'tabpfn-3.5 (2.7)' over 'tabpfn-3.5-fast (2.8)'; 'tabpfn-3.5-fast (2.8)' over 'exaone (4.3)'; 'exaone (4.3)' over 'causilo (4.5)' (+21 more)
+figure audit /var/home/keks/projects/tab/plots/baseline/LOS7/tudd_roc_auc_cross_cohort: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/baseline/LOS7/tudd_paired_forest: 1 problem(s) — fix before using
+  - an axes has no y label
+figure audit /var/home/keks/projects/tab/plots/sample_size/LOS7/tudd_roc_auc_ranks: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/sample_size/LOS7/tudd_roc_auc_ranks_by_setting: 1 problem(s) — fix before using
+  - overlapping text: 'tabdpt (2.2)' over 'causilo (2.8)'; 'causilo (2.8)' over 'tabfm (4)'; 'tabfm (4)' over 'tabpfn-3.5 (4.2)' (+53 more)
+
+  setting 200: N = 6, k = 10, Friedman p = 0.007302, Iman-Davenport p = 0.001974, CD = 5.53
+  setting 400: N = 6, k = 10, Friedman p = 0.001082, Iman-Davenport p = 6.884e-05, CD = 5.53
+  setting 800: N = 6, k = 10, Friedman p = 0.07078, Iman-Davenport p = 0.05272, CD = 5.53
+  setting 1600: N = 6, k = 10, Friedman p = 0.09658, Iman-Davenport p = 0.07848, CD = 5.53
+  setting 3200: N = 6, k = 10, Friedman p = 0.03081, Iman-Davenport p = 0.01713, CD = 5.53
+  setting 6400: N = 6, k = 10, Friedman p = 0.0164, Iman-Davenport p = 0.006891, CD = 5.53
+  setting 12800: N = 6, k = 10, Friedman p = 0.1076, Iman-Davenport p = 0.08989, CD = 5.53
+  setting 25600: N = 6, k = 10, Friedman p = 0.04156, Iman-Davenport p = 0.02594, CD = 5.53
+  setting 44454: N = 6, k = 10, Friedman p = 0.04107, Iman-Davenport p = 0.02552, CD = 5.53
+  experiment: N = 60, k = 10, Friedman p = 3.005e-27, Iman-Davenport p = 5.106e-32, CD = 1.75
+
+Cross-cohort caption (roc_auc):
+\caption{\textbf{29 of 45 comparisons change hands between the in-domain and the external cohort.} Each cell holds two AUROC win shares for one model pair: the share of 10,000 paired cohort-bootstrap draws in which the row model beat the column model, above the diagonal on the held-out MIMIC-IV cohort and below it on the held-out EUH cohort. Rows and columns follow the shared model order used by the other figures, and the white diagonal separates the two halves. Both triangles read row over column, so a pair whose winner does not change has one warm cell and one cool cell, while a pair that changes hands is warm in both. Cells near 50 are undecided, and a share counts resamples of these cohorts rather than the chance that a model generalizes better.}
+
+Paired difference forest caption:
+\caption{\textbf{Effect sizes against one reference model anchor the win shares.} Points are paired AUROC differences against XGBoost, so a positive value means the model beat XGBoost on the held-out MIMIC-IV cohort and a negative value means it lost to it, and the same reading holds on EUH. Whiskers are 95\% percentile intervals from 10,000 aligned cohort-bootstrap draws. The number at the right of each row is the share of those draws in which the model outperformed XGBoost. Circles denote classical baselines and triangles tabular foundation models.}
+
+Rank figure caption (roc_auc):
+\caption{\textbf{Average AUROC rank over 60 evaluation blocks: TabPFNv3.5 leads, and 4 of 10 models move at least a rank position between the lowest and the highest setting.} Top panel: Nemenyi critical difference diagram of the average rank over 60 evaluation blocks, one per configuration and held-out cohort, from 30 pipeline runs. Models joined by a bar cannot be separated at $\alpha$ = 0.05 (Friedman p < 0.001), and two average ranks have to differ by 1.75 rank positions to count as separated. Middle panel: average rank per setting, with the model name at the right end. Bottom panel: average rank in the smallest and the largest setting, with the net movement annotated. }
+Per-setting rank figure caption (roc_auc):
+\caption{\textbf{Per-setting critical difference diagrams show where the overall ranking comes from.} One diagram per configuration level, each with its own Nemenyi critical difference and block count. A setting that contributes only a few blocks cannot separate any pair, which the scale bar makes explicit.}
+
+Figures:
+plots/baseline/LOS7/mimic_roc_auc_cross_cohort.pdf
+plots/baseline/LOS7/mimic_paired_forest.pdf
+plots/sample_size/LOS7/mimic_roc_auc_ranks.pdf
+plots/sample_size/LOS7/mimic_roc_auc_ranks_by_setting.pdf
+
+=== LOS > 7 d [tudd -> both evaluation centers] (sample_size_tudd_LOS7)
+Selected pipeline runs (pairwise view): ee570896319a4e7994cf5d09e5115bf4, e20836ab3de245008a6bf1f91cd44ab8, 7a78a07eca04496983a038aedcd82e50
+
+Rank summary for roc_auc: 54 blocks, 10 models
+  setting 100: N = 6, k = 10, Friedman p = 0.0002775, Iman-Davenport p = 4.108e-06, CD = 5.53
+  setting 200: N = 6, k = 10, Friedman p = 0.02795, Iman-Davenport p = 0.01494, CD = 5.53
+  setting 400: N = 6, k = 10, Friedman p = 0.004598, Iman-Davenport p = 0.0009257, CD = 5.53
+  setting 800: N = 6, k = 10, Friedman p = 0.1522, Iman-Davenport p = 0.1374, CD = 5.53
+  setting 1600: N = 6, k = 10, Friedman p = 0.002612, Iman-Davenport p = 0.0003501, CD = 5.53
+  setting 3200: N = 6, k = 10, Friedman p = 0.0007838, Iman-Davenport p = 3.662e-05, CD = 5.53
+  setting 6400: N = 6, k = 10, Friedman p = 5.828e-05, Iman-Davenport p = 9.003e-08, CD = 5.53
+  setting 12800: N = 6, k = 10, Friedman p = 0.0001907, Iman-Davenport p = 1.748e-06, CD = 5.53
+  setting 16379: N = 6, k = 10, Friedman p = 0.0001673, Iman-Davenport p = 1.287e-06, CD = 5.53
+  experiment: N = 54, k = 10, Friedman p = 7.589e-34, Iman-Davenport p = 1.348e-42, CD = 1.84
+
+Cross-cohort caption (roc_auc):
+\caption{\textbf{19 of 45 comparisons change hands between the in-domain and the external cohort.} Each cell holds two AUROC win shares for one model pair: the share of 10,000 paired cohort-bootstrap draws in which the row model beat the column model, above the diagonal on the held-out EUH cohort and below it on the held-out MIMIC-IV cohort. Rows and columns follow the shared model order used by the other figures, and the white diagonal separates the two halves. Both triangles read row over column, so a pair whose winner does not change has one warm cell and one cool cell, while a pair that changes hands is warm in both. Cells near 50 are undecided, and a share counts resamples of these cohorts rather than the chance that a model generalizes better.}
+
+Paired difference forest caption:
+\caption{\textbf{Effect sizes against one reference model anchor the win shares.} Points are paired AUROC differences against XGBoost, so a positive value means the model beat XGBoost on the held-out EUH cohort and a negative value means it lost to it, and the same reading holds on MIMIC-IV. Whiskers are 95\% percentile intervals from 10,000 aligned cohort-bootstrap draws. The number at the right of each row is the share of those draws in which the model outperformed XGBoost. Circles denote classical baselines and triangles tabular foundation models.}
+
+Rank figure caption (roc_auc):
+\caption{\textbf{Average AUROC rank over 54 evaluation blocks: TabPFNv3.5 Fast leads, and 8 of 10 models move at least a rank position between the lowest and the highest setting.} Top panel: Nemenyi critical difference diagram of the average rank over 54 evaluation blocks, one per configuration and held-out cohort, from 27 pipeline runs. Models joined by a bar cannot be separated at $\alpha$ = 0.05 (Friedman p < 0.001), and two average ranks have to differ by 1.84 rank positions to count as separated. Middle panel: average rank per setting, with the model name at the right end. Bottom panel: average rank in the smallest and the largest setting, with the net movement annotated. }
+Per-setting rank figure caption (roc_auc):
+\caption{\textbf{Per-setting critical difference diagrams show where the overall ranking comes from.} One diagram per configuration level, each with its own Nemenyi critical difference and block count. A setting that contributes only a few blocks cannot separate any pair, which the scale bar makes explicit.}
+
+Figures:
+plots/baseline/LOS7/tudd_roc_auc_cross_cohort.pdf
+plots/baseline/LOS7/tudd_paired_forest.pdf
+plots/sample_size/LOS7/tudd_roc_auc_ranks.pdf
+plots/sample_size/LOS7/tudd_roc_auc_ranks_by_setting.pdf
+
+=== Readmission within 72h [mimic -> both evaluation centers] (sample_size_mimic_hours_to_readmit_72)
+Selected pipeline runs (pairwise view): c4f2ea95439e4ef882e6c593411761e0, c9add5d8ddcf4672a8580c23232f288a, 77277a2d8da64b1fba9005a4f881c174
+
+Rank summary for roc_auc: 60 blocks, 10 models
+  setting 100: N = 6, k = 10, Friedman p = 0.0006713, Iman-Davenport p = 2.683e-05, CD = 5.53
+  setting 200: N = 6, k = 10, Friedman p = 8.3e-05, Iman-Davenport p = 2.284e-07, CD = 5.53
+  setting 400: N = 6, k = 10, Friedman p = 0.04059, Iman-Davenport p = 0.02511, CD = 5.53
+  setting 800: N = 6, k = 10, Friedman p = 0.1634, Iman-Davenport p = 0.1497, CD = 5.53
+  setting 1600: N = 6, k = 10, Friedman p = 0.1476, Iman-Davenport p = 0.1324, CD = 5.53
+  setting 3200: N = 6, k = 10, Friedman p = 0.3684, Iman-Davenport p = 0.378, CD = 5.53figure audit /var/home/keks/projects/tab/plots/baseline/hours_to_readmit_72/mimic_roc_auc_cross_cohort: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/baseline/hours_to_readmit_72/mimic_paired_forest: 1 problem(s) — fix before using
+  - an axes has no y label
+figure audit /var/home/keks/projects/tab/plots/sample_size/hours_to_readmit_72/mimic_roc_auc_ranks: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/sample_size/hours_to_readmit_72/mimic_roc_auc_ranks_by_setting: 1 problem(s) — fix before using
+  - overlapping text: 'tabpfn-3.5 (1.7)' over 'tabpfn-3.5-fast (2.5)'; 'tabpfn-3.5-fast (2.5)' over 'tabfm (4.3)'; 'tabfm (4.3)' over 'tabdpt (4.7)' (+13 more)
+figure audit /var/home/keks/projects/tab/plots/baseline/hours_to_readmit_72/tudd_roc_auc_cross_cohort: clean
+FIGURE AUDIT /var/home/keks/projects/tab/plots/baseline/hours_to_readmit_72/tudd_paired_forest: 1 problem(s) — fix before using
+  - an axes has no y label
+FIGURE AUDIT /var/home/keks/projects/tab/plots/sample_size/hours_to_readmit_72/tudd_roc_auc_ranks: 1 problem(s) — fix before using
+  - overlapping text: 'EXAONE' over 'TabFM'
+FIGURE AUDIT /var/home/keks/projects/tab/plots/sample_size/hours_to_readmit_72/tudd_roc_auc_ranks_by_setting: 1 problem(s) — fix before using
+  - overlapping text: 'tabpfn-3.5-fast (2.5)' over 'tabdpt (2.7)'; 'tabdpt (2.7)' over 'tabpfn-3.5 (3.5)'; 'tabpfn-3.5 (3.5)' over 'tabicl-2 (3.8)' (+61 more)
+
+  setting 6400: N = 6, k = 10, Friedman p = 0.9397, Iman-Davenport p = 0.9526, CD = 5.53
+  setting 12800: N = 6, k = 10, Friedman p = 0.1719, Iman-Davenport p = 0.1589, CD = 5.53
+  setting 25600: N = 6, k = 10, Friedman p = 0.07158, Iman-Davenport p = 0.0535, CD = 5.53
+  setting 39805: N = 6, k = 10, Friedman p = 0.06246, Iman-Davenport p = 0.04478, CD = 5.53
+  experiment: N = 60, k = 10, Friedman p = 1.199e-22, Iman-Davenport p = 6.895e-26, CD = 1.75
+
+Cross-cohort caption (roc_auc):
+\caption{\textbf{30 of 45 comparisons change hands between the in-domain and the external cohort.} Each cell holds two AUROC win shares for one model pair: the share of 10,000 paired cohort-bootstrap draws in which the row model beat the column model, above the diagonal on the held-out MIMIC-IV cohort and below it on the held-out EUH cohort. Rows and columns follow the shared model order used by the other figures, and the white diagonal separates the two halves. Both triangles read row over column, so a pair whose winner does not change has one warm cell and one cool cell, while a pair that changes hands is warm in both. Cells near 50 are undecided, and a share counts resamples of these cohorts rather than the chance that a model generalizes better.}
+
+Paired difference forest caption:
+\caption{\textbf{Effect sizes against one reference model anchor the win shares.} Points are paired AUROC differences against XGBoost, so a positive value means the model beat XGBoost on the held-out MIMIC-IV cohort and a negative value means it lost to it, and the same reading holds on EUH. Whiskers are 95\% percentile intervals from 10,000 aligned cohort-bootstrap draws. The number at the right of each row is the share of those draws in which the model outperformed XGBoost. Circles denote classical baselines and triangles tabular foundation models.}
+
+Rank figure caption (roc_auc):
+\caption{\textbf{Average AUROC rank over 60 evaluation blocks: TabPFNv3.5 leads, and 6 of 10 models move at least a rank position between the lowest and the highest setting.} Top panel: Nemenyi critical difference diagram of the average rank over 60 evaluation blocks, one per configuration and held-out cohort, from 30 pipeline runs. Models joined by a bar cannot be separated at $\alpha$ = 0.05 (Friedman p < 0.001), and two average ranks have to differ by 1.75 rank positions to count as separated. Middle panel: average rank per setting, with the model name at the right end. Bottom panel: average rank in the smallest and the largest setting, with the net movement annotated. }
+Per-setting rank figure caption (roc_auc):
+\caption{\textbf{Per-setting critical difference diagrams show where the overall ranking comes from.} One diagram per configuration level, each with its own Nemenyi critical difference and block count. A setting that contributes only a few blocks cannot separate any pair, which the scale bar makes explicit.}
+
+Figures:
+plots/baseline/hours_to_readmit_72/mimic_roc_auc_cross_cohort.pdf
+plots/baseline/hours_to_readmit_72/mimic_paired_forest.pdf
+plots/sample_size/hours_to_readmit_72/mimic_roc_auc_ranks.pdf
+plots/sample_size/hours_to_readmit_72/mimic_roc_auc_ranks_by_setting.pdf
+
+=== Readmission within 72h [tudd -> both evaluation centers] (sample_size_tudd_hours_to_readmit_72)
+Selected pipeline runs (pairwise view): 46eb52c64dd942e3b51dfff8cd50b182, 5c8bd302e86a4790b4b39a10c6b8231b, 4570fd604ede49f4add380555eaf4ab7
+
+Rank summary for roc_auc: 54 blocks, 10 models
+  setting 100: N = 6, k = 10, Friedman p = 4.399e-05, Iman-Davenport p = 4.16e-08, CD = 5.53
+  setting 200: N = 6, k = 10, Friedman p = 0.0006905, Iman-Davenport p = 2.84e-05, CD = 5.53
+  setting 400: N = 6, k = 10, Friedman p = 0.02473, Iman-Davenport p = 0.01255, CD = 5.53
+  setting 800: N = 6, k = 10, Friedman p = 0.336, Iman-Davenport p = 0.3419, CD = 5.53
+  setting 1600: N = 6, k = 10, Friedman p = 0.007113, Iman-Davenport p = 0.001893, CD = 5.53
+  setting 3200: N = 6, k = 10, Friedman p = 0.0003203, Iman-Davenport p = 5.644e-06, CD = 5.53
+  setting 6400: N = 6, k = 10, Friedman p = 0.0001426, Iman-Davenport p = 8.788e-07, CD = 5.53
+  setting 12800: N = 6, k = 10, Friedman p = 0.0003592, Iman-Davenport p = 7.245e-06, CD = 5.53
+  setting 20213: N = 6, k = 10, Friedman p = 3.091e-06, Iman-Davenport p = 4.324e-12, CD = 5.53
+  experiment: N = 54, k = 10, Friedman p = 3.133e-27, Iman-Davenport p = 1.137e-32, CD = 1.84
+
+Cross-cohort caption (roc_auc):
+\caption{\textbf{13 of 45 comparisons change hands between the in-domain and the external cohort.} Each cell holds two AUROC win shares for one model pair: the share of 10,000 paired cohort-bootstrap draws in which the row model beat the column model, above the diagonal on the held-out EUH cohort and below it on the held-out MIMIC-IV cohort. Rows and columns follow the shared model order used by the other figures, and the white diagonal separates the two halves. Both triangles read row over column, so a pair whose winner does not change has one warm cell and one cool cell, while a pair that changes hands is warm in both. Cells near 50 are undecided, and a share counts resamples of these cohorts rather than the chance that a model generalizes better.}
+
+Paired difference forest caption:
+\caption{\textbf{Effect sizes against one reference model anchor the win shares.} Points are paired AUROC differences against XGBoost, so a positive value means the model beat XGBoost on the held-out EUH cohort and a negative value means it lost to it, and the same reading holds on MIMIC-IV. Whiskers are 95\% percentile intervals from 10,000 aligned cohort-bootstrap draws. The number at the right of each row is the share of those draws in which the model outperformed XGBoost. Circles denote classical baselines and triangles tabular foundation models.}
+
+Rank figure caption (roc_auc):
+\caption{\textbf{Average AUROC rank over 54 evaluation blocks: TabFM leads, and 7 of 10 models move at least a rank position between the lowest and the highest setting.} Top panel: Nemenyi critical difference diagram of the average rank over 54 evaluation blocks, one per configuration and held-out cohort, from 27 pipeline runs. Models joined by a bar cannot be separated at $\alpha$ = 0.05 (Friedman p < 0.001), and two average ranks have to differ by 1.84 rank positions to count as separated. Middle panel: average rank per setting, with the model name at the right end. Bottom panel: average rank in the smallest and the largest setting, with the net movement annotated. }
+Per-setting rank figure caption (roc_auc):
+\caption{\textbf{Per-setting critical difference diagrams show where the overall ranking comes from.} One diagram per configuration level, each with its own Nemenyi critical difference and block count. A setting that contributes only a few blocks cannot separate any pair, which the scale bar makes explicit.}
+
+Figures:
+plots/baseline/hours_to_readmit_72/tudd_roc_auc_cross_cohort.pdf
+plots/baseline/hours_to_readmit_72/tudd_paired_forest.pdf
+plots/sample_size/hours_to_readmit_72/tudd_roc_auc_ranks.pdf
+plots/sample_size/hours_to_readmit_72/tudd_roc_auc_ranks_by_setting.pdf
+
+=== src.plotting.augmentation
+  note: combined 30 complementary MLflow run group(s): 776c8fd1 + c748d50d; 565bbe5a + b29ab21e; 4b0d26c6 + a7f89096 (+27 more)
+  note: combined 27 complementary MLflow run group(s): 48edd964 + 0ab960e6; 08ff6cc0 + 6f2d7fe0; 2f248c1e + da11b8b4 (+24 more)
+figure audit /var/home/keks/projects/tab/plots/augmentation/mortality/tudd_to_mimic_full_external_roc_auc: clean
+figure audit /var/home/keks/projects/tab/plots/augmentation/mortality/tudd_to_mimic_full_external_prc_auc: clean
+  note: combined 27 complementary MLflow run group(s): 48edd964 + 0ab960e6; 08ff6cc0 + 6f2d7fe0; 2f248c1e + da11b8b4 (+24 more)
+  note: combined 30 complementary MLflow run group(s): 776c8fd1 + c748d50d; 565bbe5a + b29ab21e; 4b0d26c6 + a7f89096 (+27 more)
+figure audit /var/home/keks/projects/tab/plots/augmentation/mortality/mimic_to_tudd_full_external_roc_auc: clean
+figure audit /var/home/keks/projects/tab/plots/augmentation/mortality/mimic_to_tudd_full_external_prc_auc: clean
+
+=== Mortality [tudd -> mimic] (mixed_sample_size_mimic_mortality)
+Reference sweep 'sample_size_mimic_mortality': 30 pipeline runs
+Reference sweep 'sample_size_tudd_mortality': 27 pipeline runs
+Selected augmentation pipeline runs: e0f19f757036425b85cb0efdb81175ec, 9b7a632db37745feb12a68e40c29b622, 377c178c56024414b30d622df4909125, d7bc620e65854f5ba3b0dc49e0c0d0cb, eb44328f22544ff8bd14715944eaa0f6, 937591cb8d2c4d71936b152931c324cb, 74f04e5fc4f648c184ccfc245984e8a0, 697d5631f2c54bd0ab5e90c599895f15, 3f6899efd87044be82484fb11eecca5e, 9a7521aa9c784f2bb263e84bc9774b2b
+Local-only reference experiment: 'sample_size_mimic_mortality'
+Unmatched reference runs not drawn (different repeat seeds): 7745907102cc41b68f410592a9bbc828, 58c3c9cf1c594f429b02185a1fd58020, b4102bf14f944d30a1e8766308ef40bc, 574fcd3d0eb44fddb41472ce2eb76698, d51bb46cb52746d1a27eb5f044720ca3, 6b13ebe77420444f834f4e831150f9d5, 2b397d9855b14d28a52a05e77a784716, 7d110fc3edc84a608bd3e3288415d24c, 1eccae1b6429412cb3bbe8d296d3d588, 5b2a21125e9a46b8bf9aba509560db53, 7b0340e755714fdb992eb0eb4266bffe, 64e3c175896146d4979f9809c44a77f0, 104c727e09fc4df8aeada74e8d504c79, feccb9e947b24bd58e92ef78620d40a9, 9148d6cad91d42e98691268932d056e0, fa86a8d5a0164b5b93faa5c6f4425a1e, 8ff614c5241749248ef2d7b190f21c08, 2a4f382527dd4645870e4cd27a8def43, 5a7e9905ab1d4daeb6ebd67210d17e83, 3c68739ace1841578ccab944bd287a4b, 960fcc8032bc407a9d168e9bd7b620e4, 6b7887e217a6491b98a33ee454d1b2de
+LaTeX caption (AUROC):
+\caption{\textbf{Adding local MIMIC-IV observations to the complete EUH training pool changes Mortality performance on the target center.} AUROC on the held-out MIMIC-IV cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 25,600, 44,454; the fixed external contribution is the complete EUH pool of 16,379 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; points summarize one pipeline run per setting. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_mimic_mortality), matched cell by cell on training_sample_seed and realized local count; 22 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}
+figure: plots/augmentation/mortality/tudd_to_mimic_full_external_roc_auc.pdf
+LaTeX caption (AUPRC):
+\caption{\textbf{Adding local MIMIC-IV observations to the complete EUH training pool changes Mortality performance on the target center.} AUPRC on the held-out MIMIC-IV cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 25,600, 44,454; the fixed external contribution is the complete EUH pool of 16,379 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; points summarize one pipeline run per setting. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_mimic_mortality), matched cell by cell on training_sample_seed and realized local count; 22 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}
+figure: plots/augmentation/mortality/tudd_to_mimic_full_external_prc_auc.pdf
+
+=== Mortality [mimic -> tudd] (mixed_sample_size_tudd_mortality)
+Reference sweep 'sample_size_tudd_mortality': 27 pipeline runs
+Reference sweep 'sample_size_mimic_mortality': 30 pipeline runs
+Selected augmentation pipeline runs: fcc6ce83dc4a48bd8deb9c0cb20a54b8, acfd3ac8c1a54bf18570a3d2908b8b53, 6d12792e830b48688bbef6eea10f747e, 78f56c23baf3484d9c4ca8800f706199, de0de99d645e4f598b25c0b065f371fc, 5b23ec7cf0094e9c884a2194015ecade, b24dc9423bb14c029bf9994374574aa8, cab4fe672bc1449baa5d198f26025e1f, 03ab7f658c73484e8b7a25bbd47f0366
+Local-only reference experiment: 'sample_size_tudd_mortality'
+Unmatched reference runs not drawn (different repeat seeds): c81c20bf6f024ad199e28b5dcf32dddd, 4ec61b12dc34423bb243610cd3770d10, 2810293f7cb34004b8582929a2f41f88, 8523ec8b579e4737976c767bba0cb49c, 9bf3add9fe8446c7a3e545c5196f3fcf, fa248f0fa5404d3aaf24c007da5516cb, e32b34d06e774c6daa0ffe763b0a9af0, 87ae4e1070f14a5f9ace6fe3b1ae59cc, 48d3786edd6341febdaada6eb3bf5511, f88583535e934e8d99964e21857f3818, 7d4ee017c14147b194a734d3b9335fe6, c8278d962cf54eaba2d43fb7a3745c98, 6b34e20dac0d44afae296c80c00c398d, a3a57ce6c8ab46fdb9169a5a92a0c25e, 8b4da34f83b24d0eb4866dd8e8996ff6, 11443a22373a40599ba10215df8b943c, 960fcc8032bc407a9d168e9bd7b620e4, 6b7887e217a6491b98a33ee454d1b2de, 5a7e9905ab1d4daeb6ebd67210d17e83, 3c68739ace1841578ccab944bd287a4b
+LaTeX caption (AUROC):
+\caption{\textbf{Adding local EUH observations to the complete MIMIC-IV training pool changes Mortality performance on the target center.} AUROC on the held-out EUH cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 16,379; the fixed external contribution is the complete MIMIC-IV pool of 44,454 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; points summarize one pipeline run per setting. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_tudd_mortality), matched cell by cell on training_sample_seed and realized local count; 20 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}
+figure: plots/augmentation/mortality/mimic_to_tudd_full_external_roc_auc.pdf
+LaTeX caption (AUPRC):
+\caption{\textbf{Adding local EUH observations to the complete MIMIC-IV training pool changes Mortality performance on the target center.} AUPRC on the held-out EUH cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 16,379; the fixed external contribution is the complete MIMIC-IV pool of 44,454 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; points summarize one pipeline run per setting. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_tudd_mortality), matched cell by cell on training_sample_seed and realized local count; 20 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}figure audit /var/home/keks/projects/tab/plots/augmentation/LOS7/tudd_to_mimic_full_external_roc_auc: clean
+figure audit /var/home/keks/projects/tab/plots/augmentation/LOS7/tudd_to_mimic_full_external_prc_auc: clean
+figure audit /var/home/keks/projects/tab/plots/augmentation/LOS7/mimic_to_tudd_full_external_roc_auc: clean
+figure audit /var/home/keks/projects/tab/plots/augmentation/LOS7/mimic_to_tudd_full_external_prc_auc: clean
+
+figure: plots/augmentation/mortality/mimic_to_tudd_full_external_prc_auc.pdf
+
+=== LOS > 7 d [tudd -> mimic] (mixed_sample_size_mimic_LOS7)
+Reusing both-full endpoint(s) from 'mixed_sample_size_tudd_LOS7' in 'mixed_sample_size_mimic_LOS7': d35feeb436af4787ba012ce42ec786eb, 9927015063ca433f871c49bcfc8acb9b
+Reference sweep 'sample_size_mimic_LOS7': 30 pipeline runs
+Reference sweep 'sample_size_tudd_LOS7': 27 pipeline runs
+Selected augmentation pipeline runs: 031abdccfc0043b8b62c3bfadceb4fae, 82e4d39273064fe9b3c2779658843f06, 0fbf701115a34984a2cb7f11ab378641, b2321625542745acbdab249872509b4f, 504212d4c4294be6aea3d134252c80b1, 9a61439647214a21a2b49c0e5bd4215f, 925d1476547a4b5cbf56fa7ab50b7f3e, c8d7f591530f4f448f1085e6b96bf843, f037d6ffaaa54bf0ab9c11ee99bebcc8, 48a4f55452b64991a05ebf692b73d084, 39643e2057ce4e0b80c88cb8bc2d6ccd, 8f2dce3b1d8b41d2acb0e61acf05a008, 2f2c269eb45845efbd7bd6dd263238a2, a40f95c010234b3e82d85a059149dbb6, 2b4b042b56f04dd7bcf55b8678240815, cd79319487564d6492ebe5adc389e835, 95a59a8c04c54a85be7bbb565d7e2db0, d35feeb436af4787ba012ce42ec786eb, 9927015063ca433f871c49bcfc8acb9b
+Local-only reference experiment: 'sample_size_mimic_LOS7'
+Unmatched reference runs not drawn (different repeat seeds): 7d53ff572bfe4cfab87e1951d5395943, 1647135d86f5411590adabf460edd243, 4622b38bf5d94cbb847fd2249fe4bec1, 12e9e4b56b034472b2487da543fcc78b, 43db64854bad470b969be202c6dbf022, 41a3222395764a12a8ef9960c1b0f9c0, c11e30b9fff04e148b77576ef8baf941, 457bdca77f344b0ab4f981a9d42682e0, c38ad5571419401299705ebe8d3e8b9e, f20736b87a0140619e424d68979d9d82, 5e07568f004b48798d4a51634d7ebb5f, 7a78a07eca04496983a038aedcd82e50
+LaTeX caption (AUROC):
+\caption{\textbf{Adding local MIMIC-IV observations to the complete EUH training pool changes LOS > 7 d performance on the target center.} AUROC on the held-out MIMIC-IV cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 25,600, 44,454; the fixed external contribution is the complete EUH pool of 16,379 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; repeat coverage is one pipeline run, 2 repeated pipeline runs. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_mimic_LOS7), matched cell by cell on training_sample_seed and realized local count; 12 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}
+figure: plots/augmentation/LOS7/tudd_to_mimic_full_external_roc_auc.pdf
+LaTeX caption (AUPRC):
+\caption{\textbf{Adding local MIMIC-IV observations to the complete EUH training pool changes LOS > 7 d performance on the target center.} AUPRC on the held-out MIMIC-IV cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 25,600, 44,454; the fixed external contribution is the complete EUH pool of 16,379 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; repeat coverage is one pipeline run, 2 repeated pipeline runs. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_mimic_LOS7), matched cell by cell on training_sample_seed and realized local count; 12 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}
+figure: plots/augmentation/LOS7/tudd_to_mimic_full_external_prc_auc.pdf
+
+=== LOS > 7 d [mimic -> tudd] (mixed_sample_size_tudd_LOS7)
+Reference sweep 'sample_size_tudd_LOS7': 27 pipeline runs
+Reference sweep 'sample_size_mimic_LOS7': 30 pipeline runs
+Selected augmentation pipeline runs: 1195efb2193743bda13182a97f598213, 30e3b852c58547ed82558d583d165382, f6d1b4ad36bc434a822fa2879ff0b05e, a9a2c6da96464416a2f8d1dd83426854, a1269f6f05414acca5515690c9ef6ee6, c9b22b1c400f4392a0afadfc8d46e0a1, 5d0ff0beacbb47cca2491a742f0d31d8, 01e82c3be3d94f73a52fd917824e5ba4, 902a6d29103c4d7c8571babbb994f80c, 9348d7e31cd045f7820ed22738f6ae3e, ca39003f291a49a4ad597b888f863933, dd2017a52c804355a4fc0b745097fa10, fc4b5ef86f524abebb86d32c666bdf83, 7bf5ef71cb8b45418212dcc7dac82e4b, a14cf4cb885642239038d5d9e796d52e, 6043ac1c222b4464873e92f102a466ad, d35feeb436af4787ba012ce42ec786eb, 9927015063ca433f871c49bcfc8acb9b
+Local-only reference experiment: 'sample_size_tudd_LOS7'
+Unmatched reference runs not drawn (different repeat seeds): 26c56d945417472780185d1b89510df3, 2037b6bf9d944f6f9ac19c684ce5a45f, cc712945e01d4f23a3f22f852b458c39, c78a3a360ce34e75a6eb3e06128f3935, 35f60fd8eabe484d84dc6c84a8c4751f, a8ee9724282c4247a86d84766fc2196b, 47ca342f22f544ba8479059f94eb8670, b6bc3f9525ba4fdca84b563d3c708dec, 7a78a07eca04496983a038aedcd82e50, 5e07568f004b48798d4a51634d7ebb5f
+LaTeX caption (AUROC):
+\caption{\textbf{Adding local EUH observations to the complete MIMIC-IV training pool changes LOS > 7 d performance on the target center.} AUROC on the held-out EUH cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 16,379; the fixed external contribution is the complete MIMIC-IV pool of 44,454 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; points summarize 2 repeated pipeline runs per setting. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_tudd_LOS7), matched cell by cell on training_sample_seed and realized local count; 10 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}
+figure: plots/augmentation/LOS7/mimic_to_tudd_full_external_roc_auc.pdf
+LaTeX caption (AUPRC):
+\caption{\textbf{Adding local EUH observations to the complete MIMIC-IV training pool changes LOS > 7 d performance on the target center.} AUPRC on the held-out EUH cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 16,379; the fixed external contribution is the complete MIMIC-IV pool of 44,454 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; points summarize 2 repeated pipeline runs per setting. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_tudd_LOS7), matched cell by cell on training_sample_seed and realized local count; 10 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}figure audit /var/home/keks/projects/tab/plots/augmentation/hours_to_readmit_72/tudd_to_mimic_full_external_roc_auc: clean
+figure audit /var/home/keks/projects/tab/plots/augmentation/hours_to_readmit_72/tudd_to_mimic_full_external_prc_auc: clean
+warning: skipping Readmission within 72h [augmentation_full_external; mimic -> tudd] (no MLflow experiment registered): the intended augmentation experiment has not been registered yet
+
+figure: plots/augmentation/LOS7/mimic_to_tudd_full_external_prc_auc.pdf
+
+=== Readmission within 72h [tudd -> mimic] (mixed_sample_size_mimic_hours_to_readmit_72)
+Reference sweep 'sample_size_mimic_hours_to_readmit_72': 30 pipeline runs
+Reference sweep 'sample_size_tudd_hours_to_readmit_72': 27 pipeline runs
+Selected augmentation pipeline runs: b1a06975c8e2443093e8e29619d188df, 23c72bc8702b4a1dae5065ed67ccee2f, 5c7c192e034c498f9887339b530da1a8, e083939b10854042bfdf724ddae95330, f075fe8c721f4e908e144653502fac2d, 705ebe09e35b445fb103ff84d4b4282e, 8d039e0332b94c29ab2ccb0c65920e8e, 3e8726a1ea6c423f8de99c4515f513d0, 8df33ac9ef944b619edfe1d74c283230, b90b1ae4f09d43e1b4ae5b658549e2d6, 09084a865334432886c0e2f2b08a99df, ab986752a1f3420fb39ec315ef955880, 4b5bfa15948a44b48cbc59fc88830cf6, 274862c35451464395608fea50532006, 9cbaf4411fcf4a4f8411cb34fea8d494, 3ccc07f6f19e4e71abc488513b42ac3a, a695a65922a548fd83d800e6428b42dc, de36b4c2d1bc49bb8d9a2ad3a5e3d530, 379d04b2eb42416881326ccabd2300c5, b7d1fb7829fb4982ae430cb5c6c21ad0
+Local-only reference experiment: 'sample_size_mimic_hours_to_readmit_72'
+Unmatched reference runs not drawn (different repeat seeds): d63722643dff4f32bebe4cc66a1b1004, 723cf21a7cdb4e01806029512e2a9b71, c5264f72ae6742a6948dea4a6dc2770b, 41c3bdaa203d48259ed503b9f8b9c740, 73cc1200ae084184a1167b76a5b9d893, 075f9b4eb9514308922fcc7ffdbda3e3, c5ca0af9f4294a1b9aea00701825d227, 6ad36fdc2b0846dab60d96b73270cc9d, f045a61c0e824288be43f7ed2b37523c, 77277a2d8da64b1fba9005a4f881c174, 4570fd604ede49f4add380555eaf4ab7
+LaTeX caption (AUROC):
+\caption{\textbf{Adding local MIMIC-IV observations to the complete EUH training pool changes Readmission within 72h performance on the target center.} AUROC on the held-out MIMIC-IV cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 25,600, 39,805; the fixed external contribution is the complete EUH pool of 20,213 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; points summarize 2 repeated pipeline runs per setting. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_mimic_hours_to_readmit_72), matched cell by cell on training_sample_seed and realized local count; 11 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}
+figure: plots/augmentation/hours_to_readmit_72/tudd_to_mimic_full_external_roc_auc.pdf
+LaTeX caption (AUPRC):
+\caption{\textbf{Adding local MIMIC-IV observations to the complete EUH training pool changes Readmission within 72h performance on the target center.} AUPRC on the held-out MIMIC-IV cohort for 10 models, each in its own panel. Measured local counts are 100, 200, 400, 800, 1,600, 3,200, 6,400, 12,800, 25,600, 39,805; the fixed external contribution is the complete EUH pool of 20,213 observations. The solid curve trains on local data only, and the dashed curve trains on the complete external pool plus the same local count. Combined training deliberately has a larger total training count than local-only training. Runs of one cell share their training_sample_seed, so the local-only and combined conditions use the same local observations; points summarize 2 repeated pipeline runs per setting. The grey dashed line repeats that model's externally trained score as the level its local data has to beat; it is a measured reference, not a fitted threshold, and it can be switched off with show_external_baseline in VisualSettings. The local-only curve comes from that center's own single-source sweep (sample_size_mimic_hours_to_readmit_72), matched cell by cell on training_sample_seed and realized local count; 11 reference run(s) repeated a size with seeds the augmentation sweep does not share and were left out rather than averaged in. Whiskers are 95\% percentile intervals from 10,000 aligned test-cohort bootstrap draws after averaging repeats within each setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. Only measured settings are drawn and connected.}
+figure: plots/augmentation/hours_to_readmit_72/tudd_to_mimic_full_external_prc_auc.pdf
+
+=== Readmission within 72h [mimic -> tudd] (not registered)
+
+rebuilt 3 step(s)

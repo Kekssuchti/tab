@@ -99,6 +99,7 @@ _EXPERIMENT_NAMES: dict[tuple[str, str, str | None, str | None], str] = {
     (AUGMENTATION_FULL_EXTERNAL, "mortality", "mimic", "tudd"): "mixed_sample_size_tudd_mortality",
     (AUGMENTATION_FULL_EXTERNAL, "LOS7", "tudd", "mimic"): "mixed_sample_size_mimic_LOS7",
     (AUGMENTATION_FULL_EXTERNAL, "LOS7", "mimic", "tudd"): "mixed_sample_size_tudd_LOS7",
+    (AUGMENTATION_FULL_EXTERNAL, "hours_to_readmit_72", "tudd", "mimic"): "mixed_sample_size_mimic_hours_to_readmit_72",
     (RETRIEVAL, "mortality", "tudd", "tudd"): "retriever_tudd_mortality",
 }
 

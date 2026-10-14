@@ -21,6 +21,7 @@ from src.plotting.utils.sample_size import full_training_count
 from src.utils.prediction_tables import (
     PREDICTION_DATASETS,
     PREDICTION_MANIFEST_FILENAME,
+    PREDICTION_SCHEMA_VERSION,
     TEST_SET_ID_COLUMN,
     Y_TRUE_COLUMN,
 )
@@ -128,10 +129,14 @@ def prepare_source_contrast(
 
     client = MlflowClient(tracking_uri=tracking_uri)
     run_evidence = {
-        source: tuple(_load_run_evidence(client, run_id) for run_id in artifacts_by_source[source].run_ids)
+        source: tuple(
+            _load_run_evidence(client, physical_id)
+            for logical_id in artifacts_by_source[source].run_ids
+            for physical_id in artifacts_by_source[source].physical_run_ids(logical_id)
+        )
         for source in sources
     }
-    _validate_model_rosters(aggregated, run_evidence, sources)
+    _validate_model_rosters(aggregated, run_evidence, sources, artifacts_by_source)
 
     pairing_evidence = {
         center: _validate_pairing(
@@ -196,8 +201,10 @@ def _load_run_evidence(client: MlflowClient, run_id: str) -> _RunEvidence:
     manifest_path = f"{ARTIFACT_TEST_PREDICTIONS}/{PREDICTION_MANIFEST_FILENAME}"
     manifest = _read_json_artifact(client, run_id, manifest_path)
 
-    version = _required_value(manifest, ("version",), run_id, manifest_path)
-    if str(version) == "1":
+    version = str(_required_value(manifest, ("version",), run_id, manifest_path))
+    if version not in {"1", PREDICTION_SCHEMA_VERSION}:
+        raise ValueError(f"Run {run_id} has unsupported prediction manifest version {version!r}")
+    if version == "1":
         dataset_order = tuple(PREDICTION_DATASETS)
     else:
         recorded_datasets = _required_value(manifest, ("datasets",), run_id, manifest_path)
@@ -329,23 +336,51 @@ def _validate_model_rosters(
     aggregated: Mapping[str, AggregatedEvaluation],
     evidence: Mapping[str, tuple[_RunEvidence, ...]],
     sources: tuple[str, ...],
+    artifacts: Mapping[str, PlotArtifacts],
 ) -> None:
-    reference_source = sources[0]
-    reference_run = evidence[reference_source][0]
-    reference_configured = reference_run.configured_models
+    reference_configured: dict[str, tuple[str, str]] | None = None
+    reference_id: str | None = None
     for source in sources:
-        for run in evidence[source]:
-            if run.configured_models != reference_configured:
-                missing, unexpected, changed = _configured_roster_difference(
-                    reference_configured,
-                    run.configured_models,
-                )
+        physical_evidence = {run.run_id: run for run in evidence[source]}
+        for logical_id in artifacts[source].run_ids:
+            configured: dict[str, tuple[str, str]] = {}
+            for physical_id in artifacts[source].physical_run_ids(logical_id):
+                shard = physical_evidence[physical_id].configured_models
+                overlap = sorted(set(configured) & set(shard))
+                if overlap:
+                    raise ValueError(
+                        f"Logical F3 run {logical_id} has ambiguous configured model instances "
+                        f"across its contributing runs: {overlap}"
+                    )
+                configured.update(shard)
+            if reference_configured is None:
+                reference_configured = configured
+                reference_id = logical_id
+            if configured != reference_configured:
+                missing, unexpected, changed = _configured_roster_difference(reference_configured, configured)
                 raise ValueError(
                     "Reciprocal F3 inputs must configure the same unambiguous model instances; "
-                    f"run {run.run_id} trained on {source!r} differs from run {reference_run.run_id}: "
+                    f"logical run {logical_id} trained on {source!r} differs from logical run {reference_id}: "
                     f"missing={missing}, unexpected={unexpected}, changed_instance_configs={changed}"
                 )
+            points = artifacts[source].metrics
+            points = points.loc[
+                points["pipeline_mlflow_run_id"].astype(str).eq(logical_id)
+                & points["scope"].eq("test")
+                & points["statistic"].eq("point")
+            ]
+            actual_repeat = dict(zip(points["model_instance"].astype(str), points["model_name"].astype(str)))
+            expected_repeat = {instance: values[0] for instance, values in configured.items()}
+            if actual_repeat != expected_repeat:
+                raise ValueError(
+                    f"Logical F3 run {logical_id} trained on {source!r} has evaluated models "
+                    "that differ from its combined contributing configurations; "
+                    f"missing={sorted(set(expected_repeat) - set(actual_repeat))}, "
+                    f"unexpected={sorted(set(actual_repeat) - set(expected_repeat))}, "
+                    "or renamed model instances. F3 does not compare unequal or filtered rosters."
+                )
 
+        assert reference_configured is not None
         actual = {
             str(row.model_instance): str(row.model_name) for row in aggregated[source].model_metadata.itertuples()
         }
@@ -414,8 +449,10 @@ def _validate_pairing(
 
     manifest_versions = {run.manifest_version for _, run in runs}
     dataset_orders = {run.dataset_order for _, run in runs}
-    if len(manifest_versions) != 1 or len(dataset_orders) != 1:
-        raise ValueError(f"Cannot pair {center!r}: prediction manifest schema/order differs across selected runs")
+    # v1 has an implicit MIMIC/TUDD order; v2 records it explicitly. Both are
+    # normalized on load, so version differences alone do not invalidate pairing.
+    if len(dataset_orders) != 1:
+        raise ValueError(f"Cannot pair {center!r}: prediction dataset order differs across selected runs")
 
     reference_table = reference.cohort_tables[center]
     for source, run in runs[1:]:
@@ -447,7 +484,7 @@ def _validate_pairing(
         evaluation_center=center,
         cohort_fingerprint=next(iter(fingerprints)),
         cohort_size=len(reference_table),
-        prediction_schema_version=next(iter(manifest_versions)),
+        prediction_schema_version="/".join(sorted(manifest_versions)),
         prediction_dataset_order=next(iter(dataset_orders)),
         dataset_target=str(reference.alignment_config["dataset.target"]),
         dataset_random_state=int(reference.alignment_config["dataset.random_state"]),

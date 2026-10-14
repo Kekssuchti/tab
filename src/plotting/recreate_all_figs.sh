@@ -5,23 +5,26 @@ set -uo pipefail
 
 cd "$(dirname "$0")/../.." || exit 1
 
+# Silence MLflow's artifact progress bars, not figure audits or download errors.
+export MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR=false
+
 steps=(
-    src.plotting.baseline_transfer
+#    src.plotting.baseline_transfer
     src.plotting.training_source_contrast
-    src.plotting.sample_size
-    src.plotting.training_composition
+#    src.plotting.sample_size
+#    src.plotting.training_composition
     src.plotting.augmentation
-    src.plotting.ablation_estimators
+#    src.plotting.ablation_estimators
 #    src.plotting.feature_distributions
     src.plotting.pairwise_wins
 #    src.plotting.pairwise_tables
 #    src.plotting.retriever_comparison
-    src.plotting.retrieval_budget
+#    src.plotting.retrieval_budget
 )
 
 filter="${1:-}"
 jobs="${JOBS:-3}"
-mem_floor_mb="${MEM_FLOOR_MB:-13192}"
+mem_floor_mb="${MEM_FLOOR_MB:-8192}"
 
 selected=()
 for step in "${steps[@]}"; do

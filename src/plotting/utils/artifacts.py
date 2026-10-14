@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
@@ -36,6 +36,12 @@ class PlotArtifacts:
     bootstrap_scores: pd.DataFrame
     experiment_name: str
     run_ids: tuple[str, ...]
+    # Logical repeat -> physical MLflow runs supplying its model results.
+    run_shards: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+    def physical_run_ids(self, run_id: str) -> tuple[str, ...]:
+        """Return contributing runs; unmerged inputs contribute themselves."""
+        return self.run_shards.get(run_id, (run_id,))
 
 
 def load_plot_artifacts(
@@ -248,6 +254,15 @@ def combine_complementary_runs(
         bootstrap_scores=bootstraps,
         experiment_name=artifacts.experiment_name,
         run_ids=complete_run_ids,
+        run_shards={
+            logical_id: tuple(
+                physical_id
+                for run_id in artifacts.run_ids
+                if replacement[str(run_id)] == logical_id
+                for physical_id in artifacts.physical_run_ids(str(run_id))
+            )
+            for logical_id in complete_run_ids
+        },
     )
 
 
