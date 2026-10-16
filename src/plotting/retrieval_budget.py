@@ -39,6 +39,7 @@ from src.plotting.experiments import (
     tasks_for,
     warn_skipped,
 )
+from src.plotting.model_sets import PLOT_METRICS, plot_dir
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
     IncompleteExperimentError,
@@ -65,14 +66,14 @@ class DataSettings:
     unrestricted_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
     exclude_models: tuple[str, ...] | None = None
-    output_dir: Path = config.dir_plots / "retrieval"
+    output_dir: Path = plot_dir("retrieval")
 
 
 @dataclass(frozen=True)
 class VisualSettings(MetricPanelSettings):
     """Locally editable presentation choices for F10."""
 
-    metrics: tuple[str, ...] = ("roc_auc",)
+    metrics: tuple[str, ...] = PLOT_METRICS
     show_ci: bool = True
     ci_level: float = 0.95
     figure_width: float = WIDE
@@ -387,7 +388,7 @@ def main() -> None:
             for metric in prepared.metrics:
                 stem = output_root / (
                     f"{task.direction_slug}_batch-{view.batch_center}-{view.batch_size}"
-                    f"_seed-{view.test_sample_seed}_{metric}"
+                    f"_seed-{view.test_sample_seed}"
                 )
                 outputs = save(make_figure(view, metric, visual), str(stem), formats=visual.output_formats)
                 print(

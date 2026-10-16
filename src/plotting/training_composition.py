@@ -29,6 +29,7 @@ from src.plotting.defaults import (
     task_label,
 )
 from src.plotting.experiments import MAIN_TARGETS, tasks_for, warn_skipped
+from src.plotting.model_sets import PLOT_METRICS, plot_dir
 from src.plotting.scientific_figstyle import WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
     CompositionBudgetView,
@@ -45,15 +46,15 @@ class DataSettings:
 
     pipeline_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
-    exclude_models: tuple[str, ...] | None = ("tabpfn-3.5-fast",)
-    output_dir: Path = config.dir_plots / "composition"
+    exclude_models: tuple[str, ...] | None = None
+    output_dir: Path = plot_dir("composition")
 
 
 @dataclass(frozen=True)
 class VisualSettings(MetricPanelSettings):
     """Locally editable presentation choices for F6."""
 
-    metrics: tuple[str, ...] = ("roc_auc",)  # , "prc_auc")
+    metrics: tuple[str, ...] = PLOT_METRICS
     show_ci: bool = True
     ci_level: float = 0.95
     figure_width: float = WIDE
@@ -289,7 +290,7 @@ def main() -> None:
         for view in prepared.budget_views:
             output_dir = DATA.output_dir / view.target
             for metric in view.metrics:
-                stem = output_dir / f"{metric}_budget-{view.total_count}"
+                stem = output_dir / f"composition_budget-{view.total_count}"
                 outputs = save(
                     make_figure(view, metric, visual),
                     str(stem),

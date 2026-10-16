@@ -5,7 +5,7 @@ Regenerate with:
     uv run python -m src.plotting.pairwise_wins
 
 Every prediction task declared for this family in ``src.plotting.experiments``
-is rebuilt in turn, each into its own ``plots/pairwise/<target>/`` directory.
+is rebuilt in turn, each into its own ``plots/{baseline,sample_size}/<auroc|auprc>/<all|main>/<target>/`` directory.
 Edit ``VISUAL`` to change presentation and ``--target`` to narrow the run.
 The LaTeX tables for the same data live in ``src.plotting.pairwise_tables``.
 
@@ -42,6 +42,7 @@ from src.plotting.defaults import (
     set_plot_style,
 )
 from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
+from src.plotting.model_sets import PLOT_METRICS, plot_dir
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure, figure_grid, label_ends, panel_labels, save
 from src.plotting.utils import (
     MissingExperimentError,
@@ -68,17 +69,17 @@ class DataSettings:
     setting_label: str = "Training rows"
     # The full-data views belong to the baseline family and the rank views belong
     # to the sample-size family, because that is where their inputs come from.
-    baseline_dir: Path = config.dir_plots / "baseline"
-    rank_dir: Path = config.dir_plots / "sample_size"
+    baseline_dir: Path = plot_dir("baseline")
+    rank_dir: Path = plot_dir("sample_size")
 
 
 @dataclass(frozen=True)
 class VisualSettings:
     """All locally editable presentation choices for these figures."""
 
-    comparison_metrics: tuple[str, ...] = ("roc_auc",)
-    cross_metrics: tuple[str, ...] = ("roc_auc",)
-    rank_metrics: tuple[str, ...] = ("roc_auc",)
+    comparison_metrics: tuple[str, ...] = PLOT_METRICS
+    cross_metrics: tuple[str, ...] = PLOT_METRICS
+    rank_metrics: tuple[str, ...] = PLOT_METRICS
     ci_level: float | None = 0.95
     alpha: float = 0.05
     reference_model: str | None = "xgboost"
@@ -676,7 +677,7 @@ def main() -> None:
         stems: list[Path] = []
 
         for metric in visual.cross_metrics:
-            stem = baseline_dir / f"{summary.trained_on}_{metric}_cross_cohort"
+            stem = baseline_dir / f"{summary.trained_on}_cross_cohort"
             save(make_cross_cohort_figure(summary, metric, visual), str(stem), formats=visual.output_formats)
             stems.append(stem)
             print(f"\nCross-cohort caption ({metric}):")
@@ -689,7 +690,7 @@ def main() -> None:
         print(f"\\caption{{{forest_caption(summary, visual)}}}")
 
         for metric, metric_ranks in ranks.items():
-            rank_figure = rank_dir / f"{summary.trained_on}_{metric}_ranks"
+            rank_figure = rank_dir / f"{summary.trained_on}_ranks"
             save(
                 make_rank_figure(metric_ranks, DATA.setting_label, visual),
                 str(rank_figure),
@@ -706,7 +707,7 @@ def main() -> None:
                         f"  Note: a setting contributes only {smallest} blocks, so no per-setting diagram can "
                         f"separate a pair; set VISUAL.setting_panels = False to skip that figure."
                     )
-                setting_figure = rank_dir / f"{summary.trained_on}_{metric}_ranks_by_setting"
+                setting_figure = rank_dir / f"{summary.trained_on}_ranks_by_setting"
                 save(
                     make_setting_rank_figure(metric_ranks, DATA.setting_source, visual),
                     str(setting_figure),

@@ -18,6 +18,7 @@ from matplotlib.figure import Figure
 
 from src.config import config
 from src.plotting.defaults import dataset_label, metric_label, set_plot_style
+from src.plotting.model_sets import PLOT_METRIC, plot_dir
 from src.plotting.scientific_figstyle import WIDE, figure, save
 from src.plotting.utils import aggregate_runs_by_setting, load_plot_artifacts
 from src.plotting.utils.grouped import GroupedEvaluation
@@ -32,11 +33,11 @@ class DataSettings:
     experiment_name: str = "ablation_tudd_n_estimators"
     setting_pattern: str = r"grid-default-(\d+)-roc-auc"
     dataset: str = "mimic"
-    metric: str = "roc_auc"
+    metric: str = PLOT_METRIC
     runtime_metric: str = "total_time"
     # Model names to leave out of every figure.
     exclude_models: tuple[str, ...] | None = None
-    output_dir: Path = config.dir_plots / "ablation_n_estimators"
+    output_dir: Path = plot_dir("ablation_n_estimators")
 
 
 @dataclass(frozen=True)

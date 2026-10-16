@@ -28,6 +28,7 @@ from src.plotting.experiments import (
     tasks_for,
     warn_skipped,
 )
+from src.plotting.model_sets import PLOT_METRICS, plot_dir
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
     MissingExperimentError,
@@ -43,14 +44,14 @@ from src.plotting.utils.rendering import draw_model_forest, instance_plot_styles
 class DataSettings:
     """Output location for reciprocal complete-data contrasts."""
 
-    output_dir: Path = config.dir_plots / "baseline"
+    output_dir: Path = plot_dir("baseline")
 
 
 @dataclass(frozen=True)
 class VisualSettings(MetricPanelSettings):
     """Locally editable presentation choices for F3."""
 
-    metrics: tuple[str, ...] = ("roc_auc",)  # "prc_auc")
+    metrics: tuple[str, ...] = PLOT_METRICS
     show_ci: bool = True
     ci_level: float = 0.95
     figure_width: float = WIDE
@@ -167,7 +168,7 @@ def _pairing_report(data: SourceContrastEvaluation) -> None:
     print(
         f"  Models: the same {len(data.model_instances)} configured and successfully evaluated instances "
         "occur in every selected logical repeat from both sources, including complementary model runs; "
-        "no exclusions or missing models."
+        "no missing models within the selected model view."
     )
     for center in data.evaluation_centers:
         evidence = data.pairing_evidence[center]

@@ -15,14 +15,14 @@ here by requiring matched repeat seeds inside every comparison cell.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import pandas as pd
 
 from mlflow import MlflowClient
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI
 from src.mlflow.tracking_contract import ARTIFACT_CONFIG
-from src.plotting.utils.artifacts import PlotArtifacts
+from src.plotting.utils.artifacts import PlotArtifacts, load_plot_artifacts
 from src.plotting.utils.grouped import GroupedEvaluation, aggregate_runs_by_setting, require_grouped_coverage
 from src.plotting.utils.runs import (
     IncompleteExperimentError,
@@ -76,12 +76,24 @@ def reuse_full_pool_runs(
         f"Reusing both-full endpoint(s) from {reciprocal.experiment_name!r} "
         f"in {artifacts.experiment_name!r}: {', '.join(borrowed)}"
     )
+    if reciprocal.bootstrap_scores.empty:
+        # Discover endpoints from cheap point/config metadata first; do not load
+        # the reciprocal sweep's bootstrap draws just to borrow a few runs.
+        reciprocal = load_plot_artifacts(
+            reciprocal.experiment_name,
+            pipeline_runs=[physical for run_id in borrowed for physical in reciprocal.physical_run_ids(run_id)],
+            models=tuple(reciprocal.metrics["model_instance"].astype(str).drop_duplicates()),
+            tracking_uri=tracking_uri,
+        )
+        if not set(borrowed).issubset(reciprocal.run_ids):
+            raise ValueError("Reciprocal endpoint loading changed the selected logical runs")
     combined = _combine_artifacts(artifacts, select_artifact_runs(reciprocal, borrowed))
     return PlotArtifacts(
         metrics=combined.metrics,
         bootstrap_scores=combined.bootstrap_scores,
         experiment_name=artifacts.experiment_name,
         run_ids=combined.run_ids,
+        run_shards=combined.run_shards,
     )
 
 
@@ -235,12 +247,10 @@ def prepare_full_external_augmentation(
     external_only, dropped_external_only = _selected_external_only(external_only, combined)
 
     runs = (*external_only, *measured_local_only, *combined)
-    setting_by_run = {
-        design.run_id: _full_external_setting(design) for design in runs
-    }
+    setting_by_run = {design.run_id: _full_external_setting(design) for design in runs}
     setting_order = _full_external_setting_order(local_counts, measured_zero=bool(external_only))
     grouped = _aggregate(
-        _combine_artifacts(artifacts, local_only_artifacts, external_only_artifacts),
+        (artifacts, local_only_artifacts, external_only_artifacts),
         runs,
         setting_by_run,
         setting_order,
@@ -399,6 +409,7 @@ def _combine_artifacts(*sets: PlotArtifacts | None) -> PlotArtifacts:
         bootstrap_scores=pd.concat([item.bootstrap_scores for item in selected], ignore_index=True),
         experiment_name=" + ".join(dict.fromkeys(item.experiment_name for item in selected)),
         run_ids=tuple(run_id for item in selected for run_id in item.run_ids),
+        run_shards={run_id: item.physical_run_ids(run_id) for item in selected for run_id in item.run_ids},
     )
 
 
@@ -541,20 +552,47 @@ def _conditions_frame(
 
 
 def _aggregate(
-    artifacts: PlotArtifacts,
+    artifact_sets: Sequence[PlotArtifacts | None],
     runs: Sequence[_RunDesign],
     setting_by_run: Mapping[str, str],
     setting_order: Sequence[str],
     metrics: Sequence[str],
     ci_level: float,
 ) -> GroupedEvaluation:
-    selected = select_artifact_runs(artifacts, [design.run_id for design in runs])
-    grouped = aggregate_runs_by_setting(
-        selected,
-        setting_by_run,
-        setting_order=setting_order,
-        metrics=metrics,
-        ci_level=ci_level,
+    # Settings are independent: keep every repeat of a setting together, but
+    # never concatenate/copy all three full sweeps for one giant groupby.
+    # Unmatched reference runs are excluded before any concatenation.
+    parts = []
+    for setting in setting_order:
+        run_ids = [design.run_id for design in runs if setting_by_run[design.run_id] == setting]
+        selected = _combine_artifacts(
+            *(
+                select_artifact_runs(item, selected_ids)
+                for item in artifact_sets
+                if item is not None
+                if (selected_ids := [run_id for run_id in run_ids if run_id in item.run_ids])
+            )
+        )
+        part = aggregate_runs_by_setting(
+            selected,
+            {run_id: setting for run_id in run_ids},
+            setting_order=(setting,),
+            metrics=metrics,
+            ci_level=ci_level,
+        )
+        if parts and not part.model_metadata.equals(parts[0].model_metadata):
+            raise ValueError("Augmentation settings must share one model roster and model identity")
+        parts.append(part)
+        del selected
+    scores = pd.concat([part.bootstrap_scores for part in parts], ignore_index=True)
+    grouped = replace(
+        parts[0],
+        performance=pd.concat([part.performance for part in parts], ignore_index=True),
+        runtimes=pd.concat([part.runtimes for part in parts], ignore_index=True),
+        bootstrap_scores=scores,
+        settings=tuple(setting_order),
+        run_counts={setting: count for part in parts for setting, count in part.run_counts.items()},
+        bootstrap_count=int(scores["bootstrap_id"].nunique()),
     )
     require_grouped_coverage(grouped, datasets=PREDICTION_DATASETS, description="Augmentation")
     return grouped

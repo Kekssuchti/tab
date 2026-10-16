@@ -5,7 +5,7 @@ Regenerate with:
     uv run python -m src.plotting.sample_size
 
 Every prediction task declared for this family in ``src.plotting.experiments``
-is rebuilt in turn, each into its own ``plots/sample_size/<target>/`` directory.
+is rebuilt in turn, each into its own ``plots/sample_size/<auroc|auprc>/<all|main>/<target>/`` directory.
 Edit ``VISUAL`` for presentation; ``--target`` narrows the run to selected tasks.
 """
 
@@ -29,6 +29,7 @@ from src.plotting.experiments import (
     tasks_for,
     warn_skipped,
 )
+from src.plotting.model_sets import PLOT_METRICS, plot_dir
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
     FullDataBenchmark,
@@ -57,15 +58,15 @@ class DataSettings:
     pipeline_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
     # Model names to leave out of every figure.
-    exclude_models: tuple[str, ...] | None = ("tabpfn-3.5-fast",)
-    output_dir: Path = config.dir_plots / "sample_size"
+    exclude_models: tuple[str, ...] | None = None
+    output_dir: Path = plot_dir("sample_size")
 
 
 @dataclass(frozen=True)
 class VisualSettings(MetricPanelSettings):
     """All locally editable presentation choices for this figure."""
 
-    metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
+    metrics: tuple[str, ...] = PLOT_METRICS
     datasets: tuple[str, ...] | None = None
     show_ci: bool = False
     ci_level: float = 0.95
@@ -230,7 +231,7 @@ def make_xgboost_difference_figure(
                 color=BASELINE,
                 linewidth=visual.benchmark_line_width,
                 linestyle=visual.benchmark_linestyle,
-                label="XGBoost (zero)",
+                label="XGBoost",
                 zorder=1,
             )
             dataset_rows = metric_rows.loc[metric_rows["dataset"].eq(dataset)]

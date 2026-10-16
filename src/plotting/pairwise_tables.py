@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label
 from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
+from src.plotting.model_sets import PLOT_METRICS
 from src.plotting.utils import MissingExperimentError, PairwiseSummary, RankSummary, load_pairwise_inputs
 from src.plotting.utils.pairwise import pairwise_matrix_to_latex, rank_table_to_latex
 from src.plotting.utils.settings import setting_display
@@ -47,7 +48,7 @@ class DataSettings:
 class TableSettings(MetricPanelSettings):
     """All locally editable table choices."""
 
-    metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
+    metrics: tuple[str, ...] = PLOT_METRICS
     matrix_datasets: tuple[str, ...] | None = None
     ci_level: float = 0.95
     alpha: float = 0.05

@@ -29,6 +29,7 @@ from src.config import config
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI, load_evaluation_data
 from src.plotting.defaults import MetricPanelSettings, metric_label, ordered_models, set_plot_style
 from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
+from src.plotting.model_sets import PLOT_METRICS, excluded_models, plot_dir
 from src.plotting.scientific_figstyle import BASELINE, DIVERGING, PALETTE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import MissingExperimentError
 from src.plotting.utils.rendering import instance_plot_styles
@@ -47,14 +48,14 @@ class DataSettings:
     train_sizes: tuple[int, ...] | None = None
     test_sizes: tuple[int, ...] | None = None
     reference_strategy: str = "random"
-    output_dir: Path = config.dir_plots / "retrieval"
+    output_dir: Path = plot_dir("retrieval")
 
 
 @dataclass(frozen=True)
 class VisualSettings(MetricPanelSettings):
     """All locally editable presentation choices for this figure."""
 
-    metrics: tuple[str, ...] = ("roc_auc",)
+    metrics: tuple[str, ...] = PLOT_METRICS
     figure_width: float = WIDE
     # One metric is one grid row.
     row_height: float = 0.55
@@ -118,8 +119,10 @@ def load_retriever_comparisons(
         pipeline_runs=pipeline_runs,
         tracking_uri=tracking_uri,
     )
+    if not metrics.empty:
+        metrics = metrics.loc[~metrics["model_name"].isin(excluded_models(metrics["model_name"]))]
     if metrics.empty:
-        raise MissingExperimentError(f"No evaluation data found for experiment {experiment_name!r}")
+        raise MissingExperimentError(f"No evaluation data for the selected model view in {experiment_name!r}")
 
     points = metrics.loc[
         metrics["scope"].eq("test") & metrics["statistic"].eq("point") & metrics["dataset"].eq(RETRIEVER_DATASET)

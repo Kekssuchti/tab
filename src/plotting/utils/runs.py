@@ -129,8 +129,7 @@ def read_train_on_design(
     if not isinstance(train_on, list) or not 1 <= len(train_on) <= len(allowed_sources):
         count = len(train_on) if isinstance(train_on, list) else "non-list"
         raise ValueError(
-            f"Run {run_id} dataset.train_on must contain between one and {len(allowed_sources)} entries; "
-            f"found {count}"
+            f"Run {run_id} dataset.train_on must contain between one and {len(allowed_sources)} entries; found {count}"
         )
 
     entries = []
@@ -161,9 +160,7 @@ def _train_on_entry(source: str, fraction: object, run_id: str) -> TrainOnEntry:
         raise TypeError(f"Run {run_id} dataset.train_on fraction for {source!r} must be a number; found bool")
     if isinstance(fraction, int):
         if fraction <= 0:
-            raise ValueError(
-                f"Run {run_id} dataset.train_on count for {source!r} must be positive; found {fraction}"
-            )
+            raise ValueError(f"Run {run_id} dataset.train_on count for {source!r} must be positive; found {fraction}")
         return TrainOnEntry(source=source, kind=SAMPLE_COUNT, value=fraction)
     if isinstance(fraction, float) and fraction == 1.0:
         return TrainOnEntry(source=source, kind=FULL_POOL, value=1.0)
@@ -361,14 +358,18 @@ def read_training_sample_seed(client: MlflowClient, run_id: str) -> int:
 
 def select_artifact_runs(artifacts: PlotArtifacts, run_ids: Sequence[str]) -> PlotArtifacts:
     """Return the artifacts restricted to the given run IDs, in that order."""
-    selected = {str(run_id) for run_id in run_ids}
+    ordered_ids = tuple(str(run_id) for run_id in run_ids)
+    if ordered_ids == artifacts.run_ids:
+        return artifacts
+    selected = set(ordered_ids)
     metric_ids = artifacts.metrics["pipeline_mlflow_run_id"].astype(str)
     bootstrap_ids = artifacts.bootstrap_scores["pipeline_mlflow_run_id"].astype(str)
     return PlotArtifacts(
         metrics=artifacts.metrics.loc[metric_ids.isin(selected)].copy(),
         bootstrap_scores=artifacts.bootstrap_scores.loc[bootstrap_ids.isin(selected)].copy(),
         experiment_name=artifacts.experiment_name,
-        run_ids=tuple(str(run_id) for run_id in run_ids),
+        run_ids=ordered_ids,
+        run_shards={run_id: artifacts.physical_run_ids(run_id) for run_id in ordered_ids},
     )
 
 

@@ -122,6 +122,7 @@ def load_bootstrap_data(
     pipeline_runs: str | Sequence[str] | None = None,
     models: str | Sequence[str] | None = None,
     tracking_uri: str = DEFAULT_TRACKING_URI,
+    compact: bool = False,
 ) -> pd.DataFrame:
     """Load logged bootstrap metric scores in a model-long plotting format.
 
@@ -130,6 +131,10 @@ def load_bootstrap_data(
     matching ``prediction_metrics.csv`` artifact rather than inferred from the
     bootstrap column name. This keeps duplicate model instances unambiguous and
     lets callers average aligned bootstrap IDs across repeated pipeline runs.
+
+    ``compact`` retains only the columns consumed by figure helpers, avoiding
+    repeated run metadata and per-draw ``train_sources`` tuple allocations.
+    String columns remain non-categorical to preserve downstream groupby semantics.
     """
     client = MlflowClient(tracking_uri=tracking_uri)
     requested_runs = _selectors(pipeline_runs)
@@ -177,6 +182,15 @@ def load_bootstrap_data(
                     + ", ".join(unknown_instances)
                 )
 
+            if compact and requested_models:
+                model_columns = [
+                    instance
+                    for instance in model_columns
+                    if instance in requested_models or instance_to_name[instance] in requested_models
+                ]
+            if compact and not model_columns:
+                continue
+
             long = bootstrap.melt(
                 id_vars=["dataset", "metric", "bootstrap_id"],
                 value_vars=model_columns,
@@ -184,7 +198,7 @@ def load_bootstrap_data(
                 value_name="score",
             )
             long["model_name"] = long["model_instance"].map(instance_to_name)
-            if requested_models:
+            if requested_models and not compact:
                 selected = long[["model_instance", "model_name"]].astype(str).isin(requested_models).any(axis=1)
                 long = long.loc[selected].copy()
             if long.empty:
@@ -201,7 +215,10 @@ def load_bootstrap_data(
             ]
             metadata = metrics.iloc[0]
             long.insert(0, "pipeline_mlflow_run_id", parent.info.run_id)
-            long.insert(1, "experiment_name", experiment.name)
+            if compact:
+                metadata_columns = ["target", "trained_on"]
+            else:
+                long.insert(1, "experiment_name", experiment.name)
             for column in metadata_columns:
                 long[column] = metadata[column]
             frames.append(long)
@@ -210,7 +227,8 @@ def load_bootstrap_data(
         return pd.DataFrame()
 
     combined = pd.concat(frames, ignore_index=True)
-    combined["train_sources"] = combined["train_sources"].map(_parse_sources)
+    if not compact:
+        combined["train_sources"] = combined["train_sources"].map(_parse_sources)
     return combined
 
 

@@ -12,11 +12,11 @@ steps=(
 #    src.plotting.baseline_transfer
     src.plotting.training_source_contrast
 #    src.plotting.sample_size
-#    src.plotting.training_composition
+    src.plotting.training_composition
     src.plotting.augmentation
 #    src.plotting.ablation_estimators
 #    src.plotting.feature_distributions
-    src.plotting.pairwise_wins
+#    src.plotting.pairwise_wins
 #    src.plotting.pairwise_tables
 #    src.plotting.retriever_comparison
 #    src.plotting.retrieval_budget
@@ -70,11 +70,23 @@ room_for_another_step() {
     ((available >= mem_floor_mb))
 }
 
+# Keep a family's metric/model views sequential to avoid increasing peak memory.
+run_step() {
+    local metric model_set status=0
+    for metric in ${PLOT_METRIC:-auroc auprc}; do
+        for model_set in ${PLOT_MODEL_SET:-all main}; do
+            echo "--- metric: $metric; model set: $model_set"
+            PLOT_METRIC="$metric" PLOT_MODEL_SET="$model_set" uv run python -m "$1" || status=1
+        done
+    done
+    return "$status"
+}
+
 if ((jobs == 1 || ${#selected[@]} == 1)); then
     for step in "${selected[@]}"; do
         echo
         echo "=== $step"
-        uv run python -m "$step" || failed+=("$step")
+        run_step "$step" || failed+=("$step")
     done
 else
     logs="$(mktemp -d)"
@@ -99,7 +111,7 @@ else
             fi
             step="${selected[next]}"
             stem="${logs}/${step//./_}"
-            ( uv run python -m "$step" >"${stem}.log" 2>&1; echo $? >"${stem}.rc" ) &
+            ( run_step "$step" >"${stem}.log" 2>&1; echo $? >"${stem}.rc" ) &
             running[$!]="$step"
             next=$((next + 1))
         done

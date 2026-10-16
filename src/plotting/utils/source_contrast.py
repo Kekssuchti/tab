@@ -15,6 +15,7 @@ from mlflow.exceptions import MlflowException
 from mlflow import MlflowClient
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI
 from src.mlflow.tracking_contract import ARTIFACT_CONFIG, ARTIFACT_TEST_PREDICTIONS
+from src.plotting.model_sets import excluded_models
 from src.plotting.utils.aggregation import AggregatedEvaluation, aggregate_evaluation_runs
 from src.plotting.utils.artifacts import PlotArtifacts
 from src.plotting.utils.sample_size import full_training_count
@@ -321,6 +322,7 @@ def _configured_models(config: Mapping[str, object], run_id: str) -> dict[str, t
             raise TypeError(f"Run {run_id} has an invalid training model at index {index}")
         names.append(str(model["name"]))
 
+    excluded = set(excluded_models(names))
     counts = Counter(names)
     seen: Counter[str] = Counter()
     configured = {}
@@ -328,7 +330,8 @@ def _configured_models(config: Mapping[str, object], run_id: str) -> dict[str, t
         index = seen[name]
         seen[name] += 1
         instance = name if counts[name] == 1 else f"{name}__{index}"
-        configured[instance] = (name, json.dumps(model, sort_keys=True, separators=(",", ":")))
+        if name not in excluded:
+            configured[instance] = (name, json.dumps(model, sort_keys=True, separators=(",", ":")))
     return configured
 
 
@@ -377,7 +380,7 @@ def _validate_model_rosters(
                     "that differ from its combined contributing configurations; "
                     f"missing={sorted(set(expected_repeat) - set(actual_repeat))}, "
                     f"unexpected={sorted(set(actual_repeat) - set(expected_repeat))}, "
-                    "or renamed model instances. F3 does not compare unequal or filtered rosters."
+                    "or renamed model instances. F3 requires complete rosters within the selected model view."
                 )
 
         assert reference_configured is not None
@@ -394,7 +397,7 @@ def _validate_model_rosters(
             raise ValueError(
                 f"Complete-data runs trained on {source!r} exclude or lack configured models; "
                 f"missing={missing}, unexpected={unexpected}, renamed_instances={renamed}. "
-                "F3 does not compare unequal or filtered rosters."
+                "F3 requires equal, complete rosters within the selected model view."
             )
 
     left = {str(row.model_instance): str(row.model_name) for row in aggregated[sources[0]].model_metadata.itertuples()}

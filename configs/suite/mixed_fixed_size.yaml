@@ -9,21 +9,31 @@ base_config: ../pipeline/baseline_both.yaml
 matrix:
   - path: dataset.train_on
     values:
-      - [{ dataset: tudd, fraction: 6400 }]
-      - [{ dataset: tudd, fraction: 4800 }, { dataset: mimic, fraction: 1600 }]
-      - [{ dataset: tudd, fraction: 3200 }, { dataset: mimic, fraction: 3200 }]
-      - [{ dataset: tudd, fraction: 1600 }, { dataset: mimic, fraction: 4800 }]
-      - [{ dataset: mimic, fraction: 6400 }]
+      - [{ dataset: tudd, fraction: 1600 }]
+      - [{ dataset: tudd, fraction: 1200 }, { dataset: mimic, fraction: 400 }]
+      - [{ dataset: tudd, fraction: 800 }, { dataset: mimic, fraction: 800 }]
+      - [{ dataset: tudd, fraction: 400 }, { dataset: mimic, fraction: 1200 }]
+      - [{ dataset: mimic, fraction: 1600 }]
+  #    - [{ dataset: tudd, fraction: 400 }]
+  #    - [{ dataset: tudd, fraction: 300 }, { dataset: mimic, fraction: 100 }]
+  #    - [{ dataset: tudd, fraction: 200 }, { dataset: mimic, fraction: 200 }]
+  #    - [{ dataset: tudd, fraction: 100 }, { dataset: mimic, fraction: 300 }]
+  #    - [{ dataset: mimic, fraction: 400 }]
+  #      - [{ dataset: tudd, fraction: 6400 }]
+  #      - [{ dataset: tudd, fraction: 4800 }, { dataset: mimic, fraction: 1600 }]
+  #      - [{ dataset: tudd, fraction: 3200 }, { dataset: mimic, fraction: 3200 }]
+  #      - [{ dataset: tudd, fraction: 1600 }, { dataset: mimic, fraction: 4800 }]
+  #      - [{ dataset: mimic, fraction: 6400 }]
 
   # mlflow name + source, KEEP IN SYNC!
   # definition: mixed_fixed_size_TASK
   - path: mlflow.experiment_name
-    values: ["mixed_fixed_size_mortality"]
+    values: ["mixed_fixed_size_LOS7"]
 
   # common metadata to change
   # task
   - path: dataset.target
-    values: ["mortality"]
+    values: ["LOS7"]
 
   # repeat runs with other seeds (pretty much dont need to touch)
   - path: random_states

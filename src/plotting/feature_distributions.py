@@ -16,6 +16,7 @@ import pandas as pd
 
 from src.config import config
 from src.plotting.defaults import FEATURE_ALIASES, set_plot_style
+from src.plotting.model_sets import plot_dir
 from src.plotting.scientific_figstyle import COLUMN, figure, save
 from src.plotting.utils.distributions import draw_feature_distribution
 
@@ -30,7 +31,7 @@ class DataSettings:
     )
     features: tuple[str, ...] | None = None
     exclude_features: tuple[str, ...] = ("mortality", "LOS", "hours_to_readmit")
-    output_dir: Path = config.dir_plots / "feature_distributions" / "both"
+    output_dir: Path = plot_dir("feature_distributions") / "both"
 
 
 @dataclass(frozen=True)

@@ -33,6 +33,7 @@ from src.config import config
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI
 from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style, task_label
 from src.plotting.experiments import DATA_SOURCES, MAIN_TARGETS, tasks_for, warn_skipped
+from src.plotting.model_sets import PLOT_METRICS, plot_dir
 from src.plotting.scientific_figstyle import BASELINE, PALETTE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
     FullExternalAugmentation,
@@ -59,14 +60,14 @@ class DataSettings:
     pipeline_runs: tuple[str, ...] | None = None
     models: tuple[str, ...] | None = None
     exclude_models: tuple[str, ...] | None = None
-    output_dir: Path = config.dir_plots / "augmentation"
+    output_dir: Path = plot_dir("augmentation")
 
 
 @dataclass(frozen=True)
 class VisualSettings(MetricPanelSettings):
     """Locally editable presentation choices for F7."""
 
-    metrics: tuple[str, ...] = ("roc_auc", "prc_auc")
+    metrics: tuple[str, ...] = PLOT_METRICS
     show_ci: bool = True
     ci_level: float = 0.95
     figure_width: float = WIDE
@@ -398,62 +399,65 @@ def main() -> None:
     if len(tasks) > 1 and run_ids:
         raise SystemExit("--run-id pins one augmentation input; select exactly one target and evaluation center")
     for task in tasks:
-        print(f"\n=== {task.label} [{task.direction}] ({task.experiment_name or 'not registered'})")
-        if task.experiment_name is None:
-            warn_skipped(task, "the intended augmentation experiment has not been registered yet")
-            continue
+        _run_task(task, run_ids, args.seed)
+
+
+def _run_task(task, run_ids: tuple[str, ...] | None, seed: int | None) -> None:
+    """Scope large sweep frames to one task, including skipped/failed tasks."""
+    print(f"\n=== {task.label} [{task.direction}] ({task.experiment_name or 'not registered'})")
+    if task.experiment_name is None:
+        warn_skipped(task, "the intended augmentation experiment has not been registered yet")
+        return
+    try:
+        artifacts = load_plot_artifacts(
+            task.experiment_name,
+            pipeline_runs=run_ids,
+            models=DATA.models,
+            exclude_models=DATA.exclude_models,
+            expected_target=task.target,
+        )
+    except MissingExperimentError as missing:
+        warn_skipped(task, missing)
+        return
+
+    if seed is not None:
+        client = MlflowClient(tracking_uri=DEFAULT_TRACKING_URI)
+        selected_ids = [run_id for run_id in artifacts.run_ids if read_training_sample_seed(client, run_id) == seed]
+        if not selected_ids:
+            warn_skipped(task, f"no augmentation runs record training_sample_seed={seed}")
+            return
+        artifacts = select_artifact_runs(artifacts, selected_ids)
+
+    reciprocal_tasks = tasks_for(
+        "augmentation_full_external", [task.target], evaluation_centers=[str(task.training_source)]
+    )
+    reciprocal_name = reciprocal_tasks[0].experiment_name
+    if reciprocal_name is not None:
         try:
-            artifacts = load_plot_artifacts(
-                task.experiment_name,
-                pipeline_runs=run_ids,
+            reciprocal = load_plot_artifacts(
+                reciprocal_name,
                 models=DATA.models,
                 exclude_models=DATA.exclude_models,
                 expected_target=task.target,
+                include_bootstrap=False,
             )
         except MissingExperimentError as missing:
-            warn_skipped(task, missing)
-            continue
+            print(f"note: reciprocal full-data endpoint unavailable: {missing}", file=sys.stderr)
+        else:
+            artifacts = reuse_full_pool_runs(artifacts, reciprocal)
+            del reciprocal
 
-        if args.seed is not None:
-            client = MlflowClient(tracking_uri=DEFAULT_TRACKING_URI)
-            selected_ids = [
-                run_id
-                for run_id in artifacts.run_ids
-                if read_training_sample_seed(client, run_id) == args.seed
-            ]
-            if not selected_ids:
-                warn_skipped(task, f"no augmentation runs record training_sample_seed={args.seed}")
-                continue
-            artifacts = select_artifact_runs(artifacts, selected_ids)
-
-        reciprocal_tasks = tasks_for(
-            "augmentation_full_external", [task.target], evaluation_centers=[str(task.training_source)]
+    try:
+        _run_full_external(
+            task,
+            artifacts,
+            str(task.evaluation_center),
+            str(task.training_source),
+            VISUAL,
+            DATA.output_dir,
         )
-        reciprocal_name = reciprocal_tasks[0].experiment_name
-        if reciprocal_name is not None:
-            try:
-                reciprocal = load_plot_artifacts(
-                    reciprocal_name,
-                    models=DATA.models,
-                    exclude_models=DATA.exclude_models,
-                    expected_target=task.target,
-                )
-            except MissingExperimentError as missing:
-                print(f"note: reciprocal full-data endpoint unavailable: {missing}", file=sys.stderr)
-            else:
-                artifacts = reuse_full_pool_runs(artifacts, reciprocal)
-
-        try:
-            _run_full_external(
-                task,
-                artifacts,
-                str(task.evaluation_center),
-                str(task.training_source),
-                VISUAL,
-                DATA.output_dir,
-            )
-        except IncompleteExperimentError as incomplete:
-            warn_skipped(task, incomplete)
+    except IncompleteExperimentError as incomplete:
+        warn_skipped(task, incomplete)
 
 
 def _load_single_source_reference(task, source: str) -> PlotArtifacts | None:
@@ -505,15 +509,18 @@ def _common_roster(*items: PlotArtifacts) -> tuple[PlotArtifacts, ...]:
         if models:
             print(f"  note: {models} are not evaluated in {name!r} and are left out of this figure")
     return tuple(
-        PlotArtifacts(
+        item
+        if roster == common
+        else PlotArtifacts(
             metrics=item.metrics.loc[item.metrics["model_instance"].astype(str).isin(common)].copy(),
             bootstrap_scores=item.bootstrap_scores.loc[
                 item.bootstrap_scores["model_instance"].astype(str).isin(common)
             ].copy(),
             experiment_name=item.experiment_name,
             run_ids=item.run_ids,
+            run_shards=item.run_shards,
         )
-        for item in selected
+        for item, roster in zip(selected, rosters, strict=True)
     )
 
 
@@ -537,7 +544,7 @@ def _run_full_external(task, artifacts, local_center: str, external_source: str,
         print("Unmatched reference runs not drawn (different repeat seeds): " + ", ".join(prepared.dropped_runs))
     output_root = output_dir / prepared.target
     for metric in prepared.metrics:
-        stem = output_root / f"{external_source}_to_{local_center}_full_external_{metric}"
+        stem = output_root / f"{external_source}_to_{local_center}_full_external"
         outputs = save(make_full_external_figure(prepared, metric, visual), str(stem), formats=visual.output_formats)
         print(f"LaTeX caption ({metric_label(metric)}):")
         print(f"\\caption{{{full_external_caption(prepared, metric, visual)}}}")

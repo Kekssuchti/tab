@@ -5,7 +5,7 @@ Regenerate with:
     uv run python -m src.plotting.baseline_transfer
 
 Every prediction task declared for this family in ``src.plotting.experiments``
-is rebuilt in turn, each into its own ``plots/baseline/<target>/`` directory.
+is rebuilt in turn, each into its own ``plots/baseline/<auroc|auprc>/<all|main>/<target>/`` directory.
 Edit ``VISUAL`` to change figure presentation; ``--target`` narrows the run to
 selected tasks and ``--run-id`` pins explicit pipeline runs.
 """
@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
-from src.config import config
 from src.plotting.defaults import (
     MetricPanelSettings,
     dataset_label,
@@ -29,6 +28,7 @@ from src.plotting.defaults import (
     set_plot_style,
 )
 from src.plotting.experiments import DATA_SOURCES, tasks_for, warn_skipped
+from src.plotting.model_sets import METRIC_SET, MODEL_SET, PLOT_METRICS, plot_dir
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
     MissingExperimentError,
@@ -50,14 +50,14 @@ class DataSettings:
     # Model names to leave out of every figure, for example a model that a
     # reviewer asked to see separately.
     exclude_models: tuple[str, ...] | None = None
-    output_dir: Path = config.dir_plots / "baseline"
+    output_dir: Path = plot_dir("baseline")
 
 
 @dataclass(frozen=True)
 class VisualSettings(MetricPanelSettings):
     """All locally editable presentation choices for these figures."""
 
-    metrics: tuple[str, ...] = ("roc_auc",)
+    metrics: tuple[str, ...] = PLOT_METRICS
     plot_type: Literal["current", "bootstrap", "min_max"] = "min_max"
     show_ci: bool = True
     ci_level: float = 0.95
@@ -461,7 +461,7 @@ def main() -> None:
                 )
             repeats = tuple(repeat_summaries)
 
-        output_dir = (args.output_dir or DATA.output_dir) / prepared.target
+        output_dir = ((args.output_dir / METRIC_SET / MODEL_SET) if args.output_dir else DATA.output_dir) / prepared.target
         output_dir.mkdir(parents=True, exist_ok=True)
         for kind in plot_types:
             selected_visual = replace(visual, plot_type=kind)

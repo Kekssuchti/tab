@@ -81,9 +81,29 @@ uv run python -m src.plotting.retriever_comparison
 uv run python -m src.plotting.retrieval_budget
 ```
 
-### Output paths
+### Metric/model views and output paths
 
-Every figure path reads `plots/<experiment>/<target>/<source>_<what>.pdf`:
+`model_sets.py` centrally defines `main`: TabPFN 3.5, LR, XGBoost, TabFM,
+and Causilo. `all` includes every available model. Selection is applied before
+aggregation, so model-dependent ranks and references use the selected roster.
+Local explicit model/exclusion overrides still apply. This covers the evaluation
+figure scripts listed above; the fixed three-model interpretability notebook
+remains separate.
+
+`model_sets.py` also selects one score per figure: `PLOT_METRIC=auroc` maps to
+`roc_auc`, and `PLOT_METRIC=auprc` to `prc_auc`. Figure settings use this shared
+single-metric default rather than combining the scores in one figure.
+
+`recreate_all_figs.sh` generates all four metric/model combinations for each
+enabled step, sequentially within that family. Set either environment variable
+to narrow the rebuild. Individual Python scripts default to `auroc` and `all`:
+
+```bash
+PLOT_METRIC=auprc PLOT_MODEL_SET=main uv run python -m src.plotting.baseline_transfer
+PLOT_METRIC=auprc PLOT_MODEL_SET=main src/plotting/recreate_all_figs.sh
+```
+
+Every figure path reads `plots/<experiment>/<auroc|auprc>/<all|main>/<target>/<source>_<what>.pdf`:
 
 - `<experiment>` is the experiment family the figure reports on (`baseline`,
   `sample_size`, `composition`, `augmentation`, `retrieval`), not the kind of
@@ -97,11 +117,14 @@ Every figure path reads `plots/<experiment>/<target>/<source>_<what>.pdf`:
   a reciprocal contrast. A design with one training pool, such as fixed-budget
   composition, starts the file name with `<what>` instead.
 - `<what>` names the figure and the design settings it fixes, for example
-  `generalizability`, `roc_auc_ranks`, `roc_auc_budget-1600`, or
-  `xgboost_difference`.
+  `generalizability`, `ranks`, `composition_budget-1600`, or
+  `xgboost_difference`. The score is encoded only in the metric directory,
+  not repeated in the filename.
 
 Estimator-count ablations and feature distributions are investigation figures and
-keep their own flat directories.
+keep their own directories beneath the same metric/model levels. Feature
+distributions do not depend on either selection, so those views contain the same
+data; estimator-runtime figures likewise do not change with the score selection.
 
 ### Baseline uncertainty versions
 
@@ -132,7 +155,7 @@ uv run python -m src.plotting.baseline_transfer --plot-type all --output-dir plo
 
 The current version retains the original filenames. Alternatives append
 `_bootstrap` or `_min_max`; each version is exported as PDF and SVG. The
-comparison outputs under `plots/baseline/versions/<target>/` preserve existing
+comparison outputs under `plots/baseline/versions/<auroc|auprc>/<all|main>/<target>/` preserve existing
 baseline PDFs. Captions printed by the script describe each version's markers
 and interval interpretation.
 
@@ -150,10 +173,10 @@ in inches, for what belongs to no single row (a band of panel labels).
 ### Where a figure's metrics come from
 
 The registry orchestrates inputs only: which experiment, which target, which
-training source, which evaluation center. Which metrics a figure plots is a
-plot-level decision in the figure's own `VISUAL` (or `TABLES`) settings, next to
-its colors, sizes, and axis labels, so registering a new input never changes what
-an existing figure shows. `score_scale` is derived from `metrics` through
+training source, which evaluation center. The shared `PLOT_METRICS` singleton supplies
+the figure's `VISUAL` (or `TABLES`) metric default; `PLOT_METRIC` selects it
+centrally. Colors, sizes, and axis labels remain plot-local, so registering a
+new input never changes what an existing figure shows. `score_scale` is derived from `metrics` through
 `defaults.panel_scale`, so the two cannot disagree; a tuple mixing percentage and
 original-unit metrics is rejected instead of being plotted on one axis.
 
@@ -254,7 +277,7 @@ misleading figure.
 
 - `baseline`, `sample_size`, `pairwise_wins`, and `pairwise_tables` are
   task-scoped: they loop over every declared task and write under
-  `plots/<experiment>/<target>/` (`pairwise_wins` splits its full-data views into
+  `plots/<experiment>/<auroc|auprc>/<all|main>/<target>/` (`pairwise_wins` splits its full-data views into
   `baseline/` and its rank views into `sample_size/`), so one entry per task is
   all a new experiment needs, and `src/plotting/recreate_all_figs.sh` needs no
   change at all.

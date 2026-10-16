@@ -14,6 +14,7 @@ from mlflow.exceptions import MlflowException
 from mlflow import MlflowClient
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI, load_bootstrap_data, load_evaluation_data
 from src.mlflow.tracking_contract import ARTIFACT_CONFIG
+from src.plotting.model_sets import excluded_models
 
 
 class MissingExperimentError(ValueError):
@@ -93,6 +94,12 @@ def load_plot_artifacts(
     dropped_instances: tuple[str, ...] = ()
     if exclude_models is not None:
         metrics, dropped_instances = _exclude_models(metrics, exclude_models)
+    view_exclusions = excluded_models(metrics["model_name"].astype(str))
+    if view_exclusions:
+        metrics, view_instances = _exclude_models(metrics, view_exclusions)
+        dropped_instances += view_instances
+    if metrics.empty:
+        raise MissingExperimentError(f"No models remain for the selected view in {experiment_name!r}")
 
     if full_training_only:
         candidate_run_ids = tuple(metrics["pipeline_mlflow_run_id"].astype(str).drop_duplicates())
@@ -102,8 +109,7 @@ def load_plot_artifacts(
             if rejected:
                 raise ValueError(
                     "Explicit full-data baseline run(s) do not record exactly one dataset.train_on "
-                    "entry with fraction equal to float 1.0 in config.json: "
-                    + ", ".join(rejected)
+                    "entry with fraction equal to float 1.0 in config.json: " + ", ".join(rejected)
                 )
         elif not run_ids:
             raise MissingFullTrainingRunError(
@@ -130,6 +136,7 @@ def load_plot_artifacts(
         pipeline_runs=run_ids,
         models=models,
         tracking_uri=tracking_uri,
+        compact=True,
     )
     if bootstrap_scores.empty:
         raise ValueError("No bootstrap_metrics.csv artifacts found for the selected pipeline runs")
@@ -208,16 +215,23 @@ def combine_complementary_runs(
         replacement.update({run_id: representative for run_id in run_ids})
         merged_groups.append(tuple(run_ids))
 
-    metrics = artifacts.metrics.copy()
-    bootstraps = artifacts.bootstrap_scores.copy()
-    for frame in (metrics, bootstraps):
-        if not frame.empty:
-            frame[run_column] = frame[run_column].astype(str).map(replacement)
+    metrics = artifacts.metrics
+    bootstraps = artifacts.bootstrap_scores
+    if merged_groups:
+        # Replace only the run-ID column; all other columns remain read-only.
+        # A shallow container copy avoids duplicating the large score table.
+        metrics = metrics.copy(deep=False)
+        bootstraps = bootstraps.copy(deep=False)
+        for frame in (metrics, bootstraps):
+            if not frame.empty:
+                frame[run_column] = frame[run_column].astype(str).map(replacement)
     logical_run_ids = tuple(dict.fromkeys(replacement[str(run_id)] for run_id in artifacts.run_ids))
 
     logical_points = metrics.loc[metrics["scope"].eq("test") & metrics["statistic"].eq("point")].copy()
     roster = set(logical_points["model_instance"].astype(str))
-    logical_sets = logical_points.groupby(run_column, sort=False)["model_instance"].agg(lambda values: set(map(str, values)))
+    logical_sets = logical_points.groupby(run_column, sort=False)["model_instance"].agg(
+        lambda values: set(map(str, values))
+    )
     complete_run_ids = tuple(run_id for run_id in logical_run_ids if logical_sets.get(run_id, set()) == roster)
     if not complete_run_ids:
         raise ValueError(
@@ -234,9 +248,7 @@ def combine_complementary_runs(
         examples = [" + ".join(run_id[:8] for run_id in group) for group in merged_groups[:3]]
         suffix = f" (+{len(merged_groups) - len(examples)} more)" if len(merged_groups) > len(examples) else ""
         print(
-            f"  note: combined {len(merged_groups)} complementary MLflow run group(s): "
-            + "; ".join(examples)
-            + suffix,
+            f"  note: combined {len(merged_groups)} complementary MLflow run group(s): " + "; ".join(examples) + suffix,
             file=sys.stderr,
         )
     if dropped:
@@ -291,7 +303,8 @@ def _require_matching_bootstrap_plan(bootstraps: pd.DataFrame, run_ids: Sequence
         return
     required = {"pipeline_mlflow_run_id", "dataset", "metric", "bootstrap_id", "model_instance"}
     _require_columns(bootstraps, required, "bootstrap scores")
-    rows = bootstraps.loc[bootstraps["pipeline_mlflow_run_id"].astype(str).isin(run_ids)].copy()
+    columns = ["pipeline_mlflow_run_id", "dataset", "metric", "bootstrap_id", "model_instance"]
+    rows = bootstraps.loc[bootstraps["pipeline_mlflow_run_id"].astype(str).isin(run_ids), columns].copy()
     rows["bootstrap_id"] = pd.to_numeric(rows["bootstrap_id"], errors="coerce")
     if rows["bootstrap_id"].isna().any():
         raise ValueError("Complementary runs contain non-numeric bootstrap IDs")
@@ -412,9 +425,7 @@ def _read_single_source_training_config(client: MlflowClient, run_id: str) -> tu
         payload = json.loads(config_path.read_text(encoding="utf-8"))
         train_on = payload["dataset"]["train_on"]
     except (json.JSONDecodeError, KeyError, TypeError) as error:
-        raise ValueError(
-            f"Run {run_id} has an invalid {ARTIFACT_CONFIG}; expected dataset.train_on"
-        ) from error
+        raise ValueError(f"Run {run_id} has an invalid {ARTIFACT_CONFIG}; expected dataset.train_on") from error
     if not isinstance(train_on, list) or len(train_on) != 1:
         count = len(train_on) if isinstance(train_on, list) else "non-list"
         raise ValueError(
