@@ -187,9 +187,8 @@ def caption(
         for row in data.compositions.itertuples()
     )
     uncertainty = (
-        rf"Whiskers are {round(100 * data.ci_level)}\% percentile intervals from "
-        f"{data.bootstrap_count:,} aligned test-cohort bootstrap draws after averaging repeats within each exact "
-        "composition; they quantify held-out cohort resampling uncertainty, not training-repeat variation."
+        "Points are mean run estimates; whiskers span the minimum and maximum run estimates within each exact "
+        "composition, not confidence intervals. A single run has zero-width whiskers."
         if visual.show_ci
         else "No uncertainty intervals are shown."
     )

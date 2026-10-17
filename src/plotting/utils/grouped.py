@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,8 @@ class GroupedEvaluation:
     run_counts: dict[str, int]
     bootstrap_count: int
     ci_level: float | None
+    interval_kind: Literal["bootstrap", "min_max"] = "bootstrap"
+    repeat_points: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 def aggregate_runs_by_setting(
@@ -38,9 +41,11 @@ def aggregate_runs_by_setting(
     metrics: Sequence[str],
     runtime_columns: Sequence[str] = (),
     ci_level: float | None = 0.95,
+    interval_kind: Literal["bootstrap", "min_max"] = "bootstrap",
 ) -> GroupedEvaluation:
-    """Average repeated runs within settings and recompute bootstrap intervals.
+    """Average repeated runs with bootstrap intervals or min/max repeat ranges.
 
+    Min/max bounds use individual run point estimates, not bootstrap scores.
     Draws must align within a setting, including across runs, models, metrics,
     and evaluation cohorts. Different settings can have different draw plans.
     """
@@ -48,6 +53,8 @@ def aggregate_runs_by_setting(
     runtime_columns = tuple(dict.fromkeys(runtime_columns))
     if not selected_metrics:
         raise ValueError("metrics must contain at least one metric")
+    if interval_kind not in ("bootstrap", "min_max"):
+        raise ValueError(f"Unknown interval_kind: {interval_kind!r}")
     if ci_level is not None and not 0 < ci_level < 1:
         raise ValueError("ci_level must lie strictly between zero and one")
 
@@ -126,6 +133,12 @@ def aggregate_runs_by_setting(
     point_means = points.groupby(["setting", "model_name", "model_instance", "dataset"], sort=False, as_index=False)[
         list(selected_metrics)
     ].mean()
+    repeat_points = points.melt(
+        id_vars=["setting", "pipeline_mlflow_run_id", "model_name", "model_instance", "dataset"],
+        value_vars=list(selected_metrics),
+        var_name="metric",
+        value_name="estimate",
+    )
 
     bootstraps["score"] = pd.to_numeric(bootstraps["score"], errors="coerce")
     bootstraps["bootstrap_id"] = pd.to_numeric(bootstraps["bootstrap_id"], errors="coerce")
@@ -151,7 +164,13 @@ def aggregate_runs_by_setting(
         as_index=False,
     )["score"].mean()
     interval_keys = ["setting", "dataset", "metric", "model_name", "model_instance"]
-    if ci_level is None:
+    if interval_kind == "min_max":
+        intervals = (
+            repeat_points.groupby(interval_keys, sort=False)["estimate"]
+            .agg(lower="min", upper="max")
+            .reset_index()
+        )
+    elif ci_level is None:
         intervals = averaged_bootstraps[interval_keys].drop_duplicates().assign(lower=np.nan, upper=np.nan)
     else:
         alpha = (1.0 - ci_level) / 2.0
@@ -199,6 +218,8 @@ def aggregate_runs_by_setting(
         run_counts=run_counts,
         bootstrap_count=int(averaged_bootstraps["bootstrap_id"].nunique()),
         ci_level=ci_level,
+        interval_kind=interval_kind,
+        repeat_points=repeat_points,
     )
 
 
@@ -278,7 +299,7 @@ def require_grouped_coverage(
         )
     values = grouped.performance[["estimate", "lower", "upper"]].apply(pd.to_numeric, errors="coerce")
     if values.isna().any().any() or not np.isfinite(values).all().all():
-        raise ValueError(f"{description} point estimates and bootstrap interval bounds must be finite")
+        raise ValueError(f"{description} point estimates and interval bounds must be finite")
 
 
 def _preview_index(index: pd.Index, maximum: int = 3) -> str:

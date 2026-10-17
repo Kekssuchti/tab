@@ -68,7 +68,7 @@ class VisualSettings(MetricPanelSettings):
 
     metrics: tuple[str, ...] = PLOT_METRICS
     datasets: tuple[str, ...] | None = None
-    show_ci: bool = False
+    show_ci: bool = True
     ci_level: float = 0.95
     figure_width: float = WIDE
     row_height: float = 0.54
@@ -338,9 +338,8 @@ def caption(
         raise ValueError("A benchmark and an unavailable reason cannot both be supplied")
     run_text = _repeat_coverage(data)
     uncertainty = (
-        rf"Whiskers are {round(100 * visual.ci_level)}\% percentile intervals from "
-        f"{data.bootstrap_count:,} aligned test-cohort bootstrap draws after averaging repeats within each "
-        "training count; they quantify held-out cohort resampling uncertainty, not training-repeat variation."
+        "Points are mean run estimates; whiskers span the minimum and maximum run estimates within each "
+        "training count, not confidence intervals. A single run has zero-width whiskers."
         if visual.show_ci
         else "No uncertainty intervals are shown."
     )
@@ -368,10 +367,9 @@ def xgboost_difference_caption(
     metrics = " and ".join(metric_label(metric) for metric in data.metrics)
     datasets = " and ".join(dataset_label(dataset) for dataset in _datasets(data.sample_size, visual))
     uncertainty = (
-        rf"Whiskers are {round(100 * data.ci_level)}\% percentile intervals of "
-        f"{data.bootstrap_count:,} paired test-cohort bootstrap score differences, matched on training count, "
-        "evaluation center, metric, and bootstrap ID after repeat aggregation; they quantify held-out cohort "
-        "resampling uncertainty, not training-repeat variation."
+        "Points are mean within-run model-minus-XGBoost differences; whiskers span the minimum and maximum "
+        "of those paired run differences at each training count, not confidence intervals. "
+        "A single run has zero-width whiskers."
         if visual.show_ci
         else "No uncertainty intervals are shown."
     )

@@ -44,7 +44,10 @@ class PairwiseSummary:
     that ``row_instance`` is the model that ranks better in-domain, and one win
     share per cohort. ``forest`` holds one row per model and test dataset, with
     ``estimate`` oriented so that positive values mean better than the reference
-    model. Setting ``ci_level`` to None skips every interval.
+    model. Forest points are mean paired repeat point differences; its bounds
+    span the individual-repeat minimum and maximum, not bootstrap intervals.
+    Setting ``ci_level`` to None skips all bounds; its numeric value controls
+    bootstrap intervals in ``matrix_cells`` only.
     """
 
     matrix_cells: pd.DataFrame
@@ -108,11 +111,15 @@ def prepare_pairwise_summary(
     *,
     reference_model: str | None = None,
     alpha: float = 0.05,
+    repeat_points: pd.DataFrame | None = None,
 ) -> PairwiseSummary:
     """Calculate every pairwise contrast used by the comparison figures.
 
     The reference model anchors the difference forest, because a difference
     against one anchor is the only way to read effect size at a common scale.
+    ``repeat_points`` contains the original wide evaluation metric rows; it is
+    required for multiple runs so the forest can pair points by run before taking
+    the mean and min/max. A single-run aggregate supplies its own point fallback.
     """
     external_datasets = [dataset for dataset in aggregated.datasets if dataset != aggregated.trained_on]
     if aggregated.trained_on not in aggregated.datasets or len(external_datasets) != 1:
@@ -126,7 +133,7 @@ def prepare_pairwise_summary(
     matrix_cells = _matrix_cells(aggregated, ordering, alpha)
     cross_cells = _cross_cells(matrix_cells, ordering, aggregated.trained_on, external_dataset)
     reference_instance = _resolve_reference(aggregated, reference_model, external_dataset)
-    forest = _forest(aggregated, ordering, reference_instance, alpha)
+    forest = _forest(aggregated, ordering, reference_instance, repeat_points)
 
     return PairwiseSummary(
         matrix_cells=matrix_cells,
@@ -181,7 +188,9 @@ def load_pairwise_inputs(
         expected_training_source=expected_training_source,
     )
     aggregated = aggregate_evaluation_runs(artifacts, metrics=metrics, ci_level=ci_level)
-    summary = prepare_pairwise_summary(aggregated, reference_model=reference_model, alpha=alpha)
+    summary = prepare_pairwise_summary(
+        aggregated, reference_model=reference_model, alpha=alpha, repeat_points=artifacts.metrics
+    )
 
     rank_artifacts = load_plot_artifacts(
         experiment_name,
@@ -401,35 +410,54 @@ def _forest(
     aggregated: AggregatedEvaluation,
     ordering: pd.DataFrame,
     reference_instance: str,
-    alpha: float,
+    repeat_points: pd.DataFrame | None,
 ) -> pd.DataFrame:
-    """Measure every model against the reference on every test dataset."""
+    """Summarize paired point differences across repeats, keeping bootstrap win shares."""
+    if repeat_points is None:
+        if aggregated.run_count != 1:
+            raise ValueError("Individual repeat point metrics are required for a multi-run paired forest")
+        points = None
+    else:
+        points = repeat_points.loc[
+            repeat_points["scope"].eq("test") & repeat_points["statistic"].eq("point")
+        ].copy()
+        points["pipeline_mlflow_run_id"] = points["pipeline_mlflow_run_id"].astype(str)
+        points = points.loc[points["pipeline_mlflow_run_id"].isin(aggregated.run_ids)]
     rows: list[dict[str, object]] = []
 
     for metric in aggregated.metrics:
         direction = metric_direction(metric)
         for dataset in aggregated.datasets:
             matrix = win_matrix(aggregated, dataset, metric)
-            scores = aggregated.scores(dataset, metric)
             ordered = ordering.loc[ordering["dataset"].eq(dataset) & ordering["metric"].eq(metric)]
-            estimates = ordered.set_index("model_instance")["estimate"]
             names = ordered.set_index("model_instance")["model_name"]
+            if points is None:
+                estimates = ordered.set_index("model_instance")["estimate"]
+                paired = pd.DataFrame([direction * (estimates - estimates.loc[reference_instance])])
+            else:
+                # Pivot on run identity before subtracting: endpoints must come
+                # from paired repeat differences, never independent model extrema.
+                estimates = points.loc[points["dataset"].eq(dataset)].pivot(
+                    index="pipeline_mlflow_run_id", columns="model_instance", values=metric
+                ).reindex(index=aggregated.run_ids, columns=aggregated.model_instances)
+                estimates = estimates.apply(pd.to_numeric, errors="coerce")
+                if not np.isfinite(estimates.to_numpy(dtype=float)).all():
+                    raise ValueError("Paired forest requires finite point metrics for every selected run and model")
+                paired = direction * estimates.sub(estimates[reference_instance], axis="index")
             for instance in aggregated.model_instances:
                 is_reference = instance == reference_instance
-                # Oriented like a "difference from the baseline" plot: positive is
-                # the model doing better than the reference, so the reader cannot
-                # mistake a positive bar for a loss.
-                draws = direction * (scores[instance] - scores[reference_instance])
-                lower, upper = _quantile_interval(draws, aggregated.ci_level)
+                differences = paired[instance]
+                lower = float(differences.min()) if aggregated.ci_level is not None else np.nan
+                upper = float(differences.max()) if aggregated.ci_level is not None else np.nan
                 rows.append(
                     {
                         "dataset": dataset,
                         "metric": metric,
                         "model_instance": instance,
                         "model_name": str(names.loc[instance]),
-                        "estimate": direction * float(estimates.loc[instance] - estimates.loc[reference_instance]),
-                        "lower": float(lower),
-                        "upper": float(upper),
+                        "estimate": float(differences.mean()),
+                        "lower": lower,
+                        "upper": upper,
                         "win_share": np.nan
                         if is_reference
                         else float(matrix.loc[instance, reference_instance]) / aggregated.bootstrap_count,

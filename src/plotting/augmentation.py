@@ -364,9 +364,8 @@ def _uncertainty(data, visual: VisualSettings) -> str:
     if not visual.show_ci:
         return "No uncertainty intervals are shown."
     return (
-        rf"Whiskers are {round(100 * visual.ci_level)}\% percentile intervals from "
-        f"{data.bootstrap_count:,} aligned test-cohort bootstrap draws after averaging repeats within each "
-        "setting; they quantify held-out cohort resampling uncertainty, not training-repeat variation. "
+        "Points are mean run estimates; whiskers span the minimum and maximum run estimates within each "
+        "setting, not confidence intervals. A single run has zero-width whiskers. "
         "Only measured settings are drawn and connected."
     )
 

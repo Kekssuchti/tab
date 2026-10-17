@@ -61,6 +61,8 @@ class SourceContrastEvaluation:
     run_ids: dict[str, tuple[str, ...]]
     pairing_evidence: dict[str, PairingEvidence]
     ci_level: float
+    repeat_differences: pd.DataFrame
+    repeat_pairing: str
 
     @property
     def bootstrap_count(self) -> int:
@@ -83,6 +85,18 @@ class _RunEvidence:
     dataset_order: tuple[str, ...]
     cohort_fingerprints: dict[str, str]
     cohort_tables: dict[str, pd.DataFrame]
+    repeat_seeds: tuple[int, ...] | None
+
+
+# Include every recorded training/tuning/inference seed, not the fixed cohort
+# split or bootstrap seeds. Never infer a repeat match from run order or time.
+_REPEAT_SEEDS = (
+    "model_training_seed",
+    "model_inference_seed",
+    "cv_split_seed",
+    "tuning_sampler_seed",
+    "training_sample_seed",
+)
 
 
 def prepare_source_contrast(
@@ -94,10 +108,15 @@ def prepare_source_contrast(
 ) -> SourceContrastEvaluation:
     """Compute local-full minus external-full scores on each fixed cohort.
 
-    Repeated complete-data runs are averaged within each source before the two
-    source scores are subtracted. Interval endpoints are quantiles of paired
-    bootstrap score differences, never differences between absolute-score
-    interval endpoints.
+    Repeated complete-data point scores are averaged within each source before
+    subtraction. Whiskers span the minimum and maximum repeat point contrasts.
+    Repeats are paired by recorded training/tuning/inference seed tuples only
+    when those tuples establish a unique complete bijection across sources.
+    Otherwise all local-minus-external repeat combinations are used: this avoids
+    arbitrary run-order pairing or dropping repeats, and their mean equals the
+    difference of source means even with unequal repeat counts. A single pair
+    yields a zero-width range. These are descriptive ranges, not confidence
+    intervals; validated paired bootstrap differences remain available separately.
 
     Pairing is accepted only after validating the recorded cohort fingerprint,
     exact ordered test IDs and labels, split and bootstrap settings, prediction
@@ -151,11 +170,13 @@ def prepare_source_contrast(
         )
         for center in sources
     }
-    performance, bootstrap_differences = _source_differences(
+    repeat_pairs, repeat_pairing = _repeat_pairs(artifacts_by_source, run_evidence, sources)
+    performance, bootstrap_differences, repeat_differences = _source_differences(
         aggregated,
+        artifacts_by_source,
         sources,
         selected_metrics,
-        ci_level,
+        repeat_pairs,
     )
 
     reference = aggregated[sources[0]]
@@ -171,6 +192,8 @@ def prepare_source_contrast(
         run_ids={source: aggregated[source].run_ids for source in sources},
         pairing_evidence=pairing_evidence,
         ci_level=ci_level,
+        repeat_differences=repeat_differences,
+        repeat_pairing=repeat_pairing,
     )
 
 
@@ -261,6 +284,7 @@ def _load_run_evidence(client: MlflowClient, run_id: str) -> _RunEvidence:
         dataset_order=dataset_order,
         cohort_fingerprints=cohort_fingerprints,
         cohort_tables=cohort_tables,
+        repeat_seeds=_recorded_repeat_seeds(config),
     )
 
 
@@ -520,17 +544,79 @@ def _recorded_bootstrap_count(
     return values[0]
 
 
+def _recorded_repeat_seeds(config: Mapping[str, object]) -> tuple[int, ...] | None:
+    states = config.get("random_states")
+    if not isinstance(states, Mapping):
+        return None
+    values = tuple(states.get(key) for key in _REPEAT_SEEDS)
+    if not all(type(value) is int for value in values):
+        return None
+    return tuple(int(value) for value in values)
+
+
+def _repeat_pairs(
+    artifacts: Mapping[str, PlotArtifacts],
+    evidence: Mapping[str, tuple[_RunEvidence, ...]],
+    sources: tuple[str, ...],
+) -> tuple[tuple[tuple[str, str], ...], str]:
+    """Use complete unique seed matches, or the full Cartesian repeat product."""
+    seed_maps: dict[str, dict[tuple[int, ...], str]] = {}
+    pairable = True
+    for source in sources:
+        by_id = {run.run_id: run for run in evidence[source]}
+        seed_maps[source] = {}
+        for logical_id in artifacts[source].run_ids:
+            seeds = {by_id[physical_id].repeat_seeds for physical_id in artifacts[source].physical_run_ids(logical_id)}
+            if len(seeds) != 1:
+                raise ValueError(f"Logical F3 run {logical_id} has conflicting repeat seeds across model shards")
+            key = next(iter(seeds))
+            if key is None or key in seed_maps[source]:
+                pairable = False
+            else:
+                seed_maps[source][key] = logical_id
+    left, right = sources
+    if pairable and seed_maps[left].keys() == seed_maps[right].keys():
+        return tuple((run_id, seed_maps[right][key]) for key, run_id in seed_maps[left].items()), "matched_seeds"
+    # Missing/duplicate/unmatched seeds cannot define a complete bijection.
+    # Keep every repeat and preserve the source-wise mean rather than silently
+    # selecting a seed intersection or pairing independent runs by chronology.
+    return tuple((a, b) for a in artifacts[left].run_ids for b in artifacts[right].run_ids), "all_combinations"
+
+
+def _repeat_point_scores(
+    artifacts: PlotArtifacts,
+    center: str,
+    metric: str,
+    instances: tuple[str, ...],
+) -> pd.DataFrame:
+    # aggregate_evaluation_runs has already validated finite numeric values and
+    # exactly one point cell per logical run/model/cohort, including model shards.
+    points = artifacts.metrics.loc[
+        artifacts.metrics["scope"].eq("test")
+        & artifacts.metrics["statistic"].eq("point")
+        & artifacts.metrics["dataset"].eq(center),
+        ["pipeline_mlflow_run_id", "model_instance", metric],
+    ].copy()
+    points["pipeline_mlflow_run_id"] = points["pipeline_mlflow_run_id"].astype(str)
+    points["model_instance"] = points["model_instance"].astype(str)
+    points[metric] = pd.to_numeric(points[metric], errors="raise")
+    return points.pivot(index="pipeline_mlflow_run_id", columns="model_instance", values=metric).loc[
+        list(artifacts.run_ids), list(instances)
+    ]
+
+
 def _source_differences(
     aggregated: Mapping[str, AggregatedEvaluation],
+    artifacts: Mapping[str, PlotArtifacts],
     sources: tuple[str, ...],
     metrics: tuple[str, ...],
-    ci_level: float,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+    repeat_pairs: tuple[tuple[str, str], ...],
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     names = aggregated[sources[0]].model_metadata.set_index("model_instance")["model_name"]
     instances = aggregated[sources[0]].model_instances
-    alpha = (1.0 - ci_level) / 2.0
     performance_rows = []
     bootstrap_frames = []
+    repeat_frames = []
 
     for center in sources:
         external_source = next(source for source in sources if source != center)
@@ -539,6 +625,25 @@ def _source_differences(
         for metric in metrics:
             local_points = _point_scores(local, center, metric, instances)
             external_points = _point_scores(external, center, metric, instances)
+            local_repeats = _repeat_point_scores(artifacts[center], center, metric, instances)
+            external_repeats = _repeat_point_scores(artifacts[external_source], center, metric, instances)
+            oriented_pairs = repeat_pairs if center == sources[0] else tuple((b, a) for a, b in repeat_pairs)
+            repeat_contrasts = pd.DataFrame(
+                [local_repeats.loc[a] - external_repeats.loc[b] for a, b in oriented_pairs]
+            ).reset_index(drop=True)
+            repeat_contrasts.index.name = "repeat_pair"
+            repeat_long = repeat_contrasts.rename_axis(columns="model_instance").reset_index().melt(
+                id_vars="repeat_pair", var_name="model_instance", value_name="difference"
+            )
+            local_ids, external_ids = zip(*oriented_pairs, strict=True)
+            repeat_frames.append(
+                repeat_long.assign(
+                    local_run_id=repeat_long["repeat_pair"].map(dict(enumerate(local_ids))),
+                    external_run_id=repeat_long["repeat_pair"].map(dict(enumerate(external_ids))),
+                    evaluation_center=center,
+                    metric=metric,
+                )
+            )
             differences = local.scores(center, metric) - external.scores(center, metric)
             if differences.isna().any().any():
                 raise ValueError(f"Paired source difference produced missing scores for {center!r}/{metric!r}")
@@ -553,7 +658,8 @@ def _source_differences(
                 .assign(evaluation_center=center, metric=metric)
             )
             for instance in instances:
-                lower, upper = differences[instance].quantile([alpha, 1.0 - alpha])
+                lower = repeat_contrasts[instance].min()
+                upper = repeat_contrasts[instance].max()
                 performance_rows.append(
                     {
                         "model_name": str(names.loc[instance]),
@@ -566,7 +672,11 @@ def _source_differences(
                     }
                 )
 
-    return pd.DataFrame(performance_rows), pd.concat(bootstrap_frames, ignore_index=True)
+    return (
+        pd.DataFrame(performance_rows),
+        pd.concat(bootstrap_frames, ignore_index=True),
+        pd.concat(repeat_frames, ignore_index=True),
+    )
 
 
 def _point_scores(

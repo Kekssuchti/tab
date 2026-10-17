@@ -2,6 +2,7 @@
 # Rebuild every figure (and print the LaTeX tables) from the recorded MLflow runs.
 
 set -uo pipefail
+mkdir -p .cache/figure-tmp
 
 cd "$(dirname "$0")/../.." || exit 1
 
@@ -9,14 +10,14 @@ cd "$(dirname "$0")/../.." || exit 1
 export MLFLOW_ENABLE_ARTIFACTS_PROGRESS_BAR=false
 
 steps=(
-#    src.plotting.baseline_transfer
+    src.plotting.baseline_transfer
     src.plotting.training_source_contrast
-#    src.plotting.sample_size
+    src.plotting.sample_size
     src.plotting.training_composition
     src.plotting.augmentation
 #    src.plotting.ablation_estimators
 #    src.plotting.feature_distributions
-#    src.plotting.pairwise_wins
+    src.plotting.pairwise_wins
 #    src.plotting.pairwise_tables
 #    src.plotting.retriever_comparison
 #    src.plotting.retrieval_budget

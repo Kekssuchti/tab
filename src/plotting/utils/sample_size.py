@@ -175,6 +175,7 @@ def prepare_sample_size_evaluation(
         setting_order=setting_order,
         metrics=metrics,
         ci_level=ci_level,
+        interval_kind="min_max",
     )
     if full_training_size is not None and full_training_size <= 0:
         raise ValueError("full_training_size must be positive when provided")
@@ -193,13 +194,11 @@ def prepare_sample_size_evaluation(
 
 
 def prepare_xgboost_difference_evaluation(data: SampleSizeEvaluation) -> XGBoostDifferenceEvaluation:
-    """Compute same-setting model-minus-XGBoost scores and paired intervals.
+    """Compute model-minus-XGBoost means and ranges of within-run differences.
 
-    The input has already averaged repeated pipeline runs within each training
-    count. Point contrasts therefore compare run-averaged scores, while interval
-    endpoints are quantiles of score differences paired on training count,
-    evaluation dataset, metric, and bootstrap ID. Confidence-interval endpoints
-    from the absolute-score summaries are never subtracted.
+    Min/max endpoints come from paired point differences within each repeat,
+    never from subtracting absolute-score range endpoints. Bootstrap differences
+    remain available; legacy bootstrap-mode inputs retain percentile intervals.
     """
     reference_name = "xgboost"
     reference_metadata = data.model_metadata.loc[data.model_metadata["model_name"].eq(reference_name)]
@@ -326,14 +325,34 @@ def prepare_xgboost_difference_evaluation(data: SampleSizeEvaluation) -> XGBoost
         raise ValueError("A non-XGBoost bootstrap score has no same-size XGBoost match")
     paired["difference"] = pd.to_numeric(paired["score"]) - pd.to_numeric(paired["xgboost_score"])
 
-    alpha = (1.0 - data.ci_level) / 2.0
-    intervals = (
-        paired.groupby(point_keys, sort=False)["difference"]
-        .quantile([alpha, 1.0 - alpha])
-        .unstack()
-        .reset_index()
-        .rename(columns={alpha: "lower", 1.0 - alpha: "upper"})
-    )
+    if data.grouped.interval_kind == "min_max":
+        repeat_points = data.grouped.repeat_points
+        repeat_keys = [*reference_cell_keys, "pipeline_mlflow_run_id"]
+        repeat_reference = repeat_points.loc[
+            repeat_points["model_instance"].eq(reference_instance), repeat_keys + ["estimate"]
+        ].rename(columns={"estimate": "reference_estimate"})
+        repeat_differences = repeat_points.loc[~repeat_points["model_instance"].eq(reference_instance)].merge(
+            repeat_reference, on=repeat_keys, how="left", validate="many_to_one"
+        )
+        if repeat_differences["reference_estimate"].isna().any():
+            raise ValueError("A repeat point has no within-run XGBoost reference")
+        repeat_differences["difference"] = (
+            repeat_differences["estimate"] - repeat_differences["reference_estimate"]
+        )
+        intervals = (
+            repeat_differences.groupby(point_keys, sort=False)["difference"]
+            .agg(lower="min", upper="max")
+            .reset_index()
+        )
+    else:
+        alpha = (1.0 - data.ci_level) / 2.0
+        intervals = (
+            paired.groupby(point_keys, sort=False)["difference"]
+            .quantile([alpha, 1.0 - alpha])
+            .unstack()
+            .reset_index()
+            .rename(columns={alpha: "lower", 1.0 - alpha: "upper"})
+        )
     performance = point_differences[point_keys + ["estimate"]].merge(
         intervals,
         on=point_keys,

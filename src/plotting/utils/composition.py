@@ -235,6 +235,7 @@ def _prepare_budget_view(
         setting_order=setting_order,
         metrics=metrics,
         ci_level=ci_level,
+        interval_kind="min_max",
     )
     require_grouped_coverage(grouped, datasets=PREDICTION_DATASETS, description="Composition")
 

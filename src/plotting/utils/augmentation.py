@@ -579,6 +579,7 @@ def _aggregate(
             setting_order=(setting,),
             metrics=metrics,
             ci_level=ci_level,
+            interval_kind="min_max",
         )
         if parts and not part.model_metadata.equals(parts[0].model_metadata):
             raise ValueError("Augmentation settings must share one model roster and model identity")
@@ -589,6 +590,7 @@ def _aggregate(
         parts[0],
         performance=pd.concat([part.performance for part in parts], ignore_index=True),
         runtimes=pd.concat([part.runtimes for part in parts], ignore_index=True),
+        repeat_points=pd.concat([part.repeat_points for part in parts], ignore_index=True),
         bootstrap_scores=scores,
         settings=tuple(setting_order),
         run_counts={setting: count for part in parts for setting, count in part.run_counts.items()},

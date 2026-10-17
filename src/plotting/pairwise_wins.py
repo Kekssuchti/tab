@@ -98,10 +98,8 @@ class VisualSettings:
     rank_diagram_height: float = 1.6
     trajectory_height: float = 1.7
     movement_height: float = 1.6
-    setting_panel_height: float = 1.25
     show_rank_movement: bool = True
     show_rank_spread: bool = False
-    setting_panels: bool = True
 
     @property
     def score_scale(self) -> float:
@@ -111,11 +109,6 @@ class VisualSettings:
 
 DATA = DataSettings()
 VISUAL = VisualSettings()
-
-# Below this many blocks a post-hoc test cannot separate any pair, which the
-# per-setting figures report rather than hide.
-_MINIMUM_SETTING_BLOCKS = 4
-
 
 # ---------------------------------------------------------------------------
 # FIGURES
@@ -207,7 +200,7 @@ def make_cross_cohort_figure(summary: PairwiseSummary, metric: str, visual: Visu
 
 
 def make_paired_forest_figure(summary: PairwiseSummary, visual: VisualSettings = VISUAL) -> Figure:
-    """Draw each model's paired difference against the reference model."""
+    """Draw mean paired point differences with their across-repeat min/max range."""
     set_plot_style()
     datasets = (summary.trained_on, summary.external_dataset)
     fig, axes = figure_grid(
@@ -280,27 +273,6 @@ def make_rank_figure(ranks: RankSummary, setting_label: str, visual: VisualSetti
     if show_movement:
         _draw_rank_movement(axes[2, 0], ranks, styles, visual)
     panel_labels(axes)
-    return fig
-
-
-def make_setting_rank_figure(ranks: RankSummary, setting_source: str, visual: VisualSettings = VISUAL) -> Figure:
-    """Draw one critical difference diagram per experimental setting."""
-    set_plot_style()
-    styles = instance_plot_styles(ranks.model_metadata)
-    settings = list(ranks.settings)
-    fig, axes = figure_grid(
-        len(settings),
-        1,
-        width=visual.figure_width,
-        row_height=visual.setting_panel_height / visual.figure_width,
-        overhead=0.4,
-        squeeze=False,
-    )
-    labels = []
-    for index, setting in enumerate(settings):
-        draw_rank_diagram(axes[index, 0], ranks, styles, setting=setting)
-        labels.append(f"({chr(ord('a') + index)}) {setting_display(setting, setting_source)}")
-    panel_labels(axes, labels)
     return fig
 
 
@@ -517,17 +489,19 @@ def forest_caption(summary: PairwiseSummary, visual: VisualSettings = VISUAL) ->
     reference_label = styles[summary.reference_instance][1]
     metrics = " and ".join(metric_label(metric) for metric in summary.metrics)
     intervals = (
-        f"whiskers are {round(100 * summary.ci_level)}\\% percentile intervals from {summary.bootstrap_count:,} "
-        f"aligned cohort-bootstrap draws"
+        "whiskers span the minimum and maximum individual-repeat paired point differences, not confidence intervals"
         if summary.ci_level is not None
         else "no intervals are shown"
     )
     return (
         r"\textbf{Effect sizes against one reference model anchor the win shares.} "
-        f"Points are paired {metrics} differences against {reference_label}, so a positive value means the model beat "
+        f"Points are mean paired {metrics} point-estimate differences over {summary.run_count} pipeline runs "
+        f"against {reference_label}, so a positive value means the model beat "
         f"{reference_label} on the held-out {dataset_label(summary.trained_on)} cohort and a negative value means it "
         f"lost to it, and the same reading holds on {dataset_label(summary.external_dataset)}. "
-        f"{intervals.capitalize()}. The number at the right of each row is the share of those draws in which the model "
+        f"{intervals.capitalize()}. With one run the range collapses to its point estimate. "
+        f"The number at the right of each row is the share of {summary.bootstrap_count:,} aligned cohort-bootstrap "
+        f"draws in which the model "
         f"outperformed {reference_label}. Circles denote classical baselines and triangles tabular foundation models."
     )
 
@@ -583,15 +557,6 @@ def _excluded_note(ranks: RankSummary) -> str:
     return (
         f"Models that are absent from at least one setting are left out, because a rank comparison needs the same "
         f"models in every block: {names}."
-    )
-
-
-def setting_rank_caption(ranks: RankSummary) -> str:
-    return (
-        r"\textbf{Per-setting critical difference diagrams show where the overall ranking comes from.} "
-        "One diagram per configuration level, each with its own Nemenyi critical difference and block "
-        "count. A setting that contributes only a few blocks cannot separate any pair, which the scale bar makes "
-        "explicit."
     )
 
 
@@ -699,23 +664,6 @@ def main() -> None:
             stems.append(rank_figure)
             print(f"\nRank figure caption ({metric}):")
             print(f"\\caption{{{rank_caption(metric_ranks, DATA.setting_label, visual)}}}")
-
-            if visual.setting_panels and len(metric_ranks.settings) > 1:
-                smallest = int(metric_ranks.tests.loc[metric_ranks.tests["scope"].eq("setting"), "n_blocks"].min())
-                if smallest < _MINIMUM_SETTING_BLOCKS:
-                    print(
-                        f"  Note: a setting contributes only {smallest} blocks, so no per-setting diagram can "
-                        f"separate a pair; set VISUAL.setting_panels = False to skip that figure."
-                    )
-                setting_figure = rank_dir / f"{summary.trained_on}_ranks_by_setting"
-                save(
-                    make_setting_rank_figure(metric_ranks, DATA.setting_source, visual),
-                    str(setting_figure),
-                    formats=visual.output_formats,
-                )
-                stems.append(setting_figure)
-                print(f"Per-setting rank figure caption ({metric}):")
-                print(f"\\caption{{{setting_rank_caption(metric_ranks)}}}")
 
         print("\nFigures:")
         for stem in stems:

@@ -28,12 +28,12 @@ matrix:
   # mlflow name + source, KEEP IN SYNC!
   # definition: mixed_fixed_size_TASK
   - path: mlflow.experiment_name
-    values: ["mixed_fixed_size_LOS7"]
+    values: ["mixed_fixed_size_hours_to_readmit_72"]
 
   # common metadata to change
   # task
   - path: dataset.target
-    values: ["LOS7"]
+    values: ["hours_to_readmit_72"]
 
   # repeat runs with other seeds (pretty much dont need to touch)
   - path: random_states
