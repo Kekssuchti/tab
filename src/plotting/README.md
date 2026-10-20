@@ -3,10 +3,12 @@
 Current figure scripts:
 
 - `baseline_transfer.py` — full-data performance and generalizability
+- `baseline_tables.py` — reciprocal full-sample train/test LaTeX tables (all models)
 - `training_source_contrast.py` — same-target local-versus-external full-data contrast
 - `sample_size.py` — AUROC/AUPRC progression over training sample size, plus
   same-size XGBoost differences
-- `training_composition.py` — fixed-budget MIMIC/TUDD composition curves
+- `training_composition.py` — fixed-budget MIMIC/TUDD composition curves,
+  plus a model-row × training-size-column comparison
 - `augmentation.py` — local-only versus external-augmented training curves
 - `ablation_estimators.py` — estimator-count performance and runtime
 - `pairwise_wins.py` — cross-cohort win shares, paired differences, and rank summaries
@@ -125,6 +127,71 @@ Estimator-count ablations and feature distributions are investigation figures an
 keep their own directories beneath the same metric/model levels. Feature
 distributions do not depend on either selection, so those views contain the same
 data; estimator-runtime figures likewise do not change with the score selection.
+
+### Composition across training sizes
+
+`training_composition.py` writes `composition_by_model.pdf` and an SVG preview
+alongside the existing `composition_budget-<N>.pdf` figures:
+
+```text
+plots/composition/<auroc|auprc>/<all|main>/<target>/composition_by_model.{pdf,svg}
+```
+
+Each row fixes one model; columns show all measured total training sizes in
+ascending order (currently N=400, 1,600, and 6,400). Within a panel, the x-axis
+is the MIMIC-IV share of the fixed training budget. The solid MIMIC-IV and
+dashed EUH curves evaluate the two held-out centers separately. All panels
+share the same performance scale. Points and min–max whiskers use the same
+within-composition run aggregation as the per-budget figures; budgets are never
+pooled. Panel labels combine the model-row number and size-column letter.
+
+The standard metric/model selectors and target/run filters apply. For example:
+
+```bash
+PLOT_METRIC=auroc PLOT_MODEL_SET=main uv run python -m src.plotting.training_composition --target mortality
+```
+
+`recreate_all_figs.sh` includes the new grid automatically. Edit
+`VISUAL.budget_grid_row_height_ratio` to adjust its per-model row height
+independently of the existing per-budget figures. The script prints a LaTeX
+caption with measured sizes, composition shares, repeat counts, and interval
+interpretation.
+
+### Full-sample baseline tables
+
+`baseline_tables.py` uses the same registered single-source experiments and exact
+float `fraction: 1.0` selection as the baseline plots. It combines complementary
+model shards into logical repeats and writes one reciprocal 2×2 train/test table
+per target, with EUH first and MIMIC-IV second:
+
+```bash
+uv run python -m src.plotting.baseline_tables
+PLOT_METRIC=auprc uv run python -m src.plotting.baseline_tables --target mortality
+src/plotting/recreate_all_tables.sh
+```
+
+Only LaTeX is written, always including **all models**, independently of
+`PLOT_MODEL_SET`. Paths are `tables/baseline/<auroc|auprc>/<target>_baseline.tex`,
+for example `tables/baseline/auroc/mortality_baseline.tex`. Provenance comments
+record contributing logical/physical MLflow runs. Generated clinical aggregates
+stay local under gitignored `tables/`. LaTeX requires `booktabs`, `graphicx`,
+and `xcolor` with the `table` option. Captions and labels are included.
+
+Scores are mean [minimum, maximum] across the same full-data repeats as the
+baseline plots, not bootstrap confidence intervals. Deltas are point contrasts
+of those means, as in the example table: Δ_spec = external − internal and
+Δ_comp = external − best transferred mean, separately for each training block
+and displayed model roster. The best transferred model has exactly zero Δ_comp.
+Scores are percentages and deltas percentage points. External cells are grey;
+bold highlights the largest score/delta within each training block. Training/test
+counts come from logged metrics and dataset summaries, with recorded cohort
+fingerprints and split configuration checked across all physical runs. No
+patient-level prediction rows or bootstrap draws are loaded.
+
+`recreate_all_tables.sh` builds descriptive tables followed by baseline tables
+for AUROC and AUPRC (or respects explicit `PLOT_METRIC`). Its optional arguments,
+such as `--kind normal`, still apply only to descriptive tables; use the Python
+module's `--target` to narrow baseline generation.
 
 ### Baseline uncertainty versions
 

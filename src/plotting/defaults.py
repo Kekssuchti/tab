@@ -148,7 +148,7 @@ MODEL_STYLES: dict[str, ModelStyle] = {
     "exaone": ModelStyle(PALETTE["purple"], "-", TFM_MARKER, "EXAONE"),
     "tabdpt": ModelStyle(PALETTE["yellow"], "-", TFM_MARKER, "TabDPT"),
     "tabpfn-3.5": ModelStyle(PALETTE["blue"], "-", TFM_MARKER, "TabPFNv3.5"),
-    "tabpfn-3.5-fast": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv3.5 Fast"),
+    "tabpfn-3.5-fast": ModelStyle(PALETTE["cyan"], "-", TFM_MARKER, "TabPFNv3.5-fast"),
     "causilo": ModelStyle(PALETTE["red"], "-", TFM_MARKER, "Causilo"),
     # Legacy models keep stable but less prominent secondary colors.
     "tabpfn-2.5": ModelStyle("#A6CEE3", "-", TFM_MARKER, "TabPFNv2.5"),

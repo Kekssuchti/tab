@@ -53,6 +53,7 @@ def load_plot_artifacts(
     exclude_models: str | Sequence[str] | None = None,
     full_training_only: bool = False,
     include_bootstrap: bool = True,
+    apply_model_view: bool = True,
     expected_target: str | None = None,
     expected_training_source: str | None = None,
     tracking_uri: str = DEFAULT_TRACKING_URI,
@@ -70,6 +71,9 @@ def load_plot_artifacts(
     metrics and bootstrap columns alike, so a figure can leave out a model
     without touching the run artifacts. It is the way to answer "the same figure
     without LimiX" for any script that loads artifacts through here.
+
+    ``apply_model_view=False`` bypasses the figure model-view selector for
+    tables that always report all models; explicit model filters still apply.
 
     ``expected_target`` names the prediction task the caller intends to plot and
     is checked against the loaded artifacts, so a stale experiment fails loudly
@@ -94,7 +98,7 @@ def load_plot_artifacts(
     dropped_instances: tuple[str, ...] = ()
     if exclude_models is not None:
         metrics, dropped_instances = _exclude_models(metrics, exclude_models)
-    view_exclusions = excluded_models(metrics["model_name"].astype(str))
+    view_exclusions = excluded_models(metrics["model_name"].astype(str)) if apply_model_view else ()
     if view_exclusions:
         metrics, view_instances = _exclude_models(metrics, view_exclusions)
         dropped_instances += view_instances
