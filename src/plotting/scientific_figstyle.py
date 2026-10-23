@@ -364,7 +364,7 @@ def _text_collisions(fig) -> list[str]:
     return problems
 
 
-def save(fig, stem: str, formats=("pdf", "svg"), close: bool = True) -> list[str]:
+def save(fig, stem: str, formats=("pdf",), close: bool = True) -> list[str]:
     """Write `stem.pdf` (for \\includegraphics) and `stem.svg` (for preview).
 
     No `bbox_inches="tight"`: trimming to content changes the physical width

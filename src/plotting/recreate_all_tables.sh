@@ -17,5 +17,5 @@ metrics=(auroc auprc)
 if [[ -n "${PLOT_METRIC:-}" ]]; then metrics=("$PLOT_METRIC"); fi
 for metric in "${metrics[@]}"; do
     echo "=== src.plotting.baseline_tables [$metric]"
-    PLOT_METRIC="$metric" uv run python -m src.plotting.baseline_tables
+    PLOT_METRIC="$metric" uv run python -m src.plotting.baseline_tables --ci both
 done

@@ -2,8 +2,10 @@
 
 Regenerate: uv run python -m src.plotting.baseline_tables
 Select PLOT_METRIC=auroc|auprc as for figures. Always includes all models.
-Writes only tables/baseline/<metric>/<target>_baseline.tex.
-Only point metrics are loaded: ranges describe training repeats, not bootstraps.
+Use --ranges on|off|both (--ci is an alias); default: on.
+Writes tables/baseline/<metric>/<target>_baseline.tex with ranges and
+<target>_baseline_no_ranges.tex without ranges, with distinct LaTeX labels.
+Only point metrics are loaded: ranges describe training repeats, not bootstrap CIs.
 """
 
 from __future__ import annotations
@@ -148,24 +150,25 @@ def prepare_table(artifacts: dict[str, PlotArtifacts], metric: str) -> BaselineT
     )
 
 
-def caption(data: BaselineTable, metric: str) -> str:
-    repeats = "; ".join(f"{dataset_label(s)}: {len(data.artifacts[s].run_ids)}" for s in data.sources)
-    caveat = (
-        r" AUPRC and its $\Delta_{\mathrm{spec}}$ also reflect differences in outcome prevalence."
-        if metric == "prc_auc"
+def caption(data: BaselineTable, metric: str, *, include_ranges: bool = True) -> str:
+    counts = {source: len(data.artifacts[source].run_ids) for source in data.sources}
+    if len(set(counts.values())) == 1:
+        count = next(iter(counts.values()))
+        number = {1: "one", 2: "two", 3: "three"}.get(count, str(count))
+        repeats = f"{number} training repeat{'s' if count != 1 else ''}"
+    else:
+        repeats = "training repeats (" + "; ".join(f"{dataset_label(s)}: {n}" for s, n in counts.items()) + ")"
+    scores = "mean [minimum, maximum]" if include_ranges and max(counts.values()) > 1 else "means"
+    single_repeat = (
+        " A single repeat is shown without a range."
+        if include_ranges and min(counts.values()) == 1 < max(counts.values())
         else ""
     )
     return (
         rf"\textbf{{Full-sample {metric_label(metric)} train/test comparison for {task_label(data.target)}.}} "
-        r"Only single-source sample-size $1.0$ settings are included. "
-        rf"Scores are mean [minimum, maximum] across training repeats ({repeats}); "
-        r"a single repeat is shown without a range. Ranges are not confidence intervals. "
-        r"Scores are percentages; deltas are percentage points. Grey cells denote external evaluations. "
-        r"$\Delta_{\mathrm{spec}}$ is mean external minus mean internal performance; "
-        r"$\Delta_{\mathrm{comp}}$ is mean external performance minus the best transferred mean "
-        r"within the same training block and displayed model roster. Negative deltas indicate worse performance. "
-        r"Within each training block, bold marks the highest mean in each test column and the largest delta, "
-        r"not statistical significance. $N$ denotes the recorded training/test row count." + caveat
+        f"Scores are {scores} across {repeats}.{single_repeat} "
+        "Grey cells denote external evaluations. "
+        "Within each training block, bold marks the highest mean in each test column and the largest delta."
     )
 
 
@@ -174,10 +177,12 @@ def _number(value: float, metric: str) -> str:
     return f"{0.0 if rounded == 0 else rounded:.2f}"
 
 
-def _score(data: BaselineTable, source: str, center: str, instance: str, metric: str) -> str:
+def _score(
+    data: BaselineTable, source: str, center: str, instance: str, metric: str, *, include_ranges: bool = True
+) -> str:
     row = data.performance[source].loc[(instance, center)]
     value = _number(row.estimate, metric)
-    if len(data.artifacts[source].run_ids) > 1:
+    if include_ranges and len(data.artifacts[source].run_ids) > 1:
         value += f" [{_number(row.lower, metric)}, {_number(row.upper, metric)}]"
     return value
 
@@ -203,11 +208,14 @@ def _escape(text: str) -> str:
     )
 
 
-def table_to_latex(data: BaselineTable, metric: str) -> str:
+def table_to_latex(data: BaselineTable, metric: str, *, include_ranges: bool = True) -> str:
     """Complete table fragment; no document class, preamble, or resizebox."""
+    label_suffix = "" if include_ranges else "-no-ranges"
     lines = [
-        r"% Requires \usepackage{booktabs,graphicx} and \usepackage[table]{xcolor}.",
+        r"% Requires \usepackage{booktabs,graphicx,multirow} and \usepackage[table]{xcolor}.",
         r"% Source: MLflow prediction_metrics.csv; only scope=test, statistic=point.",
+        r"% Ranges, when shown, are training-repeat minima/maxima, not bootstrap confidence intervals.",
+        r"% Scores are percentages; deltas are percentage points.",
     ]
     for source in data.sources:
         for run in data.artifacts[source].run_ids:
@@ -216,14 +224,14 @@ def table_to_latex(data: BaselineTable, metric: str) -> str:
                 + ", ".join(data.artifacts[source].physical_run_ids(run))
             )
     lines += [
-        r"\begin{table}[tbp]",
+        r"\begin{table}[htb]",
         r"  \centering",
-        rf"  \caption{{{caption(data, metric)}}}",
-        rf"  \label{{tab:baseline-{data.target.replace('_', '-')}-{METRIC_SET}}}",
+        rf"  \caption{{{caption(data, metric, include_ranges=include_ranges)}}}",
+        rf"  \label{{tab:baseline-{data.target.replace('_', '-')}-{METRIC_SET}{label_suffix}}}",
         "",
         r"  \small",
-        r"  \setlength{\tabcolsep}{4pt}",
-        r"  \renewcommand{\arraystretch}{1.18}",
+        r"  \setlength{\tabcolsep}{2pt}",
+        # r"  \renewcommand{\arraystretch}{1.18}",
         r"  \newcommand{\ood}{\cellcolor[gray]{0.92}}",
         "",
         # Tabular resets baselineskip to zero, so freeze the group offset first.
@@ -254,7 +262,7 @@ def table_to_latex(data: BaselineTable, metric: str) -> str:
         for index, (instance, label) in enumerate(data.model_labels.items()):
             cells = [train if index == 0 else "", _escape(label)]
             for center in data.sources:
-                value = _score(data, source, center, instance, metric)
+                value = _score(data, source, center, instance, metric, include_ranges=include_ranges)
                 cell = rf"\textbf{{{value}}}" if _best(data, source, center, instance) else value
                 if center != source:
                     cell = r"\ood " + cell
@@ -272,6 +280,13 @@ def main() -> None:
     parser.add_argument("--target", action="append", dest="targets")
     parser.add_argument("--output-dir", type=Path, default=config.dir_root / "tables" / "baseline")
     parser.add_argument("--stdout", action="store_true", help="Also print generated LaTeX")
+    parser.add_argument(
+        "--ranges",
+        "--ci",
+        choices=("on", "off", "both"),
+        default="on",
+        help="Show training-repeat min/max ranges, omit them, or save both versions (default: on; not bootstrap CIs)",
+    )
     args = parser.parse_args()
     tasks = tasks_for("baseline", args.targets)
     for target in dict.fromkeys(task.target for task in tasks):
@@ -297,12 +312,15 @@ def main() -> None:
         data = prepare_table(artifacts, PLOT_METRIC)
         output = args.output_dir / METRIC_SET
         output.mkdir(parents=True, exist_ok=True)
-        path = output / f"{target}_baseline.tex"
-        latex = table_to_latex(data, PLOT_METRIC)
-        path.write_text(latex, encoding="utf-8")
-        print(f"Table: {path}")
-        if args.stdout:
-            print(latex)
+        variants = (True, False) if args.ranges == "both" else (args.ranges == "on",)
+        for include_ranges in variants:
+            suffix = "" if include_ranges else "_no_ranges"
+            path = output / f"{target}_baseline{suffix}.tex"
+            latex = table_to_latex(data, PLOT_METRIC, include_ranges=include_ranges)
+            path.write_text(latex, encoding="utf-8")
+            print(f"Table: {path}")
+            if args.stdout:
+                print(latex)
 
 
 if __name__ == "__main__":

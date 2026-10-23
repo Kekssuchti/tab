@@ -29,7 +29,7 @@ from src.plotting.experiments import (
     tasks_for,
     warn_skipped,
 )
-from src.plotting.model_sets import PLOT_METRICS, plot_dir
+from src.plotting.model_sets import MODEL_SET, PLOT_METRICS, plot_dir
 from src.plotting.scientific_figstyle import BASELINE, WIDE, figure_grid, panel_labels, save
 from src.plotting.utils import (
     FullDataBenchmark,
@@ -81,7 +81,7 @@ class VisualSettings(MetricPanelSettings):
     ci_alpha: float = 0.65
     sample_axis_label: str = "Training sample count"
     metric_axis_template: str = "{metric} on {dataset}"
-    legend_columns: int = 5
+    legend_columns: int = 4 if MODEL_SET == "main" else 6
     axis_padding_fraction: float = 0.08
     benchmark_line_width: float = 0.9
     benchmark_linestyle: str = "--"
@@ -189,8 +189,7 @@ def make_figure(
                 ax.set_xlabel(visual.sample_axis_label)
             _format_sample_axis(ax, data.sample_sizes, visual)
 
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside upper center", ncol=visual.legend_columns)
+    _add_legend(fig, axes[0, 0], visual.legend_columns)
     panel_labels(axes)
     return fig
 
@@ -281,10 +280,21 @@ def make_xgboost_difference_figure(
                 ax.set_xlabel(visual.sample_axis_label)
             _format_sample_axis(ax, data.sample_sizes, visual)
 
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside upper center", ncol=visual.legend_columns)
+    _add_legend(fig, axes[0, 0], visual.legend_columns)
     panel_labels(axes)
     return fig
+
+
+def _add_legend(fig: Figure, ax, columns: int) -> None:
+    handles, labels = ax.get_legend_handles_labels()
+    # Matplotlib fills columns; transpose the input to display entries row-wise.
+    order = [index for column in range(columns) for index in range(column, len(handles), columns)]
+    fig.legend(
+        [handles[index] for index in order],
+        [labels[index] for index in order],
+        loc="outside upper center",
+        ncol=columns,
+    )
 
 
 def _validate_benchmark(data: SampleSizeEvaluation, benchmark: FullDataBenchmark) -> None:

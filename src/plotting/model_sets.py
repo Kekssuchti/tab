@@ -10,7 +10,7 @@ MODEL_SET = os.environ.get("PLOT_MODEL_SET", "all")
 if MODEL_SET not in ("all", "main"):
     raise ValueError("PLOT_MODEL_SET must be 'all' or 'main'")
 
-MAIN_MODELS = ("logistic-regression", "xgboost", "tabfm", "tabpfn-3.5", "causilo")
+MAIN_MODELS = ("logistic-regression", "ebm", "xgboost", "tabicl-2", "tabfm", "tabpfn-3.5", "causilo")
 
 METRIC_SET = os.environ.get("PLOT_METRIC", "auroc")
 if METRIC_SET not in ("auroc", "auprc"):
