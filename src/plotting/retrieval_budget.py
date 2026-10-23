@@ -30,7 +30,7 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
 from src.config import config
-from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style, task_label
+from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style
 from src.plotting.experiments import (
     DATA_SOURCES,
     MAIN_TARGETS,
@@ -264,47 +264,6 @@ def _bottom_row(axes: list, column_count: int) -> list:
     return axes[len(axes) - (remainder or column_count) :]
 
 
-def caption(view: RetrievalBatchView, metric: str, visual: VisualSettings = VISUAL) -> str:
-    """Return a self-contained F10 caption."""
-    counts = ", ".join(f"{count:,}" for count in view.selected_counts)
-    strategies = ", ".join(sorted(set(view.conditions["strategy_label"].astype(str)), key=lambda label: label))
-    repeats = sorted(set(view.conditions["run_count"].astype(int)))
-    repeat_text = (
-        "one pipeline run per setting"
-        if repeats == [1]
-        else "per setting " + ", ".join(f"{count} repeated pipeline runs" for count in repeats)
-    )
-    reference = (
-        f"The dashed horizontal reference trains the same model on the unrestricted candidate pool of "
-        f"{view.unrestricted_count:,} observations and evaluates it on this same batch"
-        + (
-            ", with its bootstrap interval shaded behind the line. "
-            if visual.show_ci
-            else ", without an interval band. "
-        )
-        + "It is not the best ordinary full-data model, and a selected-subset curve may legitimately lie above it. "
-        if view.unrestricted is not None
-        else "The unrestricted candidate-pool reference is not registered for this direction, so no reference line "
-        "is shown; ordinary full-held-out results are not substituted because their evaluation population differs. "
-    )
-    uncertainty = (
-        rf"Whiskers are {round(100 * view.ci_level)}\% percentile intervals from {view.bootstrap_count:,} "
-        "bootstrap draws of this target batch after averaging training repeats within each setting; they describe "
-        "resampling of these fixed batch observations and not variation across target batches or training repeats."
-        if visual.show_ci
-        else "No uncertainty intervals are shown."
-    )
-    return (
-        rf"\textbf{{Retrieval performance over the selected training budget relative to unrestricted training on "
-        f"the target batch for {task_label(view.target)}.}} {metric_label(metric)} of "
-        f"{len(view.model_instances)} models on a {view.batch_size:,}-observation "
-        f"{dataset_label(view.batch_center)} target batch (batch sample seed {view.test_sample_seed}), selecting "
-        f"from the complete {dataset_label(view.candidate_source)} candidate pool. Each panel fixes one model; "
-        f"curves are the declared strategies ({strategies}) over measured budgets {counts}, and every curve keeps "
-        "its strategy configuration fixed. Measured repeat coverage: " + repeat_text + ". " + reference + uncertainty
-    )
-
-
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -391,11 +350,6 @@ def main() -> None:
                     f"_seed-{view.test_sample_seed}"
                 )
                 outputs = save(make_figure(view, metric, visual), str(stem), formats=visual.output_formats)
-                print(
-                    f"LaTeX caption ({metric_label(metric)}, batch={view.batch_center}/{view.batch_size}/"
-                    f"{view.test_sample_seed}):"
-                )
-                print(f"\\caption{{{caption(view, metric, visual)}}}")
                 for output in outputs:
                     print("figure: " + str(Path(output).relative_to(config.dir_root)))
 

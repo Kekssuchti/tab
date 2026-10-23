@@ -159,7 +159,7 @@ def _format_estimator_axis(ax, settings: tuple[str, ...], visual: VisualSettings
 
 
 # ---------------------------------------------------------------------------
-# DATA SELECTION, CAPTIONS, AND EXECUTION
+# DATA SELECTION AND EXECUTION
 # ---------------------------------------------------------------------------
 
 
@@ -201,26 +201,6 @@ def styles_label(data: GroupedEvaluation, instance: str) -> str:
     return instance_plot_styles(data.model_metadata)[instance][1]
 
 
-def performance_caption(data: GroupedEvaluation, visual: VisualSettings = VISUAL) -> str:
-    uncertainty = (
-        rf"whiskers are {round(100 * visual.ci_level)}\% percentile intervals from aligned cohort-bootstrap draws"
-        if visual.show_ci
-        else "no uncertainty intervals are shown"
-    )
-    return (
-        r"\textbf{Estimator count changes model performance unevenly.} "
-        f"{metric_label(DATA.metric)} on {dataset_label(DATA.dataset)} over the configured estimator counts; "
-        f"points average repeated runs within each count and {uncertainty}."
-    )
-
-
-def runtime_caption() -> str:
-    return (
-        r"\textbf{Runtime rises with estimator count but differs substantially between models.} "
-        r"Total measured pipeline runtime over the configured estimator counts; repeated runs are averaged."
-    )
-
-
 def main() -> None:
     artifacts = load_plot_artifacts(DATA.experiment_name, exclude_models=DATA.exclude_models)
     setting_by_run, setting_order = _setting_map(artifacts.metrics)
@@ -240,10 +220,6 @@ def main() -> None:
     save(make_runtime_figure(prepared), str(runtime_stem), formats=VISUAL.output_formats)
     _print_pairwise_wins(prepared)
 
-    print("\nPerformance figure caption:")
-    print(f"\\caption{{{performance_caption(prepared)}}}")
-    print("Runtime figure caption:")
-    print(f"\\caption{{{runtime_caption()}}}")
     print("Figures:")
     for stem in (performance_stem, runtime_stem):
         for extension in VISUAL.output_formats:

@@ -133,48 +133,6 @@ def make_figure(data: SourceContrastEvaluation, visual: VisualSettings = VISUAL)
     return fig
 
 
-def caption(data: SourceContrastEvaluation, visual: VisualSettings = VISUAL) -> str:
-    """Return the self-contained F3 caption."""
-    sources = data.evaluation_centers
-    source_counts = " and ".join(
-        f"{data.training_counts[source]:,} {dataset_label(source)} observations "
-        f"({_repeat_text(data.run_count(source))})"
-        for source in sources
-    )
-    centers = " and ".join(dataset_label(center) for center in data.evaluation_centers)
-    metrics = " and ".join(metric_label(metric) for metric in data.metrics)
-    pairing = (
-        "Repeat contrasts pair runs by identical recorded model-training, inference, CV-split, tuning-sampler, "
-        "and training-sample seed tuples, with exactly one run per tuple in each source."
-        if data.repeat_pairing == "matched_seeds"
-        else "No unique complete seed pairing exists, so repeat contrasts use all local-minus-external run "
-        "combinations; this retains every run without inventing a chronological pairing."
-    )
-    ranges = (
-        "Whiskers span the minimum and maximum repeat point contrasts, not confidence intervals or "
-        "test-cohort bootstrap uncertainty; one repeat pair gives a zero-width range."
-        if visual.show_ci
-        else "No repeat ranges are shown."
-    )
-    return (
-        rf"\textbf{{Local rather than external full-data training has model-specific effects for "
-        f"{task_label(data.target)}.}} Columns fix the held-out {centers} evaluation populations; rows show "
-        f"{metrics}. Each point is the mean score of the same model trained on the evaluation center's complete "
-        "pool minus its mean score trained on the other center's complete pool, in percentage points, so positive "
-        f"values favor local training and negative values favor external training. The complete pools contain "
-        f"{source_counts}, selected only from runs explicitly configured with training fraction 1.0; this is an "
-        f"all-available-data comparison, not an equal-budget source-effect estimate. {ranges} {pairing} "
-        "The mean of these repeat contrasts equals the plotted difference of source means. Cohort fingerprints, "
-        "ordered cohort IDs and labels, split settings, bootstrap seed/count/IDs, and prediction-dataset order "
-        "were still required to match; paired bootstrap draws are validated but do not determine whiskers. "
-        "Circles denote classical baselines and triangles tabular foundation models."
-    )
-
-
-def _repeat_text(count: int) -> str:
-    return "one pipeline run" if count == 1 else f"{count} repeated pipeline runs"
-
-
 def _pairing_report(data: SourceContrastEvaluation) -> None:
     print("Pairing validation:")
     print(
@@ -239,8 +197,6 @@ def main() -> None:
         output_dir = DATA.output_dir / prepared.target
         stem = output_dir / f"{DATA_SOURCES[0]}_{DATA_SOURCES[1]}_source_contrast"
         outputs = save(make_figure(prepared, visual), str(stem), formats=visual.output_formats)
-        print("LaTeX caption:")
-        print(f"\\caption{{{caption(prepared, visual)}}}")
         for output in outputs:
             print("figure: " + str(Path(output).relative_to(config.dir_root)))
 

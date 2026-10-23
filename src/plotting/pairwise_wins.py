@@ -37,7 +37,6 @@ from src.plotting.defaults import (
     RANK_GROUP_COLOR,
     dataset_label,
     metric_label,
-    model_label,
     panel_scale,
     set_plot_style,
 )
@@ -286,9 +285,8 @@ def draw_rank_diagram(
     """Draw one scikit-posthocs Nemenyi diagram from a rank summary.
 
     The post-hoc test, the maximal-clique crossbars, and the label layout all come
-    from ``scikit_posthocs``. The critical difference is reported in the caption
-    rather than drawn as a scale bar, which the library places on top of the rank
-    numbers.
+    from ``scikit_posthocs``. The critical-difference scale bar is omitted because
+    the library places it on top of the rank numbers.
     """
     average = ranks.ranks_for(setting) if setting is not None else ranks.overall_ranks()
     display = ranks.labels()
@@ -461,103 +459,8 @@ def _draw_rank_movement(
 
 
 # ---------------------------------------------------------------------------
-# CAPTIONS
+# EXECUTION
 # ---------------------------------------------------------------------------
-
-
-def cross_caption(summary: PairwiseSummary, metric: str) -> str:
-    cells = summary.cross_cells.loc[summary.cross_cells["metric"].eq(metric)]
-    reversed_count = int(cells["reversed"].sum())
-    return (
-        rf"\textbf{{{reversed_count} of {len(cells)} comparisons change hands between the in-domain and the "
-        rf"external cohort.}} "
-        f"Each cell holds two {metric_label(metric)} win shares for one model pair: the share of "
-        f"{summary.bootstrap_count:,} paired cohort-bootstrap draws in which the row model beat the column model, "
-        f"above the diagonal on the held-out "
-        f"{dataset_label(summary.trained_on)} cohort and below it on the held-out "
-        f"{dataset_label(summary.external_dataset)} cohort. Rows and columns follow the shared model order used by "
-        f"the other figures, and the white diagonal separates the two halves. Both triangles read row "
-        f"over column, so a pair whose winner does not change has one warm cell and one cool cell, while a pair that "
-        f"changes hands is warm in both. Cells near 50 are undecided, and a share counts resamples of these cohorts "
-        f"rather than the chance that a model generalizes better."
-    )
-
-
-def forest_caption(summary: PairwiseSummary, visual: VisualSettings = VISUAL) -> str:
-    del visual
-    styles = instance_plot_styles(summary.model_metadata)
-    reference_label = styles[summary.reference_instance][1]
-    metrics = " and ".join(metric_label(metric) for metric in summary.metrics)
-    intervals = (
-        "whiskers span the minimum and maximum individual-repeat paired point differences, not confidence intervals"
-        if summary.ci_level is not None
-        else "no intervals are shown"
-    )
-    return (
-        r"\textbf{Effect sizes against one reference model anchor the win shares.} "
-        f"Points are mean paired {metrics} point-estimate differences over {summary.run_count} pipeline runs "
-        f"against {reference_label}, so a positive value means the model beat "
-        f"{reference_label} on the held-out {dataset_label(summary.trained_on)} cohort and a negative value means it "
-        f"lost to it, and the same reading holds on {dataset_label(summary.external_dataset)}. "
-        f"{intervals.capitalize()}. With one run the range collapses to its point estimate. "
-        f"The number at the right of each row is the share of {summary.bootstrap_count:,} aligned cohort-bootstrap "
-        f"draws in which the model "
-        f"outperformed {reference_label}. Circles denote classical baselines and triangles tabular foundation models."
-    )
-
-
-def rank_caption(ranks: RankSummary, setting_label: str, visual: VisualSettings = VISUAL) -> str:
-    test = ranks.test_for(None)
-    p_value = float(test["iman_davenport_p"])
-    p_text = "p < 0.001" if p_value < 0.001 else f"p = {p_value:.3f}"
-    movement = (
-        "Bottom panel: average rank in the smallest and the largest setting, with the net movement annotated. "
-        if visual.show_rank_movement and len(ranks.settings) > 1
-        else ""
-    )
-    spread = (
-        "with the run-to-run spread where repeated runs exist and the model name at the right end"
-        if visual.show_rank_spread
-        else "with the model name at the right end"
-    )
-    return (
-        f"{_rank_headline(ranks)} "
-        f"Top panel: Nemenyi critical difference diagram of the average rank over {ranks.block_count} evaluation "
-        f"blocks, one per configuration and held-out cohort, from {ranks.run_count} pipeline runs. Models joined by a "
-        f"bar cannot be separated at $\\alpha$ = {ranks.alpha:g} (Friedman {p_text}), and two average ranks have to "
-        f"differ by {float(test['critical_difference']):.2f} rank positions to count as separated. Middle panel: "
-        f"average rank per setting, {spread}. {movement}{_excluded_note(ranks)}"
-    )
-
-
-def _rank_headline(ranks: RankSummary) -> str:
-    """State the ranking result the figure shows, without hard-coding a claim."""
-    leader = model_label(str(ranks.labels()[ranks.overall_ranks().index[0]]))
-    metric = metric_label(ranks.metric)
-    if len(ranks.settings) < 2:
-        return rf"\textbf{{Average {metric} rank over {ranks.block_count} evaluation blocks: {leader} leads.}}"
-    table = ranks.setting_ranks()
-    movement = (table.iloc[0] - table.iloc[-1]).abs()
-    movers = int(movement.ge(1.0).sum())
-    claim = (
-        "no model moves a full rank position"
-        if movers == 0
-        else f"{movers} of {ranks.model_count} models move at least a rank position"
-    )
-    return (
-        rf"\textbf{{Average {metric} rank over {ranks.block_count} evaluation blocks: {leader} leads, and {claim} "
-        rf"between the lowest and the highest setting.}}"
-    )
-
-
-def _excluded_note(ranks: RankSummary) -> str:
-    if not ranks.excluded_models:
-        return ""
-    names = ", ".join(model_label(name) for name in ranks.excluded_models)
-    return (
-        f"Models that are absent from at least one setting are left out, because a rank comparison needs the same "
-        f"models in every block: {names}."
-    )
 
 
 def _parse_args() -> argparse.Namespace:
@@ -645,14 +548,10 @@ def main() -> None:
             stem = baseline_dir / f"{summary.trained_on}_cross_cohort"
             save(make_cross_cohort_figure(summary, metric, visual), str(stem), formats=visual.output_formats)
             stems.append(stem)
-            print(f"\nCross-cohort caption ({metric}):")
-            print(f"\\caption{{{cross_caption(summary, metric)}}}")
 
         forest = baseline_dir / f"{summary.trained_on}_paired_forest"
         save(make_paired_forest_figure(summary, visual), str(forest), formats=visual.output_formats)
         stems.append(forest)
-        print("\nPaired difference forest caption:")
-        print(f"\\caption{{{forest_caption(summary, visual)}}}")
 
         for metric, metric_ranks in ranks.items():
             rank_figure = rank_dir / f"{summary.trained_on}_ranks"
@@ -662,8 +561,6 @@ def main() -> None:
                 formats=visual.output_formats,
             )
             stems.append(rank_figure)
-            print(f"\nRank figure caption ({metric}):")
-            print(f"\\caption{{{rank_caption(metric_ranks, DATA.setting_label, visual)}}}")
 
         print("\nFigures:")
         for stem in stems:

@@ -22,8 +22,6 @@ class SampleSizeEvaluation:
     sample_sizes: tuple[int, ...]
     target: str
     trained_on: str
-    full_training_size: int | None
-    full_training_run_count: int
 
     @property
     def performance(self) -> pd.DataFrame:
@@ -131,8 +129,6 @@ def prepare_sample_size_evaluation(
     *,
     metrics: Sequence[str],
     ci_level: float = 0.95,
-    full_training_size: int | None = None,
-    full_training_run_count: int = 0,
 ) -> SampleSizeEvaluation:
     """Infer sample-size settings and aggregate repeated runs within each size."""
     required = {
@@ -177,19 +173,11 @@ def prepare_sample_size_evaluation(
         ci_level=ci_level,
         interval_kind="min_max",
     )
-    if full_training_size is not None and full_training_size <= 0:
-        raise ValueError("full_training_size must be positive when provided")
-    if full_training_run_count < 0:
-        raise ValueError("full_training_run_count cannot be negative")
-    if (full_training_size is None) != (full_training_run_count == 0):
-        raise ValueError("full_training_size and full_training_run_count must be provided together")
     return SampleSizeEvaluation(
         grouped=grouped,
         sample_sizes=sample_sizes,
         target=target,
         trained_on=trained_on,
-        full_training_size=full_training_size,
-        full_training_run_count=full_training_run_count,
     )
 
 

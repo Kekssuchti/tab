@@ -286,85 +286,8 @@ def _draw_panel(ax, rows, data, styles, visual, *, show_model_labels: bool, repe
 
 
 # ---------------------------------------------------------------------------
-# CAPTIONS AND EXECUTION
+# EXECUTION
 # ---------------------------------------------------------------------------
-
-
-def performance_caption(data: TransferSummary, visual: VisualSettings = VISUAL) -> str:
-    panel_groups = _metric_panel_groups(data.metrics)
-    uncertainty = _uncertainty_caption(data, visual)
-    return (
-        rf"\textbf{{Full-data {dataset_label(data.trained_on)} models show dataset-dependent performance on the "
-        rf"external {dataset_label(data.external_dataset)} cohort.}} "
-        f"{panel_groups} for models trained on {dataset_label(data.trained_on)} and evaluated on held-out "
-        f"{dataset_label(data.trained_on)} and {dataset_label(data.external_dataset)} cohorts. "
-        f"{uncertainty} Circles denote classical baselines and triangles tabular foundation "
-        r"models."
-    )
-
-
-def generalizability_caption(data: TransferSummary, visual: VisualSettings = VISUAL) -> str:
-    references = []
-    styles = instance_plot_styles(data.model_metadata)
-    for metric in data.metrics:
-        rows = data.delta_comp.loc[data.delta_comp["metric"].eq(metric)]
-        reference_instance = str(rows["reference_model_instance"].iloc[0])
-        references.append(f"{metric_label(metric)}: {styles[reference_instance][1]}")
-    uncertainty = _uncertainty_caption(data, visual)
-    prevalence_caveat = (
-        r" $\Delta_{\mathrm{spec}}$ for AUPRC also reflects differences in outcome prevalence between cohorts."
-        if "prc_auc" in data.metrics
-        else ""
-    )
-    return (
-        r"\textbf{Signed generalizability changes separate model-specific transfer from comparative performance.} "
-        f"Models were trained on {dataset_label(data.trained_on)} and transferred to "
-        f"{dataset_label(data.external_dataset)}. Left panels show "
-        r"$\Delta_{\mathrm{spec}}$ (target minus source performance); right panels show "
-        r"$\Delta_{\mathrm{comp}}$ (target performance minus the strongest transferred model: "
-        f"{'; '.join(references)}). Zero denotes no model-specific change or the comparative reference; more "
-        f"negative values indicate worse generalizability. The comparative reference is selected from mean "
-        f"external performance and held fixed across repeats. "
-        f"{uncertainty}{prevalence_caveat}"
-    )
-
-
-def _metric_panel_groups(metrics: tuple[str, ...]) -> str:
-    groups = []
-    for index, metric in enumerate(metrics):
-        first = chr(ord("a") + 2 * index)
-        second = chr(ord("a") + 2 * index + 1)
-        groups.append(f"{metric_label(metric)} ({first}, {second})")
-    return " and ".join(groups)
-
-
-def _uncertainty_caption(data: TransferSummary, visual: VisualSettings) -> str:
-    run_text = "one pipeline run" if data.run_count == 1 else f"{data.run_count} repeated pipeline runs"
-    if visual.plot_type == "min_max":
-        points = f"Filled markers show mean estimates across {run_text}."
-        if not visual.show_ci:
-            return f"{points} No intervals are shown."
-        return f"{points} Whiskers span the minimum and maximum run estimates, not confidence intervals."
-    if visual.plot_type != "current":
-        points = f"Large filled markers show the mean; small hollow markers show each of {run_text}."
-        if not visual.show_ci:
-            return f"{points} No intervals are shown."
-        confidence = round(100 * visual.ci_level)
-        return (
-            rf"{points} Each run's whiskers show its {confidence}\% percentile interval from "
-            f"{data.bootstrap_count:,} cohort-bootstrap draws; the mean has no whisker."
-        )
-    if not visual.show_ci:
-        return f"Points are run-averaged estimates. No uncertainty intervals are shown; estimates summarize {run_text}."
-    confidence = round(100 * visual.ci_level)
-    aggregation_text = (
-        "for one pipeline run" if data.run_count == 1 else f"after averaging {data.run_count} repeated pipeline runs"
-    )
-    return (
-        rf"Points are run-averaged estimates. Whiskers are {confidence}\% percentile intervals from "
-        f"{data.bootstrap_count:,} aligned cohort-bootstrap "
-        f"draws {aggregation_text}."
-    )
 
 
 def _parse_args() -> argparse.Namespace:
@@ -477,10 +400,6 @@ def main() -> None:
             )
             for fig, path in zip(figures, paths, strict=True):
                 save(fig, str(path), formats=selected_visual.output_formats)
-            print(f"Performance figure caption ({kind}):")
-            print(f"\\caption{{{performance_caption(prepared, selected_visual)}}}")
-            print(f"Generalizability figure caption ({kind}):")
-            print(f"\\caption{{{generalizability_caption(prepared, selected_visual)}}}")
             print("Figures:")
             for stem in paths:
                 for extension in selected_visual.output_formats:

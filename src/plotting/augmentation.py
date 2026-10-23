@@ -11,8 +11,7 @@ experiment, or without its matched local-only reference, is reported and skipped
 rather than replaced by another experiment.
 
 Every panel evaluates the designated target center. The external source is the
-other center, so the figure keeps its training-source identity in the file name
-and the caption.
+other center, so the figure keeps its training-source identity in the file name.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ from matplotlib.lines import Line2D
 from mlflow import MlflowClient
 from src.config import config
 from src.mlflow.evaluation_data import DEFAULT_TRACKING_URI
-from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style, task_label
+from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style
 from src.plotting.experiments import DATA_SOURCES, MAIN_TARGETS, tasks_for, warn_skipped
 from src.plotting.model_sets import PLOT_METRICS, plot_dir
 from src.plotting.scientific_figstyle import BASELINE, PALETTE, WIDE, figure_grid, panel_labels, save
@@ -309,67 +308,6 @@ def _bottom_row(axes: list, column_count: int) -> list:
     return axes[len(axes) - (remainder or column_count) :]
 
 
-def full_external_caption(
-    data: FullExternalAugmentation,
-    metric: str,
-    visual: VisualSettings = VISUAL,
-) -> str:
-    """Return a self-contained F7 caption."""
-    counts = ", ".join(f"{count:,}" for count in data.local_counts)
-    baseline = (
-        " The grey dashed line repeats that model's externally trained score as the level its local data has to "
-        "beat; it is a measured reference, not a fitted threshold, and it can be switched off with "
-        "show_external_baseline in VisualSettings."
-        if visual.show_external_baseline and data.external_only_measured
-        else ""
-    )
-    provenance = (
-        f" The local-only curve comes from that center's own single-source sweep ({data.local_only_experiment}), "
-        "matched cell by cell on training_sample_seed and realized local count"
-        + (
-            f"; {len(data.dropped_runs)} reference run(s) repeated a size with seeds the augmentation sweep does "
-            "not share and were left out rather than averaged in."
-            if data.dropped_runs
-            else "."
-        )
-        if data.local_only_experiment is not None
-        else ""
-    )
-    return (
-        rf"\textbf{{Adding local {dataset_label(data.local_center)} observations to the complete "
-        f"{dataset_label(data.external_source)} training pool changes {task_label(data.target)} performance on the "
-        f"target center.}} {metric_label(metric)} on the held-out {dataset_label(data.local_center)} cohort for "
-        f"{len(data.model_instances)} models, each in its own panel. Measured local counts are {counts}; the fixed "
-        f"external contribution is the complete {dataset_label(data.external_source)} pool of "
-        f"{data.external_count:,} observations. The solid curve trains on local data only, and the dashed curve "
-        "trains on the complete external pool plus the same local count. Combined training deliberately has a "
-        "larger total training count than local-only training. Runs of one cell share their "
-        "training_sample_seed, so the local-only and combined conditions use the same local observations; "
-        f"{_repeat_coverage(data.performance)}.{baseline}{provenance} {_uncertainty(data, visual)}"
-    )
-
-
-def _repeat_coverage(performance: pd.DataFrame) -> str:
-    counts = sorted(set(performance["run_count"].astype(int)))
-    if len(counts) == 1:
-        count = counts[0]
-        text = "one pipeline run" if count == 1 else f"{count} repeated pipeline runs"
-        return f"points summarize {text} per setting"
-    return "repeat coverage is " + ", ".join(
-        ("one pipeline run" if count == 1 else f"{count} repeated pipeline runs") for count in counts
-    )
-
-
-def _uncertainty(data, visual: VisualSettings) -> str:
-    if not visual.show_ci:
-        return "No uncertainty intervals are shown."
-    return (
-        "Points are mean run estimates; whiskers span the minimum and maximum run estimates within each "
-        "setting, not confidence intervals. A single run has zero-width whiskers. "
-        "Only measured settings are drawn and connected."
-    )
-
-
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -545,8 +483,6 @@ def _run_full_external(task, artifacts, local_center: str, external_source: str,
     for metric in prepared.metrics:
         stem = output_root / f"{external_source}_to_{local_center}_full_external"
         outputs = save(make_full_external_figure(prepared, metric, visual), str(stem), formats=visual.output_formats)
-        print(f"LaTeX caption ({metric_label(metric)}):")
-        print(f"\\caption{{{full_external_caption(prepared, metric, visual)}}}")
         for output in outputs:
             print("figure: " + str(Path(output).relative_to(config.dir_root)))
 

@@ -21,7 +21,7 @@ import pandas as pd
 from matplotlib.figure import Figure
 
 from src.config import config
-from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style, task_label
+from src.plotting.defaults import MetricPanelSettings, dataset_label, metric_label, set_plot_style
 from src.plotting.experiments import (
     DATA_SOURCES,
     PlotExperiment,
@@ -35,7 +35,6 @@ from src.plotting.utils import (
     FullDataBenchmark,
     MissingExperimentError,
     XGBoostDifferenceEvaluation,
-    full_training_count,
     load_plot_artifacts,
     prepare_full_data_benchmark,
     prepare_sample_size_evaluation,
@@ -331,118 +330,8 @@ def _format_sample_axis(ax, sample_sizes: tuple[int, ...], visual: VisualSetting
 
 
 # ---------------------------------------------------------------------------
-# CAPTION AND EXECUTION
+# EXECUTION
 # ---------------------------------------------------------------------------
-
-
-def caption(
-    data: SampleSizeEvaluation,
-    visual: VisualSettings = VISUAL,
-    *,
-    benchmark: FullDataBenchmark | None = None,
-    benchmark_unavailable_reason: str | None = None,
-) -> str:
-    metrics = " and ".join(metric_label(metric) for metric in data.metrics)
-    datasets = " and ".join(dataset_label(dataset) for dataset in _datasets(data, visual))
-    if benchmark is not None and benchmark_unavailable_reason is not None:
-        raise ValueError("A benchmark and an unavailable reason cannot both be supplied")
-    run_text = _repeat_coverage(data)
-    uncertainty = (
-        "Points are mean run estimates; whiskers span the minimum and maximum run estimates within each "
-        "training count, not confidence intervals. A single run has zero-width whiskers."
-        if visual.show_ci
-        else "No uncertainty intervals are shown."
-    )
-    if data.full_training_size is None:
-        local_full = f"The explicit complete {dataset_label(data.trained_on)} training count is unavailable."
-    else:
-        local_full = (
-            f"The complete {dataset_label(data.trained_on)} pool contains {data.full_training_size:,} observations "
-            f"and is identified by {_run_count_text(data.full_training_run_count)} explicitly configured at "
-            "fraction 1.0."
-        )
-    benchmark_text = _benchmark_caption(data, benchmark, benchmark_unavailable_reason)
-    return (
-        rf"\textbf{{Model performance changes with the amount of {dataset_label(data.trained_on)} training data.}} "
-        f"{metrics} on the held-out {datasets} cohorts over increasing training sample counts. Points summarize "
-        f"{run_text}. {local_full} {benchmark_text} {uncertainty}"
-    )
-
-
-def xgboost_difference_caption(
-    data: XGBoostDifferenceEvaluation,
-    visual: VisualSettings = VISUAL,
-) -> str:
-    """Return a self-contained caption for the same-size XGBoost contrasts."""
-    metrics = " and ".join(metric_label(metric) for metric in data.metrics)
-    datasets = " and ".join(dataset_label(dataset) for dataset in _datasets(data.sample_size, visual))
-    uncertainty = (
-        "Points are mean within-run model-minus-XGBoost differences; whiskers span the minimum and maximum "
-        "of those paired run differences at each training count, not confidence intervals. "
-        "A single run has zero-width whiskers."
-        if visual.show_ci
-        else "No uncertainty intervals are shown."
-    )
-    return (
-        rf"\textbf{{Differences from same-size XGBoost show how model advantages change with the amount of "
-        f"{dataset_label(data.trained_on)} training data for {task_label(data.target)}.}} "
-        f"{metrics} differences on the held-out {datasets} evaluation centers are score(model) minus "
-        "score(XGBoost) in percentage points, so positive values mean the model performs better. Each training "
-        "count matches models with XGBoost from the same experimental setting after repeat aggregation. Repeat "
-        f"coverage is {_repeat_coverage(data.sample_size)}. The grey zero line is XGBoost; its identically zero "
-        "curve is omitted. "
-        f"{uncertainty}"
-    )
-
-
-def _repeat_coverage(data: SampleSizeEvaluation) -> str:
-    counts_to_sizes: dict[int, list[int]] = {}
-    for setting, count in data.run_counts.items():
-        counts_to_sizes.setdefault(count, []).append(int(setting))
-    if len(counts_to_sizes) == 1:
-        count = next(iter(counts_to_sizes))
-        count_text = _run_count_text(count)
-        return f"{count_text} at each of {len(data.sample_sizes)} measured training counts"
-
-    coverage = []
-    for count, sizes in sorted(counts_to_sizes.items()):
-        size_text = ", ".join(f"{size:,}" for size in sorted(sizes))
-        coverage.append(f"{_run_count_text(count)} at {size_text} observations")
-    return "repeat coverage of " + "; ".join(coverage)
-
-
-def _benchmark_caption(
-    data: SampleSizeEvaluation,
-    benchmark: FullDataBenchmark | None,
-    unavailable_reason: str | None,
-) -> str:
-    if benchmark is None:
-        reason = unavailable_reason or "the reciprocal full-data input was not supplied"
-        return f"The reciprocal full-data benchmark is unavailable because {reason}; no substitute is shown."
-
-    styles = instance_plot_styles(benchmark.model_metadata)
-    winners = []
-    for metric in data.metrics:
-        reference = benchmark.reference(metric)
-        winner = styles[str(reference["model_instance"])][1]
-        winners.append(f"{metric_label(metric)}: {winner}")
-    return (
-        f"The grey Best full {dataset_label(benchmark.trained_on)}-trained model reference appears only on the "
-        f"{dataset_label(data.trained_on)} evaluation panels. It uses the complete "
-        f"{dataset_label(benchmark.trained_on)} pool of {benchmark.training_size:,} observations and the best "
-        f"mean score {_benchmark_run_text(benchmark.run_count)} ({'; '.join(winners)}); the winning "
-        "identity is fixed per metric rather than reselected in bootstrap draws."
-    )
-
-
-def _benchmark_run_text(count: int) -> str:
-    if count == 1:
-        return "from one pipeline run"
-    return f"after averaging {count} repeated pipeline runs"
-
-
-def _run_count_text(count: int) -> str:
-    return "one pipeline run" if count == 1 else f"{count} repeated pipeline runs"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -494,15 +383,12 @@ def main() -> None:
             continue
 
         visual = VISUAL
-        local_full_size, local_full_run_count = _load_local_full_metadata(task)
         prepared = prepare_sample_size_evaluation(
             artifacts,
             metrics=visual.metrics,
             ci_level=visual.ci_level,
-            full_training_size=local_full_size,
-            full_training_run_count=local_full_run_count,
         )
-        benchmark, unavailable_reason = _load_reciprocal_benchmark(task, visual)
+        benchmark = _load_reciprocal_benchmark(task, visual)
 
         output_dir = DATA.output_dir / prepared.target
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -511,10 +397,6 @@ def main() -> None:
             make_figure(prepared, visual, benchmark=benchmark),
             str(stem),
             formats=visual.output_formats,
-        )
-        print("LaTeX caption:")
-        print(
-            f"\\caption{{{caption(prepared, visual, benchmark=benchmark, benchmark_unavailable_reason=unavailable_reason)}}}"
         )
         for output in outputs:
             print("figure: " + str(Path(output).relative_to(config.dir_root)))
@@ -526,37 +408,14 @@ def main() -> None:
             str(difference_stem),
             formats=visual.output_formats,
         )
-        print("LaTeX caption (XGBoost difference):")
-        print(f"\\caption{{{xgboost_difference_caption(xgboost_differences, visual)}}}")
         for output in difference_outputs:
             print("figure: " + str(Path(output).relative_to(config.dir_root)))
-
-
-def _load_local_full_metadata(task: PlotExperiment) -> tuple[int | None, int]:
-    assert task.experiment_name is not None
-    try:
-        artifacts = load_plot_artifacts(
-            task.experiment_name,
-            models=DATA.models,
-            exclude_models=DATA.exclude_models,
-            full_training_only=True,
-            include_bootstrap=False,
-            expected_target=task.target,
-            expected_training_source=task.training_source,
-        )
-    except MissingExperimentError as missing:
-        print(
-            f"warning: {task.label} [{task.direction}] complete local count unavailable: {missing}",
-            file=sys.stderr,
-        )
-        return None, 0
-    return full_training_count(artifacts), len(artifacts.run_ids)
 
 
 def _load_reciprocal_benchmark(
     task: PlotExperiment,
     visual: VisualSettings,
-) -> tuple[FullDataBenchmark | None, str | None]:
+) -> FullDataBenchmark | None:
     reciprocal = reciprocal_single_source(task)
     if reciprocal.experiment_name is None:
         reason = (
@@ -564,7 +423,7 @@ def _load_reciprocal_benchmark(
             f"{dataset_label(str(reciprocal.training_source))} training"
         )
         _warn_benchmark_unavailable(task, reciprocal, reason)
-        return None, reason
+        return None
 
     try:
         artifacts = load_plot_artifacts(
@@ -576,12 +435,8 @@ def _load_reciprocal_benchmark(
             expected_training_source=reciprocal.training_source,
         )
     except MissingExperimentError as missing:
-        reason = (
-            f"the registered {dataset_label(str(reciprocal.training_source))}-trained "
-            f"{reciprocal.label} input has no available explicit fraction-1.0 result"
-        )
         _warn_benchmark_unavailable(task, reciprocal, missing)
-        return None, reason
+        return None
 
     benchmark = prepare_full_data_benchmark(
         artifacts,
@@ -589,7 +444,7 @@ def _load_reciprocal_benchmark(
         metrics=visual.metrics,
     )
     print("Reciprocal full-data pipeline runs: " + ", ".join(benchmark.run_ids))
-    return benchmark, None
+    return benchmark
 
 
 def _warn_benchmark_unavailable(task: PlotExperiment, reciprocal: PlotExperiment, reason: object) -> None:

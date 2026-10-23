@@ -28,7 +28,6 @@ from src.plotting.defaults import (
     dataset_label,
     metric_label,
     set_plot_style,
-    task_label,
 )
 from src.plotting.experiments import MAIN_TARGETS, tasks_for, warn_skipped
 from src.plotting.model_sets import PLOT_METRICS, plot_dir
@@ -263,60 +262,6 @@ def _draw_composition_curves(
         )
 
 
-def budget_grid_caption(
-    data: CompositionEvaluation,
-    metric: str,
-    visual: VisualSettings = VISUAL,
-) -> str:
-    """Describe the cross-budget layout without pooling different training sizes."""
-    coverage = " ".join(
-        f"At N={view.total_count:,}, measured MIMIC-IV shares are "
-        + ", ".join(_format_share(float(share)) for share in view.compositions["mimic_share"])
-        + f"; points summarize {_repeat_coverage(view)}."
-        for view in sorted(data.budget_views, key=lambda view: view.total_count)
-    )
-    uncertainty = (
-        "Points are mean run estimates; whiskers span the minimum and maximum run estimates within each exact "
-        "composition, not confidence intervals. A single run has zero-width whiskers."
-        if visual.show_ci
-        else "Points are mean run estimates; no uncertainty intervals are shown."
-    )
-    return (
-        rf"\textbf{{Source-composition effects on {metric_label(metric)} across training sizes "
-        f"for {task_label(data.target)}.}} Rows fix the model; columns increase the total number N of training "
-        "observations. Each panel replaces EUH observations with MIMIC-IV observations at fixed N. "
-        "Solid curves evaluate on held-out MIMIC-IV; dashed curves evaluate on held-out EUH. "
-        f"All panels share the same performance scale. {coverage} {uncertainty} "
-        "Different training sizes are never averaged together."
-    )
-
-
-def caption(
-    data: CompositionBudgetView,
-    metric: str,
-    visual: VisualSettings = VISUAL,
-) -> str:
-    """Return a self-contained caption for one target/metric/budget figure."""
-    measured = "; ".join(
-        f"{_format_share(float(row.mimic_share))} MIMIC "
-        f"({int(row.mimic_count):,} MIMIC-IV + {int(row.tudd_count):,} EUH)"
-        for row in data.compositions.itertuples()
-    )
-    uncertainty = (
-        "Points are mean run estimates; whiskers span the minimum and maximum run estimates within each exact "
-        "composition, not confidence intervals. A single run has zero-width whiskers."
-        if visual.show_ci
-        else "No uncertainty intervals are shown."
-    )
-    return (
-        rf"\textbf{{Fixed-budget source replacement changes {metric_label(metric)} differently across models and "
-        f"evaluation centers for {task_label(data.target)}.}} Each panel fixes one model at N={data.total_count:,} "
-        "training observations and shows exactly two absolute-performance curves: the solid MIMIC-IV curve and "
-        "the dashed EUH curve identify the ordinary held-out evaluation centers. Measured training compositions "
-        f"are {measured}. Points summarize {_repeat_coverage(data)}. {uncertainty} Both pure-source endpoints were measured. "
-    )
-
-
 def _share_ticks(data: CompositionBudgetView, maximum: int) -> tuple[list[float], list[str]]:
     if maximum < 2:
         raise ValueError("max_share_ticks must be at least two")
@@ -336,25 +281,6 @@ def _share_ticks(data: CompositionBudgetView, maximum: int) -> tuple[list[float]
 
 def _format_share(value: float) -> str:
     return f"{value:.1f}".rstrip("0").rstrip(".") + "%"
-
-
-def _repeat_coverage(data: CompositionBudgetView) -> str:
-    counts_to_compositions: dict[int, list[str]] = {}
-    for row in data.compositions.itertuples():
-        identity = f"{_format_share(float(row.mimic_share))} ({int(row.mimic_count):,}+{int(row.tudd_count):,})"
-        counts_to_compositions.setdefault(int(row.run_count), []).append(identity)
-    if len(counts_to_compositions) == 1:
-        repeat_count = next(iter(counts_to_compositions))
-        return f"{_run_count_text(repeat_count)} at each of {len(data.compositions)} measured compositions"
-    coverage = []
-    for repeat_count, compositions in sorted(counts_to_compositions.items()):
-        identities = ", ".join(compositions)
-        coverage.append(f"{_run_count_text(repeat_count)} at {identities}")
-    return "repeat coverage of " + "; ".join(coverage)
-
-
-def _run_count_text(count: int) -> str:
-    return "one pipeline run" if count == 1 else f"{count} repeated pipeline runs"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -411,8 +337,6 @@ def main() -> None:
                     str(stem),
                     formats=visual.output_formats,
                 )
-                print(f"LaTeX caption ({metric_label(metric)}, N={view.total_count:,}):")
-                print(f"\\caption{{{caption(view, metric, visual)}}}")
                 for output in outputs:
                     print("figure: " + str(Path(output).relative_to(config.dir_root)))
         for metric in prepared.metrics:
@@ -422,8 +346,6 @@ def main() -> None:
                 str(stem),
                 formats=tuple(dict.fromkeys((*visual.output_formats, "svg"))),
             )
-            print(f"LaTeX caption ({metric_label(metric)}, model rows / size columns):")
-            print(f"\\caption{{{budget_grid_caption(prepared, metric, visual)}}}")
             for output in outputs:
                 print("figure: " + str(Path(output).relative_to(config.dir_root)))
 

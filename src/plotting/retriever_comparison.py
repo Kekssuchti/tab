@@ -589,27 +589,8 @@ def _cohort_colors(test_seeds: tuple[int, ...], visual: VisualSettings) -> dict[
 
 
 # ---------------------------------------------------------------------------
-# CAPTION AND EXECUTION
+# EXECUTION
 # ---------------------------------------------------------------------------
-
-
-def figure_caption(data: RetrieverComparison, visual: VisualSettings = VISUAL) -> str:
-    setting_means = data.effects.groupby(["metric", "setting"], sort=False)["delta"].mean()
-    all_negative = bool(setting_means.lt(0).all())
-    claim = (
-        "Random training subsets outperform every targeted retriever on average."
-        if all_negative
-        else "Targeted retrieval changes predictive performance unevenly across models and cohorts."
-    )
-    metrics = " and ".join(metric_label(metric) for metric in visual.metrics)
-    return (
-        rf"\textbf{{{claim}}} "
-        f"Paired {metrics} changes relative to random selection for {data.model_count} models. "
-        f"Heatmap cells average {len(data.test_seeds)} test samples × {data.repeat_count} training/model repeats; "
-        "positive values favor the targeted retriever. In the right panels, colored points average models and repeats "
-        "within each test sample, thin lines span its repeats, and black diamonds are grand means. No inferential "
-        "intervals are shown."
-    )
 
 
 def _parse_args() -> argparse.Namespace:
@@ -695,8 +676,6 @@ def main() -> None:
                 f"{prepared.test_size}: {len(prepared.settings) + 1} retrievers × "
                 f"{len(prepared.test_seeds)} test samples × {prepared.repeat_count} repeats"
             )
-            print("Figure caption:")
-            print(f"\\caption{{{figure_caption(prepared)}}}")
             print("Figures:")
             for extension in VISUAL.output_formats:
                 print(output_stem.with_suffix(f".{extension}").relative_to(config.dir_root))
