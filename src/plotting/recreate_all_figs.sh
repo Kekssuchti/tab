@@ -74,7 +74,7 @@ room_for_another_step() {
 # Keep a family's metric/model views sequential to avoid increasing peak memory.
 run_step() {
     local metric model_set status=0
-    for metric in ${PLOT_METRIC:-auroc auprc}; do
+    for metric in ${PLOT_METRIC:-auroc}; do # add auprc once needed
         for model_set in ${PLOT_MODEL_SET:-all main}; do
             echo "--- metric: $metric; model set: $model_set"
             PLOT_METRIC="$metric" PLOT_MODEL_SET="$model_set" uv run python -m "$1" || status=1

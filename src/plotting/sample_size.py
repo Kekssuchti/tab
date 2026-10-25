@@ -6,6 +6,9 @@ Regenerate with:
 
 Every prediction task declared for this family in ``src.plotting.experiments``
 is rebuilt in turn, each into its own ``plots/sample_size/<auroc|auprc>/<all|main>/<target>/`` directory.
+Each target also gets ``combined_performance.pdf`` with EUH training above MIMIC
+training and EUH evaluation on the left. Use ``--combined-only`` to generate only
+this addition without rewriting the single-direction figures.
 Edit ``VISUAL`` for presentation; ``--target`` narrows the run to selected tasks.
 """
 
@@ -13,9 +16,10 @@ from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
@@ -85,6 +89,9 @@ class VisualSettings(MetricPanelSettings):
     benchmark_line_width: float = 0.9
     benchmark_linestyle: str = "--"
     difference_axis_template: str = "$\\Delta$ {metric} to XGBoost on {dataset}"
+    # Combined figure only: off-diagonal train/test combinations.
+    shade_external_panels: bool = True
+    external_panel_color: str = "#F7F7F7"
     output_formats: tuple[str, ...] = ("pdf",)
 
 
@@ -147,25 +154,7 @@ def make_figure(
                 model_rows = dataset_rows.loc[dataset_rows["model_instance"].eq(instance)].sort_values("sample_size")
                 if model_rows.empty:
                     continue
-                style, label = styles[instance]
-                estimates = visual.score_scale * model_rows["estimate"].to_numpy(dtype=float)
-                lower = visual.score_scale * model_rows["lower"].to_numpy(dtype=float)
-                upper = visual.score_scale * model_rows["upper"].to_numpy(dtype=float)
-                yerr = np.vstack((estimates - lower, upper - estimates)) if visual.show_ci else None
-                ax.errorbar(
-                    model_rows["sample_size"],
-                    estimates,
-                    yerr=yerr,
-                    color=style.color,
-                    marker=style.marker,
-                    linestyle=style.linestyle,
-                    markersize=visual.marker_size,
-                    linewidth=visual.line_width,
-                    elinewidth=visual.ci_line_width,
-                    capsize=visual.cap_size if visual.show_ci else 0,
-                    alpha=visual.ci_alpha if visual.show_ci else 1.0,
-                    label=label,
-                )
+                _draw_performance_curve(ax, model_rows, styles[instance], visual)
             if benchmark is not None and dataset == data.trained_on:
                 reference = benchmark.reference(metric)
                 ax.axhline(
@@ -191,6 +180,155 @@ def make_figure(
     _add_legend(fig, axes[0, 0], visual.legend_columns)
     panel_labels(axes)
     return fig
+
+
+def make_combined_figure(
+    euh: SampleSizeEvaluation,
+    mimic: SampleSizeEvaluation,
+    visual: VisualSettings = VISUAL,
+    *,
+    euh_benchmark: FullDataBenchmark | None = None,
+    mimic_benchmark: FullDataBenchmark | None = None,
+) -> Figure:
+    """Stack reciprocal sweeps: EUH training above, EUH evaluation at left.
+
+    Each row has its own training counts, ticks and grid; all four panels use
+    the same score limits. The dashed reference appears on the internal panels
+    and always denotes the best full-data model from the other training center.
+    """
+    if (euh.trained_on, mimic.trained_on) != ("tudd", "mimic"):
+        raise ValueError("Combined performance requires EUH and MIMIC training, in that order")
+    if euh.target != mimic.target or euh.metrics != mimic.metrics or len(euh.metrics) != 1:
+        raise ValueError("Combined performance requires the same target and one shared metric")
+    datasets = ("tudd", "mimic")
+    for data, benchmark in ((euh, euh_benchmark), (mimic, mimic_benchmark)):
+        if not set(datasets).issubset(data.datasets):
+            raise ValueError(f"The {data.trained_on} sweep must evaluate both EUH and MIMIC")
+        if benchmark is not None:
+            _validate_benchmark(data, benchmark)
+
+    set_plot_style()
+    fig, axes = _combined_grid(visual)
+    metric = euh.metrics[0]
+    limit_rows = pd.concat((euh.performance, mimic.performance), ignore_index=True)
+    references = [
+        {"estimate": value, "lower": value, "upper": value}
+        for benchmark in (euh_benchmark, mimic_benchmark)
+        if benchmark is not None
+        for value in (float(benchmark.reference(metric)["estimate"]),)
+    ]
+    if references:
+        limit_rows = pd.concat((limit_rows, pd.DataFrame(references)), ignore_index=True)
+    y_limits = interval_axis_limits(
+        limit_rows,
+        scale=visual.score_scale,
+        show_ci=visual.show_ci,
+        padding_fraction=visual.axis_padding_fraction,
+    )
+    metadata = pd.concat((euh.model_metadata, mimic.model_metadata), ignore_index=True).drop_duplicates()
+    if metadata["model_instance"].duplicated().any():
+        raise ValueError("Reciprocal sweeps disagree on model-instance identities")
+    styles = instance_plot_styles(metadata)
+    for row_index, (data, benchmark) in enumerate(((euh, euh_benchmark), (mimic, mimic_benchmark))):
+        rows = data.performance.copy()
+        rows["sample_size"] = pd.to_numeric(rows["setting"])
+        for column, dataset in enumerate(datasets):
+            ax = axes[row_index, column]
+            if visual.shade_external_panels and dataset != data.trained_on:
+                ax.set_facecolor(visual.external_panel_color)
+            dataset_rows = rows.loc[rows["dataset"].eq(dataset)]
+            for instance in data.model_instances:
+                model_rows = dataset_rows.loc[dataset_rows["model_instance"].eq(instance)].sort_values("sample_size")
+                if not model_rows.empty:
+                    _draw_performance_curve(ax, model_rows, styles[instance], visual)
+            if benchmark is not None and dataset == data.trained_on:
+                ax.axhline(
+                    visual.score_scale * float(benchmark.reference(metric)["estimate"]),
+                    color=BASELINE,
+                    linewidth=visual.benchmark_line_width,
+                    linestyle=visual.benchmark_linestyle,
+                    label="Best full external model",
+                    zorder=1,
+                )
+            ax.set_ylim(y_limits)
+            if column == 0:
+                ax.set_ylabel(metric_label(metric))
+            ax.set_xlim(left=85)
+            ax.set_xlabel(visual.sample_axis_label)
+            _format_sample_axis(ax, data.sample_sizes, visual)
+
+    _add_legend(fig, axes, visual.legend_columns)
+    panel_labels(axes)
+    return fig
+
+
+def _combined_grid(visual: VisualSettings):
+    """Reserve real layout cells for table-style train/test headings."""
+    fig = plt.figure(
+        figsize=(visual.figure_width, 2 * visual.figure_width * visual.row_height + 0.35),
+        layout="constrained",
+    )
+    grid = fig.add_gridspec(
+        4,
+        4,
+        width_ratios=(0.035, 0.05, 1, 1),
+        height_ratios=(0.035, 0.05, 1, 1),
+    )
+    headings = (
+        (grid[0, 2:], "Test set", 0, "bold"),
+        (grid[1, 2], dataset_label("tudd"), 0, "bold"),
+        (grid[1, 3], dataset_label("mimic"), 0, "bold"),
+        (grid[2:, 0], "Train set", 90, "bold"),
+        (grid[2, 1], dataset_label("tudd"), 90, "bold"),
+        (grid[3, 1], dataset_label("mimic"), 90, "bold"),
+    )
+    for cell, text, rotation, weight in headings:
+        heading = fig.add_subplot(cell)
+        heading.set_axis_off()
+        heading.text(
+            0.5,
+            0.5,
+            text,
+            transform=heading.transAxes,
+            ha="center",
+            va="center",
+            rotation=rotation,
+            fontweight=weight,
+        )
+
+    axes = np.empty((2, 2), dtype=object)
+    for row in range(2):
+        for column in range(2):
+            axes[row, column] = fig.add_subplot(
+                grid[row + 2, column + 2],
+                sharex=axes[row, 0] if column else None,
+                sharey=axes[0, 0] if row or column else None,
+            )
+            axes[row, column].tick_params(axis="y", labelleft=True)
+    return fig, axes
+
+
+def _draw_performance_curve(ax, rows: pd.DataFrame, model_style, visual: VisualSettings) -> None:
+    """Keep single-direction and combined curves visually identical."""
+    style, label = model_style
+    estimates = visual.score_scale * rows["estimate"].to_numpy(dtype=float)
+    lower = visual.score_scale * rows["lower"].to_numpy(dtype=float)
+    upper = visual.score_scale * rows["upper"].to_numpy(dtype=float)
+    yerr = np.vstack((estimates - lower, upper - estimates)) if visual.show_ci else None
+    ax.errorbar(
+        rows["sample_size"],
+        estimates,
+        yerr=yerr,
+        color=style.color,
+        marker=style.marker,
+        linestyle=style.linestyle,
+        markersize=visual.marker_size,
+        linewidth=visual.line_width,
+        elinewidth=visual.ci_line_width,
+        capsize=visual.cap_size if visual.show_ci else 0,
+        alpha=visual.ci_alpha if visual.show_ci else 1.0,
+        label=label,
+    )
 
 
 def make_xgboost_difference_figure(
@@ -284,8 +422,15 @@ def make_xgboost_difference_figure(
     return fig
 
 
-def _add_legend(fig: Figure, ax, columns: int) -> None:
-    handles, labels = ax.get_legend_handles_labels()
+def _add_legend(fig: Figure, axes, columns: int) -> None:
+    # Collect the union: a model or reference may occur in only one direction.
+    entries = {}
+    for ax in np.asarray(axes, dtype=object).ravel():
+        handles, labels = ax.get_legend_handles_labels()
+        for handle, label in zip(handles, labels, strict=True):
+            entries.setdefault(label, handle)
+    labels = list(entries)
+    handles = list(entries.values())
     # Matplotlib fills columns; transpose the input to display entries row-wise.
     order = [index for column in range(columns) for index in range(column, len(handles), columns)]
     fig.legend(
@@ -347,6 +492,11 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--run-id", action="append", dest="run_ids")
     parser.add_argument(
+        "--combined-only",
+        action="store_true",
+        help="Write only combined_performance; leave existing single-direction PDFs untouched.",
+    )
+    parser.add_argument(
         "--training-source",
         action="append",
         dest="training_sources",
@@ -363,6 +513,7 @@ def main() -> None:
     if len(tasks) > 1 and run_ids:
         raise SystemExit("--run-id pins one experiment input; select exactly one --target and --training-source")
 
+    pending: dict[str, dict[str, tuple[SampleSizeEvaluation, FullDataBenchmark | None]]] = {}
     for task in tasks:
         experiment_name = task.experiment_name
         print(f"\n=== {task.label} [{task.direction}] ({experiment_name or 'not registered'})")
@@ -388,28 +539,63 @@ def main() -> None:
             metrics=visual.metrics,
             ci_level=visual.ci_level,
         )
+        del artifacts
         benchmark = _load_reciprocal_benchmark(task, visual)
 
         output_dir = DATA.output_dir / prepared.target
         output_dir.mkdir(parents=True, exist_ok=True)
-        stem = output_dir / f"{prepared.trained_on}_performance"
-        outputs = save(
-            make_figure(prepared, visual, benchmark=benchmark),
-            str(stem),
-            formats=visual.output_formats,
-        )
-        for output in outputs:
-            print("figure: " + str(Path(output).relative_to(config.dir_root)))
+        if not args.combined_only:
+            stem = output_dir / f"{prepared.trained_on}_performance"
+            outputs = save(
+                make_figure(prepared, visual, benchmark=benchmark),
+                str(stem),
+                formats=visual.output_formats,
+            )
+            for output in outputs:
+                print("figure: " + str(Path(output).relative_to(config.dir_root)))
 
-        xgboost_differences = prepare_xgboost_difference_evaluation(prepared)
-        difference_stem = output_dir / f"{prepared.trained_on}_xgboost_difference"
-        difference_outputs = save(
-            make_xgboost_difference_figure(xgboost_differences, visual),
-            str(difference_stem),
-            formats=visual.output_formats,
+            xgboost_differences = prepare_xgboost_difference_evaluation(prepared)
+            difference_stem = output_dir / f"{prepared.trained_on}_xgboost_difference"
+            difference_outputs = save(
+                make_xgboost_difference_figure(xgboost_differences, visual),
+                str(difference_stem),
+                formats=visual.output_formats,
+            )
+            for output in difference_outputs:
+                print("figure: " + str(Path(output).relative_to(config.dir_root)))
+            del xgboost_differences
+
+        directions = pending.setdefault(prepared.target, {})
+        # The combined drawing only needs summaries; do not retain millions of
+        # bootstrap/repeat rows while loading the opposite training direction.
+        curves = replace(
+            prepared,
+            grouped=replace(prepared.grouped, bootstrap_scores=pd.DataFrame(), repeat_points=pd.DataFrame()),
         )
-        for output in difference_outputs:
-            print("figure: " + str(Path(output).relative_to(config.dir_root)))
+        directions[prepared.trained_on] = (curves, benchmark)
+        if {"tudd", "mimic"}.issubset(directions):
+            euh, euh_benchmark = directions["tudd"]
+            mimic, mimic_benchmark = directions["mimic"]
+            outputs = save(
+                make_combined_figure(
+                    euh,
+                    mimic,
+                    visual,
+                    euh_benchmark=euh_benchmark,
+                    mimic_benchmark=mimic_benchmark,
+                ),
+                str(output_dir / "combined_performance"),
+                formats=visual.output_formats,
+            )
+            for output in outputs:
+                print("figure: " + str(Path(output).relative_to(config.dir_root)))
+            del pending[prepared.target]
+            directions.clear()
+            del euh, mimic
+        del prepared, curves
+
+    for target in pending:
+        print(f"warning: skipping {target} combined performance: both training sources are required", file=sys.stderr)
 
 
 def _load_reciprocal_benchmark(
