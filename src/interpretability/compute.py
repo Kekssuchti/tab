@@ -1,109 +1,283 @@
 """Mortality interpretation experiment. Run with ``uv run python -m src.interpretability.compute``.
 
-Edit the small settings block below, not pipeline YAML. Each completed NPZ contains
-one fitted model's results on BOTH held-out cohorts; no estimator is serialized.
+Edit the settings and kwargs blocks below, not pipeline YAML. Each completed NPZ
+holds one fitted model's results on BOTH held-out cohorts; no estimator is
+serialized.
 """
 
 import argparse
 import hashlib
 import json
 import platform
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from importlib.metadata import version
+from inspect import getsource
 from pathlib import Path
 from time import perf_counter
 
 import numpy as np
+import pandas as pd
+from sklearn.utils import resample
 
-# Experiment settings ---------------------------------------------------------
-experiment_name = "mortality"
-train_size = 10_000
-repeat_seeds = (1337, 1338, 1339)
-split_seed = 1337
-train_fraction = 0.8
-explanation_size = 100
-background_tudd = 16
-background_mimic = 16
-background_seed = 2337
-explanation_seed = 5337
-explainer_seed = 3337
-shap_budget = 512  # Coalitions PER explained patient (TabPFN only).
+from src.classes.data_registry import dataset_task_for_target
+from src.classes.dataset import Dataset
+from src.interpretability import DEFAULT_MODELS, MODELS, SOURCES, TARGET
+from src.interpretability.explanations import explain_model
+from src.interpretability.tuning import select_parameters
+from src.schemas.dataset_schemas import DatasetBundle, DatasetConfig, DataSplitConfig, XYDataset
+from src.schemas.training_schemas import ModelConfig
+from src.utils.evaluation import evaluate_trained_model
+from src.utils.model_lifecycle import release_model
+from src.utils.model_registry import get_model_spec
 
-ebm_kwargs = {}  # Extra kwargs; searched parameters take precedence.
+SCHEMA_VERSION = 1
+TRACKED_PACKAGES = (
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "interpret",
+    "xgboost",
+    "tabpfn",
+    "torch",
+    "shap",
+    "shapiq",
+)
+
+
+@dataclass(frozen=True)
+class ExperimentSettings:
+    """Volumes and seeds; every field enters the result fingerprint."""
+
+    train_size: int
+    repeat_seeds: tuple[int, ...]
+    split_seed: int
+    train_fraction: float
+    explanation_size: int
+    background_tudd: int
+    background_mimic: int
+    background_seed: int
+    explanation_seed: int
+    explainer_seed: int
+    shap_budget: int
+
+
+# The split is fixed as in the core experiment. Background, explanation, and
+# explainer seeds stay fixed; training selection and model seeds follow the
+# repeat. Background patients come from the full training pools (EUH 16379,
+# MIMIC 44454 rows), not from a selected training subset.
+SETTINGS = ExperimentSettings(
+    train_size=10_000,
+    repeat_seeds=(1337, 1338, 1339),
+    split_seed=1337,
+    train_fraction=0.8,
+    explanation_size=250,
+    background_tudd=64,
+    background_mimic=64,
+    background_seed=2337,
+    explanation_seed=5337,
+    explainer_seed=3337,
+    shap_budget=256,  # Coalitions PER explained patient (TabPFN only).
+)
+
+# Extra estimator kwargs. EBM interactions stay disabled (the figures show main
+# effects) and TabPFN's version comes from the registry; do not override either.
+# Set estimator seeds via repeat_seeds, not inside these dictionaries.
+ebm_kwargs = {}
 xgboost_kwargs = {}
-tabpfn_kwargs = {"n_estimators": 8}  # Fixed parameters, no HPO.
+tabpfn_kwargs = {"n_estimators": 8}
+
 # Match the existing baseline experiment; ranges come from model_registry.
 ebm_hpo = {"search_space": "default", "n_trials": 50, "n_startup_trials": 5}
 xgboost_hpo = {"search_space": "good", "n_trials": 100, "n_startup_trials": 10}
-# EBM interactions are disabled; TabPFN version is fixed to v3.5 by the registry.
-# Set estimator-specific seeds via repeat_seeds, not inside these dictionaries.
-# -----------------------------------------------------------------------------
 
 ROOT = Path(__file__).resolve().parents[2]
-MODELS = ("ebm", "xgboost", "tabpfn-3.5")
-SOURCES = ("tudd", "mimic")
-SCHEMA_VERSION = 1
 
 
 def settings() -> dict:
+    """The run fingerprint settings recorded with every result."""
     return {
-        "target": "mortality",
+        **asdict(SETTINGS),
+        "target": TARGET,
         "positive_class": 1,
-        "repeat_seeds": list(repeat_seeds),
-        "train_size": train_size,
-        "split_seed": split_seed,
-        "train_fraction": train_fraction,
-        "explanation_size": explanation_size,
-        "background_tudd": background_tudd,
-        "background_mimic": background_mimic,
-        "background_seed": background_seed,
-        "explanation_seed": explanation_seed,
-        "explainer_seed": explainer_seed,
-        "shap_budget": shap_budget,
         "preprocessing": "native",
         "output": "binary_mortality_log_odds",
         "reference": "joint_empirical_marginal",
     }
 
 
-def load_pools():
-    """Reuse the core loader, split, and alignment; keep original row indices.
+def load_pools() -> tuple[dict[str, XYDataset], dict[str, XYDataset]]:
+    """Reuse the core loader, split, and alignment; keep source-local row IDs.
 
     The core's public get_dataset combines/resets training indices. Composing its
-    existing split primitives here preserves source-local row IDs for recreation
-    while avoiding a second implementation of clinical filtering or splitting.
+    existing split primitives preserves row IDs for recreation without a second
+    implementation of clinical filtering or splitting.
     """
-    from src.classes.dataset import Dataset
-    from src.schemas.dataset_schemas import DatasetConfig, DataSplitConfig, XYDataset
-
     builder = Dataset(
         DatasetConfig(
-            target="mortality",
-            random_state=split_seed,
-            train_size=train_fraction,
+            target=TARGET,
+            random_state=SETTINGS.split_seed,
+            train_size=SETTINGS.train_fraction,
             train_on=(DataSplitConfig(dataset="mimic", fraction=1.0),),
         ),
-        sample_seed=split_seed,
+        sample_seed=SETTINGS.split_seed,
     )
-    splits = {}
+    split_frames = {}
     for source, frame in builder._load_data().items():
         X_train, X_test, y_train, y_test = builder._split_single_df(frame)
-        splits[source] = {"X_train": X_train, "X_test": X_test, "y_train": y_train, "y_test": y_test}
-    builder._align_split_feature_columns(splits)
-    train = {s: XYDataset(X=p["X_train"], y=p["y_train"]) for s, p in splits.items()}
-    test = {s: XYDataset(X=p["X_test"], y=p["y_test"]) for s, p in splits.items()}
+        split_frames[source] = {"X_train": X_train, "X_test": X_test, "y_train": y_train, "y_test": y_test}
+    builder._align_split_feature_columns(split_frames)
+    train = {source: XYDataset(X=split["X_train"], y=split["y_train"]) for source, split in split_frames.items()}
+    test = {source: XYDataset(X=split["X_test"], y=split["y_test"]) for source, split in split_frames.items()}
     return train, test
 
 
-def sample_rows(data, count: int, seed: int):
-    """Stratified sampling WITHOUT replacement, with the core's row shuffle."""
-    from sklearn.utils import resample
-
-    from src.schemas.dataset_schemas import XYDataset
-
+def sample_rows(data: XYDataset, count: int, seed: int) -> XYDataset:
+    """Stratified sample without replacement, then the core's row shuffle."""
     rows = resample(data.X.index, replace=False, n_samples=count, random_state=seed, stratify=data.y)
     X = data.X.loc[rows].sample(frac=1, random_state=seed)
     return XYDataset(X=X, y=data.y.loc[X.index])
+
+
+def _model_params(model_name: str, features: list[str]) -> dict:
+    """Adapter kwargs for one model; the registry pins the TabPFN version."""
+    if model_name == "ebm":
+        params = {
+            "interactions": 0,
+            "feature_names": features,
+            "feature_types": ["nominal" if name == "Sex" else "continuous" for name in features],
+            **ebm_kwargs,
+        }
+        if params["interactions"] != 0:
+            raise ValueError("This experiment explains EBM main effects; keep interactions=0")
+        return params
+    if model_name == "xgboost":
+        return dict(xgboost_kwargs)
+    if "version" in tabpfn_kwargs:
+        raise ValueError("Use the registry model name; do not set version in tabpfn_kwargs")
+    return {
+        "categorical_features_indices": [index for index, name in enumerate(features) if name == "Sex"],
+        **tabpfn_kwargs,
+    }
+
+
+def _record_fit(model, model_name: str, train: XYDataset, metadata: dict) -> None:
+    """Fit in place and record values derived from the fitted estimator."""
+    started = perf_counter()
+    model.fit(train.X.to_numpy(dtype=float), train.y.to_numpy())
+    metadata["fit_seconds"] = perf_counter() - started
+    metadata["adapter_kwargs"] = model.kwargs
+    metadata["estimator_params"] = model.model.get_params(deep=False)
+    if model_name in ("tabpfn-3.5", "tabpfn-3.5-fast"):
+        metadata["resolved_n_estimators"] = model.model.n_estimators_
+
+
+def _fit_payload(train: XYDataset, background: pd.DataFrame) -> dict:
+    """Arrays shared by both cohorts: the selected training set and the background."""
+    return {
+        "feature_names": np.asarray(train.X.columns, dtype=str),
+        "train_row_ids": train.X.index.to_numpy(),
+        "train_y": train.y.to_numpy(),
+        "background_X": background.to_numpy(dtype=float),
+        "background_row_ids": background.index.get_level_values("row_id").to_numpy(),
+        "background_sources": background.index.get_level_values("source").to_numpy(dtype=str),
+    }
+
+
+def _evaluate_model(model, task_type, train: XYDataset, test: dict, metadata: dict) -> dict:
+    """Evaluate both held-out cohorts once; record point metrics and timings."""
+    evaluation = evaluate_trained_model(
+        model,
+        task_type,
+        DatasetBundle(train_data=train, test_mimic=test["mimic"], test_tudd=test["tudd"]),
+    )
+    metadata["metrics"] = {
+        "tudd": asdict(evaluation.metrics.tudd_test),
+        "mimic": asdict(evaluation.metrics.mimic_test),
+    }
+    metadata["prediction_seconds"] = {
+        "tudd": evaluation.metrics.tudd_prediction_time,
+        "mimic": evaluation.metrics.mimic_prediction_time,
+    }
+    metadata["explanations"] = {}
+    return {"tudd": evaluation.test_predictions.tudd, "mimic": evaluation.test_predictions.mimic}
+
+
+def _explain_cohort(
+    model_name: str,
+    estimator,
+    cohort: str,
+    explained: XYDataset,
+    background: pd.DataFrame,
+    prediction,
+    metadata: dict,
+) -> dict:
+    """Explain one cohort's fixed patients and return its NPZ arrays."""
+    X = explained.X.to_numpy(dtype=float)
+    print(f"  explain {cohort}: {len(X)} patients", flush=True)
+    started = perf_counter()
+    effects = explain_model(
+        model_name,
+        estimator,
+        X,
+        background.to_numpy(dtype=float),
+        budget=SETTINGS.shap_budget,
+        seed=SETTINGS.explainer_seed,
+    )
+    metadata["explanations"][cohort] = {
+        "seconds": perf_counter() - started,
+        "method": effects["method"],
+        "max_additivity_residual": effects["max_additivity_residual"],
+    }
+    return {
+        f"{cohort}_X": X,
+        f"{cohort}_row_ids": explained.X.index.to_numpy(),
+        f"{cohort}_shap_values": effects["shap_values"],
+        f"{cohort}_base_values": effects["base_values"],
+        f"{cohort}_model_output": effects["model_output"],
+        f"{cohort}_importance": np.abs(effects["shap_values"]).mean(axis=0),
+        f"{cohort}_test_row_ids": prediction.test_set_id,
+        f"{cohort}_test_y": prediction.y_true,
+        f"{cohort}_test_probability": prediction.positive_class_probability,
+    }
+
+
+def run_model(path, model_name, seed, train, test, explained, background, metadata) -> None:
+    """Fit, evaluate, explain, record, then release exactly one model."""
+    task_type = dataset_task_for_target(TARGET).task_type
+    model = None
+    try:
+        # Bare adapters intentionally avoid the Trainer's external preprocessing.
+        model = get_model_spec(ModelConfig(name=model_name), task_type).create(
+            task_type, metadata["params"], random_state=seed, inference_state=SETTINGS.explainer_seed
+        )
+        _record_fit(model, model_name, train, metadata)
+        predictions = _evaluate_model(model, task_type, train, test, metadata)
+        payload = _fit_payload(train, background)
+        for cohort in SOURCES:
+            payload.update(
+                _explain_cohort(
+                    model_name, model.model, cohort, explained[cohort], background, predictions[cohort], metadata
+                )
+            )
+        save_result(path, payload, metadata)
+    finally:
+        release_model(model)
+
+
+def save_result(path: Path, payload: dict, metadata: dict) -> None:
+    """Write the sidecars and the atomic NPZ that marks a completed unit."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = _json(metadata)
+    path.with_suffix(".json").write_text(json.dumps(json.loads(text), indent=2) + "\n")
+    importance = [
+        {"cohort": cohort, "feature": feature, "mean_abs_shap": float(value)}
+        for cohort in SOURCES
+        for feature, value in zip(payload["feature_names"], payload[f"{cohort}_importance"], strict=True)
+    ]
+    pd.DataFrame(importance).to_csv(path.with_suffix(".importance.csv"), index=False)
+    temporary = path.with_suffix(".tmp.npz")
+    np.savez_compressed(temporary, metadata_json=np.asarray(text), **payload)
+    temporary.replace(path)
 
 
 def _json_value(value):
@@ -129,8 +303,6 @@ def _json(value) -> str:
 
 def _data_hash(*parts) -> str:
     """Hash actual selected values, labels, row order, and feature names."""
-    import pandas as pd
-
     digest = hashlib.sha256()
     for part in parts:
         digest.update(pd.util.hash_pandas_object(part, index=True).to_numpy().tobytes())
@@ -139,206 +311,143 @@ def _data_hash(*parts) -> str:
     return digest.hexdigest()
 
 
-def _source_hashes(model_name: str) -> dict[str, str]:
-    adapter = "tabpfn_adapter.py" if model_name == "tabpfn-3.5" else "sklearn_adapter.py"
-    paths = [
-        ROOT / "src/interpretability/explanations.py",
-        ROOT / "src/adapter" / adapter,
-        ROOT / "src/utils/model_registry.py",
-        ROOT / "src/classes/dataset.py",
-        ROOT / "src/classes/data_registry.py",
-        ROOT / "src/utils/dataset_utils.py",
-    ]
-    if model_name in ("ebm", "xgboost"):
-        paths.extend(
-            ROOT / relative
-            for relative in (
-                "src/interpretability/tuning.py",
-                "src/classes/trainer.py",
-                "src/classes/preprocessor.py",
-                "src/schemas/training_schemas.py",
-                "src/schemas/pipeline_schemas.py",
-                "src/utils/evaluation_utils.py",
-                "src/utils/classification_metrics.py",
-                "src/utils/optuna_callbacks.py",
-            )
-        )
-    # Hash computation functions, not the editable kwargs/settings block: changing
-    # one model's kwargs should not invalidate the other models' completed fits.
-    from inspect import getsource
+# Code that can change one model's saved result. Function sources, not compute.py
+# itself, are hashed so editing a comment or one model's kwargs does not
+# invalidate another model's completed fits.
+_SHARED_SOURCES = (
+    "src/interpretability/explanations.py",
+    "src/utils/model_registry.py",
+    "src/classes/dataset.py",
+    "src/classes/data_registry.py",
+    "src/utils/dataset_utils.py",
+)
+_TUNING_SOURCES = (
+    "src/interpretability/tuning.py",
+    "src/classes/trainer.py",
+    "src/classes/preprocessor.py",
+    "src/schemas/training_schemas.py",
+    "src/schemas/pipeline_schemas.py",
+    "src/utils/evaluation_utils.py",
+    "src/utils/classification_metrics.py",
+    "src/utils/optuna_callbacks.py",
+)
+_ADAPTERS = {
+    "ebm": "sklearn_adapter.py",
+    "xgboost": "sklearn_adapter.py",
+    "tabpfn-3.5": "tabpfn_adapter.py",
+    "tabpfn-3.5-fast": "tabpfn_adapter.py",
+}
+_FINGERPRINTED_FUNCTIONS = (
+    load_pools,
+    sample_rows,
+    _record_fit,
+    _evaluate_model,
+    _explain_cohort,
+    _fit_payload,
+    run_model,
+)
 
-    hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+
+def _source_hashes(model_name: str) -> dict[str, str]:
+    """Fingerprint the files and functions that produced one model's result."""
+    relatives = (*_SHARED_SOURCES, f"src/adapter/{_ADAPTERS[model_name]}")
+    if model_name in ("ebm", "xgboost"):
+        relatives += _TUNING_SOURCES
+    hashes = {relative: hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() for relative in relatives}
     hashes["experiment_functions"] = hashlib.sha256(
-        "".join(getsource(f) for f in (load_pools, sample_rows, run_model)).encode()
+        "".join(getsource(function) for function in _FINGERPRINTED_FUNCTIONS).encode()
     ).hexdigest()
     return hashes
 
 
-def _model_params(model_name: str, features: list[str]) -> dict:
-    if model_name == "ebm":
-        params = {
-            "interactions": 0,
-            "feature_names": features,
-            "feature_types": ["nominal" if name == "Sex" else "continuous" for name in features],
-            **ebm_kwargs,
-        }
-        if params["interactions"] != 0:
-            raise ValueError("This experiment explains EBM main effects; keep interactions=0")
-        return params
-    if model_name == "xgboost":
-        return dict(xgboost_kwargs)
-    if "version" in tabpfn_kwargs:
-        raise ValueError("Use tabpfn-3.5; do not override version inside tabpfn_kwargs")
-    return {"categorical_features_indices": [i for i, name in enumerate(features) if name == "Sex"], **tabpfn_kwargs}
+def _hpo_record(model_name: str) -> dict | None:
+    """HPO recipe with its record fields; TabPFN keeps fixed parameters."""
+    if model_name not in ("ebm", "xgboost"):
+        return None
+    config = ebm_hpo if model_name == "ebm" else xgboost_hpo
+    return {**config, "inference_seed": SETTINGS.explainer_seed, "optuna_version": version("optuna")}
 
 
-def run_model(path, model_name, seed, train, test, explained, background, metadata):
-    """Fit, evaluate, record, then release exactly one model; never return it."""
-    from src.classes.data_registry import dataset_task_for_target
-    from src.interpretability.explanations import explain_model
-    from src.schemas.dataset_schemas import DatasetBundle
-    from src.schemas.training_schemas import ModelConfig
-    from src.utils.evaluation import evaluate_trained_model
-    from src.utils.model_lifecycle import release_model
-    from src.utils.model_registry import get_model_spec
-
-    task_type = dataset_task_for_target("mortality").task_type
-    spec = get_model_spec(ModelConfig(name=model_name), task_type)
-    model = None
-    try:
-        # Bare adapters intentionally avoid the Trainer's external preprocessing.
-        model = spec.create(task_type, metadata["params"], random_state=seed, inference_state=explainer_seed)
-        started = perf_counter()
-        model.fit(train.X.to_numpy(dtype=float), train.y.to_numpy())
-        metadata["fit_seconds"] = perf_counter() - started
-        metadata["adapter_kwargs"] = model.kwargs
-        metadata["estimator_params"] = model.model.get_params(deep=False)
-        if model_name == "tabpfn-3.5":
-            metadata["resolved_n_estimators"] = model.model.n_estimators_
-        evaluation = evaluate_trained_model(
-            model, task_type, DatasetBundle(train_data=train, test_mimic=test["mimic"], test_tudd=test["tudd"])
-        )
-        payload = {
-            "feature_names": np.asarray(train.X.columns, dtype=str),
-            "train_row_ids": train.X.index.to_numpy(),
-            "train_y": train.y.to_numpy(),
-            "background_X": background.to_numpy(dtype=float),
-            "background_row_ids": background.index.get_level_values("row_id").to_numpy(),
-            "background_sources": background.index.get_level_values("source").to_numpy(dtype=str),
-        }
-        metadata["metrics"] = {}
-        metadata["prediction_seconds"] = {}
-        metadata["explanations"] = {}
-        for cohort in SOURCES:
-            predictions = getattr(evaluation.test_predictions, cohort)
-            metadata["metrics"][cohort] = asdict(getattr(evaluation.metrics, f"{cohort}_test"))
-            metadata["prediction_seconds"][cohort] = getattr(evaluation.metrics, f"{cohort}_prediction_time")
-            X = explained[cohort].X.to_numpy(dtype=float)
-            print(f"  explain {cohort}: {len(X)} patients", flush=True)
-            started = perf_counter()
-            effects = explain_model(
-                model_name, model.model, X, background.to_numpy(dtype=float), budget=shap_budget, seed=explainer_seed
-            )
-            metadata["explanations"][cohort] = {
-                "seconds": perf_counter() - started,
-                "method": effects["method"],
-                "max_additivity_residual": effects["max_additivity_residual"],
-            }
-            payload.update(
-                {
-                    f"{cohort}_X": X,
-                    f"{cohort}_row_ids": explained[cohort].X.index.to_numpy(),
-                    f"{cohort}_shap_values": effects["shap_values"],
-                    f"{cohort}_base_values": effects["base_values"],
-                    f"{cohort}_model_output": effects["model_output"],
-                    f"{cohort}_importance": np.abs(effects["shap_values"]).mean(axis=0),
-                    f"{cohort}_test_row_ids": predictions.test_set_id,
-                    f"{cohort}_test_y": predictions.y_true,
-                    f"{cohort}_test_probability": predictions.positive_class_probability,
-                }
-            )
-        save_result(path, payload, metadata)
-    finally:
-        release_model(model)
+def _stored_signature(path: Path) -> str:
+    """Signature of a completed unit; the NPZ only exists after a full write."""
+    with np.load(path, allow_pickle=False) as stored:
+        return json.loads(str(stored["metadata_json"]))["signature"]
 
 
-def save_result(path: Path, payload: dict, metadata: dict) -> None:
-    """The final NPZ is the completion marker; interrupted writes are not reused."""
-    import pandas as pd
+def _backup_previous(path: Path) -> None:
+    """Move a completed unit aside so a failed replacement cannot pass as it."""
+    for suffix in (".npz", ".json", ".importance.csv"):
+        previous = path.with_suffix(suffix)
+        if previous.exists():
+            previous.replace(previous.with_name(f"{previous.stem}.previous{previous.suffix}"))
 
+
+def _record_failure(path: Path, identity: dict, signature: str, error: Exception) -> None:
+    """Record a failure without retaining a traceback, which could own the model."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    text = _json(metadata)
-    path.with_suffix(".json").write_text(json.dumps(json.loads(text), indent=2) + "\n")
-    records = [
-        {"cohort": cohort, "feature": feature, "mean_abs_shap": float(importance)}
-        for cohort in SOURCES
-        for feature, importance in zip(payload["feature_names"], payload[f"{cohort}_importance"], strict=True)
-    ]
-    pd.DataFrame(records).to_csv(path.with_suffix(".importance.csv"), index=False)
-    temporary = path.with_suffix(".tmp.npz")
-    np.savez_compressed(temporary, metadata_json=np.asarray(text), **payload)
-    temporary.replace(path)
+    failure = {**identity, "signature": signature, "failure": {"type": type(error).__name__, "message": str(error)}}
+    path.with_suffix(".json").write_text(_json(failure) + "\n")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--results", type=Path, default=ROOT / "run_results/interpretability" / experiment_name)
-    parser.add_argument("--models", nargs="+", choices=MODELS, default=list(MODELS))
+    parser.add_argument("--results", type=Path, default=ROOT / "run_results/interpretability" / TARGET)
+    parser.add_argument("--models", nargs="+", choices=MODELS, default=list(DEFAULT_MODELS))
     parser.add_argument("--sources", nargs="+", choices=SOURCES, default=list(SOURCES))
-    parser.add_argument("--seeds", nargs="+", type=int, choices=repeat_seeds, default=list(repeat_seeds))
+    parser.add_argument(
+        "--seeds", nargs="+", type=int, choices=SETTINGS.repeat_seeds, default=list(SETTINGS.repeat_seeds)
+    )
     parser.add_argument("--recompute", action="store_true", help="Explicitly replace selected completed model results")
     parser.add_argument(
         "--dry-run", action="store_true", help="Load/sample data and show reuse status, without fitting"
     )
     args = parser.parse_args()
 
-    import pandas as pd
+    if min(SETTINGS.train_size, SETTINGS.explanation_size, SETTINGS.shap_budget) < 1:
+        parser.error("train_size, explanation_size and shap_budget must be positive")
+    background_counts = (SETTINGS.background_tudd, SETTINGS.background_mimic)
+    if min(background_counts) < 0 or sum(background_counts) == 0:
+        parser.error("background counts must be non-negative, with at least one background patient")
 
-    if min(train_size, explanation_size, shap_budget) < 1 or min(background_tudd, background_mimic) < 0:
-        parser.error("Sample counts/budget must be positive; background source counts may be zero")
-    if background_tudd + background_mimic == 0:
-        parser.error("At least one background patient is required")
     pools, test = load_pools()
     features = list(pools["mimic"].X.columns)
-    explained = {s: sample_rows(test[s], explanation_size, explanation_seed) for s in SOURCES}
+    explained = {
+        source: sample_rows(test[source], SETTINGS.explanation_size, SETTINGS.explanation_seed) for source in SOURCES
+    }
     background_parts = {
-        s: pools[s].X.sample(n=count, random_state=background_seed, replace=False)
-        for s, count in (("tudd", background_tudd), ("mimic", background_mimic))
+        "tudd": pools["tudd"].X.sample(n=SETTINGS.background_tudd, random_state=SETTINGS.background_seed),
+        "mimic": pools["mimic"].X.sample(n=SETTINGS.background_mimic, random_state=SETTINGS.background_seed),
     }
     background = pd.concat(background_parts, names=["source", "row_id"])
-    shared_hash = _data_hash(background, *(part for s in SOURCES for part in (test[s].X, test[s].y, explained[s].X)))
-    dependencies = {
-        name: version(name)
-        for name in ("numpy", "pandas", "scikit-learn", "interpret", "xgboost", "tabpfn", "torch", "shap", "shapiq")
-    }
+    shared_hash = _data_hash(
+        background, *(part for source in SOURCES for part in (test[source].X, test[source].y, explained[source].X))
+    )
+    dependencies = {name: version(name) for name in TRACKED_PACKAGES}
     dependencies["python"] = platform.python_version()
     common = settings()
-    print(f"Training pools: { {s: len(pools[s].y) for s in SOURCES} }; selected/source={train_size}")
-    print(f"Full test sizes: { {s: len(test[s].y) for s in SOURCES} }; explained/cohort={explanation_size}")
-    print(f"Background tudd={background_tudd}, mimic={background_mimic}; results={args.results}")
+    pools_text = ", ".join(f"{source}={len(pools[source].y)}" for source in SOURCES)
+    tests_text = ", ".join(f"{source}={len(test[source].y)}" for source in SOURCES)
+    print(f"Training pools: {pools_text}; selected={SETTINGS.train_size}/source")
+    print(f"Full test sizes: {tests_text}; explained={SETTINGS.explanation_size}/cohort")
+    print(f"Background tudd={SETTINGS.background_tudd}, mimic={SETTINGS.background_mimic}; results={args.results}")
+
     failures = 0
     for seed in args.seeds:
         for source in args.sources:
-            train = sample_rows(pools[source], train_size, seed)
+            train = sample_rows(pools[source], SETTINGS.train_size, seed)
             training_hash = _data_hash(train.X, train.y)
             for model_name in args.models:
                 path = args.results / source / model_name / f"seed_{seed}.npz"
                 params = _model_params(model_name, features)
-                hpo = None
-                if model_name in ("ebm", "xgboost"):
-                    hpo = {
-                        **(ebm_hpo if model_name == "ebm" else xgboost_hpo),
-                        "inference_seed": explainer_seed,
-                        "optuna_version": version("optuna"),
-                    }
-                # Adding another repeat need not invalidate already completed fits.
+                hpo = _hpo_record(model_name)
                 identity = {
                     "schema_version": SCHEMA_VERSION,
                     "model": model_name,
                     "train_source": source,
                     "seed": seed,
                     "params": params,
-                    "settings": {k: v for k, v in common.items() if k != "repeat_seeds"},
+                    # Adding another repeat need not invalidate already completed fits.
+                    "settings": {key: value for key, value in common.items() if key != "repeat_seeds"},
                     "data_hash": shared_hash,
                     "training_hash": training_hash,
                     "dependencies": dependencies,
@@ -347,47 +456,32 @@ def main() -> int:
                 if hpo is not None:
                     identity["hpo"] = hpo
                 signature = hashlib.sha256(_json(identity).encode()).hexdigest()
-                metadata = {**identity, "settings": common, "signature": signature, "experiment_name": experiment_name}
+                metadata = {**identity, "settings": common, "signature": signature}
                 if path.exists() and not args.recompute:
-                    with np.load(path, allow_pickle=False) as stored:
-                        previous = json.loads(str(stored["metadata_json"]))
-                    if previous["signature"] != signature:
+                    if _stored_signature(path) != signature:
                         raise ValueError(
                             f"Settings/data changed for {path}. Choose a new --results directory or --recompute"
                         )
                     print(f"reuse {source}/{model_name}/seed_{seed}", flush=True)
                     continue
                 mode = f"HPO {hpo['search_space']}, up to {hpo['n_trials']} trials" if hpo else "fixed parameters"
-                print(
-                    f"{'would compute' if args.dry_run else 'compute'} {source}/{model_name}/seed_{seed} ({mode})",
-                    flush=True,
-                )
+                verb = "would compute" if args.dry_run else "compute"
+                print(f"{verb} {source}/{model_name}/seed_{seed} ({mode})", flush=True)
                 if args.dry_run:
                     continue
                 if args.recompute and path.exists():
-                    # A failed replacement must not look like a completed run.
-                    # Keep one previous result for recovery, outside the loader's pattern.
-                    for previous in (path, path.with_suffix(".json"), path.with_suffix(".importance.csv")):
-                        if previous.exists():
-                            previous.replace(previous.with_name(previous.stem + ".previous" + previous.suffix))
+                    _backup_previous(path)
                 try:
                     if hpo is not None:
-                        from src.interpretability.tuning import select_parameters
-
                         metadata["base_params"] = params
-                        metadata["params"], metadata["tuning"] = select_parameters(model_name, params, train, seed, hpo)
+                        metadata["params"], metadata["tuning"] = select_parameters(
+                            model_name, params, train, seed, hpo=hpo, inference_seed=SETTINGS.explainer_seed
+                        )
                     run_model(path, model_name, seed, train, test, explained, background, metadata)
                     print(f"saved {source}/{model_name}/seed_{seed}", flush=True)
                 except Exception as error:  # noqa: BLE001 — isolate model failures, as in the main pipeline.
-                    # No traceback/exception object is retained: it could own the model.
                     failures += 1
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    failure = {
-                        **identity,
-                        "signature": signature,
-                        "failure": {"type": type(error).__name__, "message": str(error)},
-                    }
-                    path.with_suffix(".json").write_text(_json(failure) + "\n")
+                    _record_failure(path, identity, signature, error)
                     print(
                         f"FAILED {source}/{model_name}/seed_{seed}: {type(error).__name__}; "
                         f"details in {path.with_suffix('.json')} (continuing)",

@@ -6,13 +6,16 @@ experiment is not used. No trained models are saved or logged to MLflow.
 
 ## Run
 
-From the repository root, edit the settings and `ebm_kwargs`, `xgboost_kwargs`, and
-`tabpfn_kwargs` dictionaries near the top of [compute.py](<src/interpretability/compute.py>).
-For EBM/XGBoost, these dictionaries supply extra kwargs; parameters sampled from
-the registry take precedence for searched keys (including XGBoost aliases). `ebm_hpo` and `xgboost_hpo` expose
-the trial counts and named search spaces. TabPFN uses its kwargs without tuning.
-The experiment fixes EBM interactions to zero and selects **TabPFN3.5**, not v3
-or v3.5-fast.
+From the repository root, edit the `SETTINGS` instance and the `ebm_kwargs`,
+`xgboost_kwargs`, and `tabpfn_kwargs` dictionaries near the top of
+[compute.py](<src/interpretability/compute.py>). For EBM/XGBoost, these
+dictionaries supply extra kwargs; parameters sampled from the registry take
+precedence for searched keys (including XGBoost aliases). `ebm_hpo` and
+`xgboost_hpo` expose the trial counts and named search spaces. TabPFN uses its
+kwargs without tuning. The experiment fixes EBM interactions to zero. Defaults
+remain EBM, XGBoost, and **TabPFN3.5**; `--models tabpfn-3.5-fast` selects the
+registry's **v3.5-fast** variant instead. Both TabPFN variants share `tabpfn_kwargs`
+and the same marginal OddSHAP method, with separate result directories.
 
 ```bash
 # Inspect cohort counts, sampling, and resume status. Does not fit any model.
@@ -24,10 +27,13 @@ uv run python -m src.interpretability.compute
 # Optional: complete the experiment in smaller invocations.
 uv run python -m src.interpretability.compute --models ebm xgboost
 uv run python -m src.interpretability.compute --models tabpfn-3.5 --seeds 1337
+uv run python -m src.interpretability.compute --models tabpfn-3.5-fast --seeds 1337
 
 # Plot existing results only. Never fits models or computes SHAP.
 uv run python -m src.interpretability.plot
 uv run python -m src.interpretability.plot --no-bands --features Age Sex
+# Compare baselines with the fast variant (or include both TabPFN variants).
+uv run python -m src.interpretability.plot --models ebm xgboost tabpfn-3.5-fast
 ```
 
 Both entry points accept `--results PATH`; the default is
@@ -83,7 +89,7 @@ associations.
   flag to true even for numeric inputs, which SHAP 0.52 otherwise rejects. This
   does not change the model or switch to tree-path-dependent SHAP; actual
   categorical features remain unsupported by this explanation method.
-- **TabPFN3.5:** marginal OddSHAP on `log(p_mortality) - log(p_survival)` from final
+- **TabPFN3.5 / TabPFN3.5-fast:** marginal OddSHAP on `log(p_mortality) - log(p_survival)` from final
   class probabilities, **not** the extension's automatic single-class logit.
   `shap_budget = 512` is the coalition budget **per explained patient**. Computation
   grows with explanation patients × coalitions × background patients × ensemble
@@ -96,7 +102,7 @@ associations.
 Each completed fitted model produces these files:
 
 ```text
-run_results/interpretability/<experiment_name>/
+run_results/interpretability/mortality/
   <training_source>/<model>/seed_<seed>.npz
   <training_source>/<model>/seed_<seed>.json
   <training_source>/<model>/seed_<seed>.importance.csv
@@ -123,7 +129,7 @@ restarts on rerun; there is no patient-level or per-cohort checkpointing. A mode
 failure is recorded in its private JSON sidecar and other models continue; the
 command exits nonzero if any model failed. Plotting uses the seeds actually saved,
 not every seed planned in `repeat_seeds`. One saved repetition per model/source is
-sufficient. Each saved seed must cover all models and both training sources;
+sufficient. Each saved seed must cover all selected models and both training sources;
 incomplete comparisons still raise an error instead of silently dropping results.
 
 Changed compute settings/data/parameters are not silently reused. Choose another
@@ -150,8 +156,8 @@ count, EBM bands, feature selection, and visual styling. Rows are training sourc
   fitted EBM has the same line in both columns. Native EBM bin boundaries are not
   saved: this is a sampled main-effect line, not a reconstruction of its exact
   step function. No tails are extrapolated beyond the pooled observed range.
-- **XGBoost is orange scatter; TabPFN3.5 keeps its blue scatter.** Both use the
-  same small dots, with no model-specific marker shapes or fitted/binned lines.
+- **XGBoost is orange scatter; TabPFN3.5 is blue; TabPFN3.5-fast is cyan.** All use
+  the same small dots, with no model-specific marker shapes or fitted/binned lines.
   Each dot is one patient's **mean SHAP across repeats**. The scatter's vertical
   spread is patient-level attribution variation, not an uncertainty interval.
 - Optional EBM bands show **min–max across repeat main effects**, not confidence
